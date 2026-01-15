@@ -1,198 +1,147 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Document, Schema } from 'mongoose';
 
 export interface ILoad extends Document {
-  loadNumber: string;
   companyId: string;
+  loadNumber: string;
+  
+  // Shipper Info
+  shipperName: string;
+  shipperAddress: string;
+  shipperCity: string;
+  shipperState: string;
+  shipperZip: string;
+  pickupDate: Date;
+  pickupTime?: string;
+  
+  // Receiver Info
+  receiverName: string;
+  receiverAddress: string;
+  receiverCity: string;
+  receiverState: string;
+  receiverZip: string;
+  deliveryDate: Date;
+  deliveryTime?: string;
+  
+  // Load Details
+  commodity: string;
+  weight: number;
+  pieces?: number;
+  equipmentType: string; // 'Dry Van', 'Reefer', 'Flatbed'
+  temperature?: number;
+  
+  // References
+  poNumber?: string;
+  refNumber?: string;
+  bolNumber?: string;
+  sealNumber?: string;
+  
+  // Assignment
   driverId?: string;
   truckId?: string;
   trailerId?: string;
   
-  // Origin details
-  origin: {
-    name: string;
-    address: string;
-    city: string;
-    state: string;
-    zipCode: string;
-    contactName?: string;
-    contactPhone?: string;
-    appointmentTime?: Date;
-    instructions?: string;
-  };
+  // Status
+  status: string; // 'Booked', 'Assigned', 'In Transit', 'Delivered', 'Completed'
   
-  // Destination details
-  destination: {
-    name: string;
-    address: string;
-    city: string;
-    state: string;
-    zipCode: string;
-    contactName?: string;
-    contactPhone?: string;
-    appointmentTime?: Date;
-    instructions?: string;
-  };
-  
-  // Status tracking - comprehensive workflow
-  status: 'booked' | 'assigned' | 'on_duty' | 'arrived_shipper' | 'loading' | 
-          'departed_shipper' | 'in_transit' | 'arrived_receiver' | 'unloading' | 
-          'delivered' | 'completed' | 'cancelled';
-  
-  // Status timestamps for tracking
-  statusHistory: Array<{
-    status: string;
-    timestamp: Date;
-    location?: { lat: number; lng: number };
-    notes?: string;
-    updatedBy: string;
-  }>;
-  
-  // Load details
-  pickupDate: Date;
-  deliveryDate: Date;
-  miles: number;
-  weight?: number;
-  commodity?: string;
-  loadType?: 'ltl' | 'ftl' | 'partial';
-  equipmentType?: string;
-  
-  // Financial details
-  rate: number;
-  currency: string;
-  broker: string;
+  // Financial (Dispatcher/Owner only)
+  brokerName?: string;
   brokerContact?: string;
-  brokerPhone?: string;
-  brokerEmail?: string;
-  paymentTerms?: string;
+  rateAmount?: number;
+  fuelSurcharge?: number;
+  accessorials?: number;
+  totalAmount?: number;
   
-  // Driver-specific info (hidden from driver)
-  driverRate?: number;
-  profitMargin?: number;
+  // Rate Confirmation
+  rateConfirmationUrl?: string;
   
-  // Documents flags
-  hasRateConfirmation: boolean;
-  hasBOL: boolean;
-  hasPOD: boolean;
-  
-  // Additional metadata
+  // Instructions
   specialInstructions?: string;
-  internalNotes?: string;
-  priority?: 'low' | 'normal' | 'high' | 'urgent';
+  driverInstructions?: string;
   
-  // Tracking
+  // Timestamps
   createdBy: string;
-  assignedAt?: Date;
-  completedAt?: Date;
-  cancelledAt?: Date;
-  cancellationReason?: string;
-  
   createdAt: Date;
   updatedAt: Date;
 }
 
-const LoadSchema = new Schema({
+const LoadSchema = new Schema<ILoad>({
+  companyId: { type: String, required: true, index: true },
   loadNumber: { type: String, required: true, unique: true },
-  companyId: { type: Schema.Types.ObjectId, ref: 'Company', required: true },
-  driverId: { type: Schema.Types.ObjectId, ref: 'User' },
-  truckId: { type: Schema.Types.ObjectId, ref: 'Truck' },
-  trailerId: { type: Schema.Types.ObjectId, ref: 'Trailer' },
   
-  // Origin details
-  origin: {
-    name: { type: String, required: true },
-    address: { type: String, required: true },
-    city: { type: String, required: true },
-    state: { type: String, required: true },
-    zipCode: { type: String, required: true },
-    contactName: { type: String },
-    contactPhone: { type: String },
-    appointmentTime: { type: Date },
-    instructions: { type: String },
-  },
-  
-  // Destination details
-  destination: {
-    name: { type: String, required: true },
-    address: { type: String, required: true },
-    city: { type: String, required: true },
-    state: { type: String, required: true },
-    zipCode: { type: String, required: true },
-    contactName: { type: String },
-    contactPhone: { type: String },
-    appointmentTime: { type: Date },
-    instructions: { type: String },
-  },
-  
-  // Status tracking
-  status: {
-    type: String,
-    enum: ['booked', 'assigned', 'on_duty', 'arrived_shipper', 'loading', 
-           'departed_shipper', 'in_transit', 'arrived_receiver', 'unloading', 
-           'delivered', 'completed', 'cancelled'],
-    default: 'booked',
-  },
-  
-  statusHistory: [{
-    status: { type: String, required: true },
-    timestamp: { type: Date, default: Date.now },
-    location: {
-      lat: { type: Number },
-      lng: { type: Number },
-    },
-    notes: { type: String },
-    updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  }],
-  
-  // Load details
+  shipperName: { type: String, required: true },
+  shipperAddress: { type: String, required: true },
+  shipperCity: { type: String, required: true },
+  shipperState: { type: String, required: true },
+  shipperZip: { type: String, required: true },
   pickupDate: { type: Date, required: true },
+  pickupTime: String,
+  
+  receiverName: { type: String, required: true },
+  receiverAddress: { type: String, required: true },
+  receiverCity: { type: String, required: true },
+  receiverState: { type: String, required: true },
+  receiverZip: { type: String, required: true },
   deliveryDate: { type: Date, required: true },
-  miles: { type: Number, required: true },
-  weight: { type: Number },
-  commodity: { type: String },
-  loadType: { type: String, enum: ['ltl', 'ftl', 'partial'] },
-  equipmentType: { type: String },
+  deliveryTime: String,
   
-  // Financial details
-  rate: { type: Number, required: true },
-  currency: { type: String, default: 'USD' },
-  broker: { type: String, required: true },
-  brokerContact: { type: String },
-  brokerPhone: { type: String },
-  brokerEmail: { type: String },
-  paymentTerms: { type: String },
+  commodity: { type: String, required: true },
+  weight: { type: Number, required: true },
+  pieces: Number,
+  equipmentType: { type: String, required: true },
+  temperature: Number,
   
-  // Driver-specific info (hidden from driver)
-  driverRate: { type: Number },
-  profitMargin: { type: Number },
+  poNumber: String,
+  refNumber: String,
+  bolNumber: String,
+  sealNumber: String,
   
-  // Documents flags
-  hasRateConfirmation: { type: Boolean, default: false },
-  hasBOL: { type: Boolean, default: false },
-  hasPOD: { type: Boolean, default: false },
+  driverId: { type: String, index: true },
+  truckId: { type: String, index: true },
+  trailerId: { type: String, index: true },
   
-  // Additional metadata
-  specialInstructions: { type: String },
-  internalNotes: { type: String },
-  priority: { type: String, enum: ['low', 'normal', 'high', 'urgent'], default: 'normal' },
+  status: { 
+    type: String, 
+    required: true, 
+    default: 'Booked',
+    enum: [
+      'Booked',
+      'Assigned',
+      'Driver On Duty',
+      'Arrived at Shipper',
+      'Loading',
+      'Departed Shipper',
+      'In Transit',
+      'Arrived at Receiver',
+      'Unloading',
+      'Delivered',
+      'Completed'
+    ]
+  },
   
-  // Tracking
-  createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  assignedAt: { type: Date },
-  completedAt: { type: Date },
-  cancelledAt: { type: Date },
-  cancellationReason: { type: String },
-}, { timestamps: true });
+  brokerName: String,
+  brokerContact: String,
+  rateAmount: Number,
+  fuelSurcharge: Number,
+  accessorials: Number,
+  totalAmount: Number,
+  
+  rateConfirmationUrl: String,
+  
+  specialInstructions: String,
+  driverInstructions: String,
+  
+  createdBy: { type: String, required: true },
+}, {
+  timestamps: true
+});
 
-// Indexes for optimized performance
-LoadSchema.index({ loadNumber: 1 }, { unique: true }); // Unique load number lookup
-LoadSchema.index({ companyId: 1, status: 1 }); // Filter by company and status
-LoadSchema.index({ companyId: 1, createdAt: -1 }); // Sort loads by creation date
-LoadSchema.index({ driverId: 1, status: 1 }); // Driver's loads by status
-LoadSchema.index({ pickupDate: 1, deliveryDate: 1 }); // Date range queries
-LoadSchema.index({ status: 1, pickupDate: 1 }); // Active loads by pickup date
-LoadSchema.index({ broker: 1 }); // Group by broker
-LoadSchema.index({ truckId: 1 }); // Find loads by truck
-LoadSchema.index({ trailerId: 1 }); // Find loads by trailer
-LoadSchema.index({ 'origin.state': 1, 'destination.state': 1 }); // Route analysis
+// Auto-generate load number
+LoadSchema.pre('save', async function(next) {
+  if (!this.loadNumber) {
+    const count = await mongoose.models.Load.countDocuments({ companyId: this.companyId });
+    this.loadNumber = `LOAD-${String(count + 1).padStart(4, '0')}`;
+  }
+  next();
+});
 
-export default mongoose.model<ILoad>('Load', LoadSchema);
+export const Load = mongoose.model<ILoad>('Load', LoadSchema);

@@ -1,42 +1,43 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Document, Schema } from 'mongoose';
 
-export interface ITruck {
+export interface ITruck extends Document {
   companyId: string;
-  unitNumber: string;
-  make: string;
-  model: string;
-  year: number;
-  vin: string;
-  licensePlate: string;
-  status: 'available' | 'on_road' | 'in_maintenance' | 'out_of_service';
-  currentLoadId?: string;
+  unitNumber: string; // MANDATORY
+  vin?: string;
+  licensePlate?: string;
+  make?: string;
+  model?: string;
+  year?: number;
+  eldDeviceId?: string;
+  status: 'Available' | 'Assigned' | 'Out of Service' | 'In Maintenance';
   currentDriverId?: string;
+  currentLoadId?: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
-export interface ITruckDocument extends Omit<Document, 'model'>, ITruck {}
-
-const TruckSchema = new Schema({
-  companyId: { type: Schema.Types.ObjectId, ref: 'Company', required: true },
+const TruckSchema = new Schema<ITruck>({
+  companyId: { type: String, required: true, index: true },
   unitNumber: { type: String, required: true },
-  make: { type: String, required: true },
-  model: { type: String, required: true },
-  year: { type: Number, required: true },
-  vin: { type: String, required: true, unique: true },
-  licensePlate: { type: String, required: true },
+  vin: String,
+  licensePlate: String,
+  make: String,
+  model: String,
+  year: Number,
+  eldDeviceId: String,
   status: {
     type: String,
-    enum: ['available', 'on_road', 'in_maintenance', 'out_of_service'],
-    default: 'available',
+    required: true,
+    default: 'Available',
+    enum: ['Available', 'Assigned', 'Out of Service', 'In Maintenance']
   },
-  currentLoadId: { type: Schema.Types.ObjectId, ref: 'Load' },
-  currentDriverId: { type: Schema.Types.ObjectId, ref: 'User' },
-}, { timestamps: true });
+  currentDriverId: String,
+  currentLoadId: String,
+}, {
+  timestamps: true
+});
 
-// Indexes for optimized queries
-TruckSchema.index({ companyId: 1, unitNumber: 1 }, { unique: true }); // Unique unit number per company
-TruckSchema.index({ companyId: 1, status: 1 }); // Filter by company and status
-TruckSchema.index({ vin: 1 }, { unique: true }); // Unique VIN lookup
-TruckSchema.index({ currentDriverId: 1 }); // Find truck by driver
-TruckSchema.index({ currentLoadId: 1 }); // Find truck by load
+// Compound unique index
+TruckSchema.index({ companyId: 1, unitNumber: 1 }, { unique: true });
 
-export default mongoose.model<ITruckDocument>('Truck', TruckSchema);
+export const Truck = mongoose.model<ITruck>('Truck', TruckSchema);
