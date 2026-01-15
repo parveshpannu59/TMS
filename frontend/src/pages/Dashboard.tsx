@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -10,8 +10,6 @@ import {
   Avatar,
   useTheme,
   alpha,
-  CircularProgress,
-  Alert,
 } from '@mui/material';
 import {
   LocalShipping,
@@ -19,13 +17,11 @@ import {
   Assignment,
   CheckCircle,
   TrendingUp,
-  TrendingDown,
   Schedule,
+  Warning,
 } from '@mui/icons-material';
 import { DashboardLayout } from '@layouts/DashboardLayout';
 import { useAuth } from '@hooks/useAuth';
-import { dashboardApi } from '@/api/dashboardApi';
-import { DashboardData } from '@/types/dashboard.types';
 
 interface StatCardProps {
   title: string;
@@ -98,18 +94,8 @@ const StatCard: React.FC<StatCardProps> = React.memo(({ title, value, icon, colo
         </Box>
         {trend !== undefined && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1.5 }}>
-            {trend >= 0 ? (
-              <TrendingUp sx={{ fontSize: 14, color: theme.palette.success.main }} />
-            ) : (
-              <TrendingDown sx={{ fontSize: 14, color: theme.palette.error.main }} />
-            )}
-            <Typography 
-              variant="caption" 
-              sx={{ 
-                color: trend >= 0 ? theme.palette.success.main : theme.palette.error.main, 
-                fontWeight: 600 
-              }}
-            >
+            <TrendingUp sx={{ fontSize: 14, color: theme.palette.success.main }} />
+            <Typography variant="caption" sx={{ color: theme.palette.success.main, fontWeight: 600 }}>
               {trend > 0 ? '+' : ''}{trend}%
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
@@ -127,120 +113,52 @@ StatCard.displayName = 'StatCard';
 const DashboardComponent: React.FC = React.memo(() => {
   const { user } = useAuth();
   const theme = useTheme();
-  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        const data = await dashboardApi.getOwnerDashboard();
-        setDashboardData(data);
-        setError(null);
-      } catch (err: any) {
-        console.error('Failed to fetch dashboard data:', err);
-        setError(err.message || 'Failed to load dashboard data');
-        // Set fallback data if API fails
-        setDashboardData({
-          currentDateTime: new Date().toISOString(),
-          kpis: {
-            activeLoadsCount: 0,
-            runningLateCount: 0,
-            totalDrivers: 0,
-            availableDrivers: 0,
-            totalTrucks: 0,
-            operationalTrucks: 0,
-            completedToday: 0,
-            onTrack: 0,
-            trends: { loads: 0, drivers: 0, trucks: 0 },
-          },
-          loadStatus: { pending: 0, inTransit: 0, delayed: 0 },
-          recentActivity: [],
-          criticalTrips: [],
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDashboardData();
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchDashboardData, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const stats = useMemo(() => {
-    if (!dashboardData) return [];
-    const { kpis } = dashboardData;
-    return [
+  const stats = useMemo(
+    () => [
       { 
         title: 'Active Loads', 
-        value: kpis.activeLoadsCount, 
+        value: 12, 
         icon: <Assignment sx={{ fontSize: 24 }} />, 
         color: 'primary',
-        trend: kpis.trends.loads,
-        subtitle: `${kpis.runningLateCount} running late`
+        trend: 12,
+        subtitle: '8 in transit'
       },
       { 
         title: 'Total Drivers', 
-        value: kpis.totalDrivers, 
+        value: 8, 
         icon: <People sx={{ fontSize: 24 }} />, 
         color: 'success',
-        trend: kpis.trends.drivers,
-        subtitle: `${kpis.availableDrivers} available`
+        trend: 5,
+        subtitle: '6 available'
       },
       { 
         title: 'Total Trucks', 
-        value: kpis.totalTrucks, 
+        value: 10, 
         icon: <LocalShipping sx={{ fontSize: 24 }} />, 
         color: 'info',
-        trend: kpis.trends.trucks,
-        subtitle: `${kpis.operationalTrucks} operational`
+        trend: 8,
+        subtitle: '9 operational'
       },
       { 
         title: 'Completed Today', 
-        value: kpis.completedToday, 
+        value: 5, 
         icon: <CheckCircle sx={{ fontSize: 24 }} />, 
         color: 'warning',
-        subtitle: `On track for ${kpis.onTrack}`
+        subtitle: 'On track for 12'
       },
-    ];
-  }, [dashboardData]);
+    ],
+    []
+  );
 
-  const quickActions = useMemo(() => {
-    if (!dashboardData) return [];
-    const { loadStatus } = dashboardData;
-    const total = loadStatus.pending + loadStatus.inTransit + loadStatus.delayed || 1;
-    return [
-      { label: 'Pending Loads', value: loadStatus.pending, color: theme.palette.warning.main, percent: (loadStatus.pending / total) * 100 },
-      { label: 'In Transit', value: loadStatus.inTransit, color: theme.palette.info.main, percent: (loadStatus.inTransit / total) * 100 },
-      { label: 'Delayed', value: loadStatus.delayed, color: theme.palette.error.main, percent: (loadStatus.delayed / total) * 100 },
-    ];
-  }, [dashboardData, theme]);
-
-  const recentActivities = useMemo(() => {
-    if (!dashboardData?.recentActivity?.length) {
-      return [
-        { text: 'No recent activity', time: '', status: 'info' },
-      ];
-    }
-    return dashboardData.recentActivity.slice(0, 4).map(activity => ({
-      text: activity.message,
-      time: new Date(activity.timestamp).toLocaleString(),
-      status: activity.type,
-    }));
-  }, [dashboardData]);
-
-  if (loading) {
-    return (
-      <DashboardLayout>
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 'calc(100vh - 120px)' }}>
-          <CircularProgress size={48} />
-        </Box>
-      </DashboardLayout>
-    );
-  }
+  const quickActions = useMemo(
+    () => [
+      { label: 'Pending Loads', value: 3, color: theme.palette.warning.main },
+      { label: 'In Transit', value: 8, color: theme.palette.info.main },
+      { label: 'Delayed', value: 1, color: theme.palette.error.main },
+    ],
+    [theme]
+  );
 
   return (
     <DashboardLayout>
@@ -254,12 +172,6 @@ const DashboardComponent: React.FC = React.memo(() => {
             Here's your fleet overview for today
           </Typography>
         </Box>
-
-        {error && (
-          <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setError(null)}>
-            {error} - Showing cached data
-          </Alert>
-        )}
 
         {/* Stats Grid - Compact */}
         <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -302,7 +214,7 @@ const DashboardComponent: React.FC = React.memo(() => {
                       </Box>
                       <LinearProgress
                         variant="determinate"
-                        value={action.percent}
+                        value={(action.value / 12) * 100}
                         sx={{
                           height: 6,
                           borderRadius: 3,
@@ -331,7 +243,12 @@ const DashboardComponent: React.FC = React.memo(() => {
                   </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                  {recentActivities.map((activity, index) => (
+                  {[
+                    { text: 'Load #1234 delivered successfully', time: '2 hours ago', status: 'success' },
+                    { text: 'Driver John checked in at warehouse', time: '4 hours ago', status: 'info' },
+                    { text: 'New load assigned to Truck #05', time: '6 hours ago', status: 'primary' },
+                    { text: 'Maintenance scheduled for Truck #08', time: '1 day ago', status: 'warning' },
+                  ].map((activity, index) => (
                     <Box
                       key={index}
                       sx={{
@@ -352,10 +269,7 @@ const DashboardComponent: React.FC = React.memo(() => {
                           width: 8,
                           height: 8,
                           borderRadius: '50%',
-                          bgcolor: activity.status === 'success' ? theme.palette.success.main 
-                            : activity.status === 'error' ? theme.palette.error.main
-                            : activity.status === 'warning' ? theme.palette.warning.main
-                            : theme.palette.info.main,
+                          bgcolor: theme.palette[activity.status as keyof typeof theme.palette]?.main || theme.palette.primary.main,
                           mt: 0.75,
                           flexShrink: 0,
                         }}
@@ -364,11 +278,9 @@ const DashboardComponent: React.FC = React.memo(() => {
                         <Typography variant="body2" fontWeight={500} sx={{ mb: 0.25 }}>
                           {activity.text}
                         </Typography>
-                        {activity.time && (
-                          <Typography variant="caption" color="text.secondary">
-                            {activity.time}
-                          </Typography>
-                        )}
+                        <Typography variant="caption" color="text.secondary">
+                          {activity.time}
+                        </Typography>
                       </Box>
                     </Box>
                   ))}

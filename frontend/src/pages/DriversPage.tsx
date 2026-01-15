@@ -1,431 +1,527 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Button,
   Card,
-  CardContent,
   Chip,
-  Grid,
-  IconButton,
-  TextField,
-  Typography,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
+  TextField,
+  MenuItem,
+  Typography,
   Alert,
-  useMediaQuery,
-  useTheme,
+  CircularProgress,
+  Autocomplete,
 } from '@mui/material';
-import {
-  DataGrid,
-  GridColDef,
-  GridRenderCellParams,
-  GridToolbar,
-} from '@mui/x-data-grid';
-import {
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Refresh as RefreshIcon,
-  Person as PersonIcon,
-  DirectionsCar as ActiveIcon,
-  Block as InactiveIcon,
-  LocalShipping as OnTripIcon,
-} from '@mui/icons-material';
-import { driverApi } from '@api/all.api';
-import type { Driver } from '../types/all.types';
-import { DriverStatus } from '../types/all.types';
-import { format } from 'date-fns';
-import CreateDriverDialog from '@components/dialogs/CreateDriverDialog';
-import EditDriverDialog from '@components/dialogs/EditDriverDialog';
+import { DataGrid, GridColDef, GridActionsCellItem } from '@mui/x-data-grid';
+import { Add, Edit, Delete, LocalShipping, Search, FilterList } from '@mui/icons-material';
+import { InputAdornment } from '@mui/material';
+import { DashboardLayout } from '@layouts/DashboardLayout';
+import { EmptyState } from '@/components/common/EmptyState';
+import { driverApi, Driver, DriverFormData } from '@/api/driver.api';
+import { userApi } from '@/api/user.api';
+import { useForm, Controller } from 'react-hook-form';
+import * as yup from 'yup';
+import { yupResolver } from '@hookform/resolvers/yup';
 
-interface DriverStats {
-  totalDrivers: number;
-  activeDrivers: number;
-  onTripDrivers: number;
-  inactiveDrivers: number;
-}
+const driverSchema = yup.object({
+  licenseNumber: yup.string().required('License number is required'),
+  licenseExpiry: yup.date().required('License expiry is required'),
+  status: yup.string().oneOf(['available', 'on_duty', 'off_duty', 'on_leave']),
+});
+
+const statusColors: Record<string, 'success' | 'warning' | 'error' | 'info'> = {
+  available: 'success',
+  on_duty: 'info',
+  off_duty: 'warning',
+  on_leave: 'error',
+};
 
 const DriversPage: React.FC = () => {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [stats, setStats] = useState<DriverStats | null>(null);
+  const [filteredDrivers, setFilteredDrivers] = useState<Driver[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchText, setSearchText] = useState('');
-  const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const fetchDrivers = async () => {
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<Omit<DriverFormData, 'userId'>>({
+    resolver: yupResolver(driverSchema),
+    mode: 'onChange',
+    defaultValues: {
+      licenseNumber: '',
+      licenseExpiry: new Date(),
+      status: 'off_duty',
+    },
+  });
+  
+  // Local state for selected user - managed separately from react-hook-form
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [userError, setUserError] = useState<string | null>(null);
+
+  const fetchDrivers = useCallback(async () => {
     try {
       setLoading(true);
+      const data = await driverApi.getDrivers();
+      setDrivers(data);
       setError(null);
-      const [driversData, statsData] = await Promise.all([
-        driverApi.getAllDrivers(),
-        driverApi.getDriverStats(),
-      ]);
-      setDrivers(driversData);
-      setStats(statsData);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to fetch drivers');
-      console.error('Error fetching drivers:', err);
+      setError(err.message || 'Failed to fetch drivers');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      const response = await userApi.getAllUsers({ limit: 100, role: 'driver' });
+      // Set driver role users
+      console.log('Fetched users for driver selection:', response.data);
+      setUsers(response.data);
+    } catch (err: any) {
+      console.error('Failed to fetch users:', err);
+    }
+  }, []);
 
   useEffect(() => {
     fetchDrivers();
-  }, []);
+    fetchUsers();
+  }, [fetchDrivers, fetchUsers]);
 
-  const handleDelete = async () => {
-    if (!selectedDriver) return;
+  // Apply filters
+  useEffect(() => {
+    let result = [...drivers];
+
+    // Search filter
+    if (searchTerm) {
+      const lowerSearch = searchTerm.toLowerCase();
+      result = result.filter(
+        (driver) =>
+          driver.userId?.name?.toLowerCase().includes(lowerSearch) ||
+          driver.userId?.email?.toLowerCase().includes(lowerSearch) ||
+          driver.userId?.phone?.toLowerCase().includes(lowerSearch) ||
+          driver.licenseNumber?.toLowerCase().includes(lowerSearch)
+      );
+    }
+
+    // Status filter
+    if (statusFilter !== 'all') {
+      result = result.filter((driver) => driver.status === statusFilter);
+    }
+
+    setFilteredDrivers(result);
+  }, [drivers, searchTerm, statusFilter]);
+
+  const handleOpenDialog = (driver?: Driver) => {
+    setUserError(null);
+    if (driver) {
+      setEditingDriver(driver);
+      const userId = typeof driver.userId === 'string' ? driver.userId : driver.userId._id;
+      // Find the user object for editing
+      const user = users.find(u => u._id === userId);
+      setSelectedUser(user || null);
+      reset({
+        licenseNumber: driver.licenseNumber,
+        licenseExpiry: new Date(driver.licenseExpiry),
+        status: driver.status,
+      });
+    } else {
+      setEditingDriver(null);
+      setSelectedUser(null);
+      reset({
+        licenseNumber: '',
+        licenseExpiry: new Date(),
+        status: 'off_duty',
+      });
+    }
+    setOpenDialog(true);
+  };
+
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+    setEditingDriver(null);
+    setSelectedUser(null);
+    setUserError(null);
+    reset();
+  };
+
+  const onSubmit = async (data: Omit<DriverFormData, 'userId'>) => {
+    // Manually validate userId
+    if (!editingDriver && !selectedUser) {
+      setUserError('User is required');
+      return;
+    }
+    
     try {
-      await driverApi.deleteDriver(selectedDriver.id);
-      setDeleteDialogOpen(false);
-      setSelectedDriver(null);
+      if (editingDriver) {
+        await driverApi.updateDriver(editingDriver._id, data);
+        setSuccess('Driver updated successfully');
+      } else {
+        // Include userId from selectedUser
+        const driverData: DriverFormData = {
+          ...data,
+          userId: selectedUser._id,
+        };
+        await driverApi.createDriver(driverData);
+        setSuccess('Driver created successfully');
+      }
+      handleCloseDialog();
       fetchDrivers();
+      setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to delete driver');
+      setError(err.message || 'Failed to save driver');
     }
   };
 
-  const getStatusColor = (status: DriverStatus): 'default' | 'success' | 'error' | 'warning' => {
-    switch (status) {
-      case DriverStatus.ACTIVE:
-        return 'success';
-      case DriverStatus.ON_TRIP:
-        return 'warning';
-      case DriverStatus.INACTIVE:
-        return 'error';
-      default:
-        return 'default';
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this driver?')) return;
+
+    try {
+      await driverApi.deleteDriver(id);
+      setSuccess('Driver deleted successfully');
+      fetchDrivers();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete driver');
     }
   };
-
-  const getStatusLabel = (status: DriverStatus): string => {
-    return status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-  };
-
-  const filteredDrivers = useMemo(() => {
-    if (!searchText) return drivers;
-    return drivers.filter(
-      (driver) =>
-        driver.name.toLowerCase().includes(searchText.toLowerCase()) ||
-        driver.phone.includes(searchText) ||
-        driver.licenseNumber.toLowerCase().includes(searchText.toLowerCase()) ||
-        driver.city.toLowerCase().includes(searchText.toLowerCase())
-    );
-  }, [drivers, searchText]);
 
   const columns: GridColDef[] = [
     {
-      field: 'name',
-      headerName: 'Name',
-      width: 180,
-      renderCell: (params: GridRenderCellParams) => (
-        <Typography variant="body2" fontWeight="bold">
-          {params.value}
+      field: 'userId.name',
+      headerName: 'Driver Name',
+      flex: 1.2,
+      minWidth: 150,
+      renderCell: (params) => (
+        <Typography variant="body2" fontWeight={600}>
+          {params.row.userId?.name || '-'}
         </Typography>
       ),
     },
     {
-      field: 'phone',
+      field: 'userId.email',
+      headerName: 'Email',
+      flex: 1.4,
+      minWidth: 180,
+      renderCell: (params) => params.row.userId?.email || '-',
+    },
+    {
+      field: 'userId.phone',
       headerName: 'Phone',
-      width: 130,
+      flex: 1,
+      minWidth: 120,
+      renderCell: (params) => params.row.userId?.phone || '-',
     },
     {
       field: 'licenseNumber',
-      headerName: 'License',
-      width: 140,
+      headerName: 'License #',
+      flex: 1,
+      minWidth: 120,
     },
     {
       field: 'licenseExpiry',
       headerName: 'License Expiry',
-      width: 130,
-      valueFormatter: (params: any) => {
-        if (!params?.value) return 'N/A';
-        try {
-          const date = new Date(params.value);
-          if (isNaN(date.getTime())) return 'N/A';
-          return format(date, 'dd MMM yyyy');
-        } catch {
-          return 'N/A';
-        }
-      },
-    },
-    {
-      field: 'city',
-      headerName: 'City',
-      width: 130,
-    },
-    {
-      field: 'state',
-      headerName: 'State',
-      width: 130,
-    },
-    {
-      field: 'emergencyContact',
-      headerName: 'Emergency',
-      width: 130,
+      flex: 1,
+      minWidth: 120,
+      renderCell: (params) => new Date(params.value).toLocaleDateString(),
     },
     {
       field: 'status',
       headerName: 'Status',
-      width: 120,
-      renderCell: (params: GridRenderCellParams) => (
+      flex: 1,
+      minWidth: 120,
+      renderCell: (params) => (
         <Chip
-          label={getStatusLabel(params.value as DriverStatus)}
-          color={getStatusColor(params.value as DriverStatus)}
+          label={params.value.replace('_', ' ').toUpperCase()}
+          color={statusColors[params.value] || 'default'}
           size="small"
         />
       ),
     },
     {
-      field: 'joiningDate',
-      headerName: 'Joining Date',
-      width: 130,
-      valueFormatter: (params: any) => {
-        if (!params?.value) return 'N/A';
-        try {
-          const date = new Date(params.value);
-          if (isNaN(date.getTime())) return 'N/A';
-          return format(date, 'dd MMM yyyy');
-        } catch {
-          return 'N/A';
-        }
-      },
+      field: 'currentLoadId',
+      headerName: 'Current Load',
+      flex: 1.2,
+      minWidth: 130,
+      renderCell: (params) =>
+        params.value ? (
+          <Typography variant="body2" color="primary">
+            {params.value.loadNumber || 'Assigned'}
+          </Typography>
+        ) : (
+          <Typography variant="body2" color="text.secondary">
+            -
+          </Typography>
+        ),
     },
     {
       field: 'actions',
+      type: 'actions',
       headerName: 'Actions',
-      width: 120,
-      sortable: false,
-      renderCell: (params: GridRenderCellParams) => (
-        <Box>
-          <IconButton
-            size="small"
-            onClick={() => {
-              setSelectedDriver(params.row as Driver);
-              setEditDialogOpen(true);
-            }}
-          >
-            <EditIcon fontSize="small" />
-          </IconButton>
-          <IconButton
-            size="small"
-            color="error"
-            onClick={() => {
-              setSelectedDriver(params.row as Driver);
-              setDeleteDialogOpen(true);
-            }}
-          >
-            <DeleteIcon fontSize="small" />
-          </IconButton>
-        </Box>
-      ),
+      width: 100,
+      getActions: (params) => [
+        <GridActionsCellItem
+          icon={<Edit />}
+          label="Edit"
+          onClick={() => handleOpenDialog(params.row as Driver)}
+        />,
+        <GridActionsCellItem
+          icon={<Delete />}
+          label="Delete"
+          onClick={() => handleDelete(params.row._id)}
+          showInMenu
+        />,
+      ],
     },
   ];
 
   return (
-    <Box sx={{ maxWidth: '1400px', mx: 'auto', width: '100%', p: { xs: 2, sm: 3 } }}>
-      {/* Header */}
-      <Box 
-        sx={{ 
-          mb: 3, 
-          display: 'flex', 
-          flexDirection: { xs: 'column', sm: 'row' },
-          justifyContent: 'space-between', 
-          alignItems: { xs: 'stretch', sm: 'center' },
-          gap: 2
-        }}
-      >
-        <Typography variant="h4" fontWeight="bold" sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}>
-          Driver Management
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 2, width: { xs: '100%', sm: 'auto' } }}>
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={fetchDrivers}
-            disabled={loading}
-            fullWidth={isMobile}
-          >
-            Refresh
-          </Button>
+    <DashboardLayout>
+      <Box sx={{ p: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <LocalShipping sx={{ fontSize: 32, color: 'primary.main' }} />
+            <Typography variant="h4" fontWeight={700}>
+              Drivers Management
+            </Typography>
+          </Box>
           <Button
             variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setCreateDialogOpen(true)}
-            fullWidth={isMobile}
+            startIcon={<Add />}
+            onClick={() => handleOpenDialog()}
+            sx={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #5568d3 0%, #6a4196 100%)',
+              },
+            }}
           >
             Add Driver
           </Button>
         </Box>
+
+        {error && (
+          <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+
+        {success && (
+          <Alert severity="success" onClose={() => setSuccess(null)} sx={{ mb: 2 }}>
+            {success}
+          </Alert>
+        )}
+
+        {/* Search and Filters */}
+        <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+          <TextField
+            placeholder="Search by name, email, phone, or license#..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ flex: 1, minWidth: 300 }}
+            size="small"
+          />
+          
+          <TextField
+            select
+            label="Status"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            sx={{ minWidth: 150 }}
+            size="small"
+          >
+            <MenuItem value="all">All Status</MenuItem>
+            <MenuItem value="available">Available</MenuItem>
+            <MenuItem value="on_duty">On Duty</MenuItem>
+            <MenuItem value="off_duty">Off Duty</MenuItem>
+            <MenuItem value="on_leave">On Leave</MenuItem>
+          </TextField>
+
+          {(searchTerm || statusFilter !== 'all') && (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<FilterList />}
+              onClick={() => {
+                setSearchTerm('');
+                setStatusFilter('all');
+              }}
+            >
+              Clear
+            </Button>
+          )}
+        </Box>
+
+        <Card>
+          {!loading && filteredDrivers.length === 0 ? (
+            <EmptyState
+              icon={<LocalShipping />}
+              title={drivers.length === 0 ? "No Drivers Added" : "No Results Found"}
+              description={drivers.length === 0 ? "Build your driver roster by linking user accounts with driver profiles. Add license information and track availability." : "Try adjusting your search or filters"}
+              actionLabel={drivers.length === 0 ? "Add First Driver" : undefined}
+              onAction={drivers.length === 0 ? () => handleOpenDialog() : undefined}
+            />
+          ) : (
+            <Box sx={{ minHeight: 900, height: filteredDrivers.length > 10 ? filteredDrivers.length * 52 + 150 : 900 }}>
+              <DataGrid
+                rows={filteredDrivers}
+                columns={columns}
+                loading={loading}
+                getRowId={(row) => row._id}
+                pageSizeOptions={[10, 25, 50]}
+                initialState={{
+                  pagination: { paginationModel: { pageSize: 10 } },
+                }}
+                disableRowSelectionOnClick
+                autoHeight={false}
+                sx={{
+                  border: 'none',
+                  height: '100%',
+                  width: '100%',
+                  '& .MuiDataGrid-cell:focus': {
+                    outline: 'none',
+                  },
+                  '& .MuiDataGrid-row:hover': {
+                    bgcolor: 'action.hover',
+                  },
+                  '& .MuiDataGrid-virtualScroller': {
+                    overflow: 'auto !important',
+                  },
+                }}
+              />
+            </Box>
+          )}
+        </Card>
+
+        {/* Add/Edit Dialog */}
+        <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+          <DialogTitle>
+            {editingDriver ? 'Edit Driver' : 'Add New Driver'}
+          </DialogTitle>
+          <form onSubmit={handleSubmit(onSubmit)}>
+            <DialogContent>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+                <Autocomplete
+                  options={users}
+                  getOptionLabel={(option: any) => 
+                    option?.name ? `${option.name} (${option.email})` : ''
+                  }
+                  isOptionEqualToValue={(option: any, value: any) => {
+                    if (!option || !value) return option === value;
+                    return option._id === value._id;
+                  }}
+                  onChange={(_, newValue) => {
+                    setSelectedUser(newValue);
+                    // Clear error when user is selected
+                    if (newValue) {
+                      setUserError(null);
+                    }
+                  }}
+                  value={selectedUser}
+                  clearOnBlur={false}
+                  blurOnSelect={true}
+                  disabled={isSubmitting || !!editingDriver}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Select User *"
+                      error={!!userError}
+                      helperText={userError}
+                      placeholder="Search for a user..."
+                    />
+                  )}
+                />
+
+                <Controller
+                  name="licenseNumber"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      label="License Number *"
+                      error={!!errors.licenseNumber}
+                      helperText={errors.licenseNumber?.message}
+                      disabled={isSubmitting}
+                      fullWidth
+                    />
+                  )}
+                />
+
+                <Controller
+                  name="licenseExpiry"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      label="License Expiry *"
+                      type="date"
+                      error={!!errors.licenseExpiry}
+                      helperText={errors.licenseExpiry?.message}
+                      disabled={isSubmitting}
+                      InputLabelProps={{ shrink: true }}
+                      value={field.value instanceof Date ? field.value.toISOString().split('T')[0] : field.value}
+                      fullWidth
+                    />
+                  )}
+                />
+
+                <Controller
+                  name="status"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      select
+                      label="Status"
+                      disabled={isSubmitting}
+                      fullWidth
+                    >
+                      <MenuItem value="available">Available</MenuItem>
+                      <MenuItem value="on_duty">On Duty</MenuItem>
+                      <MenuItem value="off_duty">Off Duty</MenuItem>
+                      <MenuItem value="on_leave">On Leave</MenuItem>
+                    </TextField>
+                  )}
+                />
+              </Box>
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+              <Button onClick={handleCloseDialog} disabled={isSubmitting}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={isSubmitting}
+                startIcon={isSubmitting && <CircularProgress size={16} />}
+              >
+                {editingDriver ? 'Update' : 'Create'}
+              </Button>
+            </DialogActions>
+          </form>
+        </Dialog>
       </Box>
-
-      {/* Error Alert */}
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {/* Statistics Cards */}
-      {stats && (
-        <Grid container spacing={{ xs: 2, sm: 3 }} sx={{ mb: 3 }}>
-          <Grid item xs={6} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography color="text.secondary" variant="body2">
-                      Total Drivers
-                    </Typography>
-                    <Typography variant="h4" fontWeight="bold">
-                      {stats.totalDrivers}
-                    </Typography>
-                  </Box>
-                  <PersonIcon sx={{ fontSize: 48, color: 'primary.main', opacity: 0.3 }} />
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography color="text.secondary" variant="body2">
-                      Active
-                    </Typography>
-                    <Typography variant="h4" fontWeight="bold" color="success.main">
-                      {stats.activeDrivers}
-                    </Typography>
-                  </Box>
-                  <ActiveIcon sx={{ fontSize: 48, color: 'success.main', opacity: 0.3 }} />
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography color="text.secondary" variant="body2">
-                      On Trip
-                    </Typography>
-                    <Typography variant="h4" fontWeight="bold" color="warning.main">
-                      {stats.onTripDrivers}
-                    </Typography>
-                  </Box>
-                  <OnTripIcon sx={{ fontSize: 48, color: 'warning.main', opacity: 0.3 }} />
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography color="text.secondary" variant="body2">
-                      Inactive
-                    </Typography>
-                    <Typography variant="h4" fontWeight="bold" color="error.main">
-                      {stats.inactiveDrivers}
-                    </Typography>
-                  </Box>
-                  <InactiveIcon sx={{ fontSize: 48, color: 'error.main', opacity: 0.3 }} />
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      )}
-
-      {/* Search */}
-      <Box sx={{ mb: 2 }}>
-        <TextField
-          fullWidth
-          placeholder="Search by name, phone, license, or city..."
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          size="small"
-        />
-      </Box>
-
-      {/* Data Grid */}
-      <Card>
-        <DataGrid
-          rows={filteredDrivers}
-          columns={columns}
-          loading={loading}
-          autoHeight
-          pageSizeOptions={[10, 25, 50, 100]}
-          initialState={{
-            pagination: { paginationModel: { pageSize: 25 } },
-          }}
-          slots={{ toolbar: GridToolbar }}
-          slotProps={{
-            toolbar: {
-              showQuickFilter: true,
-              quickFilterProps: { debounceMs: 500 },
-            },
-          }}
-          sx={{
-            '& .MuiDataGrid-cell:focus': {
-              outline: 'none',
-            },
-          }}
-        />
-      </Card>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
-        <DialogTitle>Delete Driver</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to delete driver <strong>{selectedDriver?.name}</strong>?
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 1 }}>
-            This action cannot be undone.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleDelete} color="error" variant="contained">
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Create Driver Dialog */}
-      <CreateDriverDialog
-        open={createDialogOpen}
-        onClose={() => setCreateDialogOpen(false)}
-        onSuccess={fetchDrivers}
-      />
-
-      {/* Edit Driver Dialog */}
-      <EditDriverDialog
-        open={editDialogOpen}
-        driver={selectedDriver}
-        onClose={() => {
-          setEditDialogOpen(false);
-          setSelectedDriver(null);
-        }}
-        onSuccess={fetchDrivers}
-      />
-    </Box>
+    </DashboardLayout>
   );
 };
 
