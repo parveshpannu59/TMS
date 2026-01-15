@@ -34,6 +34,11 @@ const userSchema = new Schema<IUserDocument>(
       default: UserRole.DISPATCHER,
       required: true,
     },
+    companyId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Company',
+      required: false,
+    },
     phone: {
       type: String,
       trim: true,
@@ -71,8 +76,11 @@ userSchema.methods.comparePassword = async function (
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-// Indexes
-userSchema.index({ email: 1 });
-userSchema.index({ role: 1, status: 1 });
+// Indexes for optimized queries
+userSchema.index({ email: 1 }, { unique: true }); // Unique email lookup
+userSchema.index({ role: 1, status: 1 }); // Filter by role and status
+userSchema.index({ companyId: 1, role: 1 }); // Company users by role
+userSchema.index({ companyId: 1, createdAt: -1 }); // Sort by creation date
+userSchema.index({ status: 1 }); // Filter active/inactive users
 
 export const User = mongoose.model<IUserDocument>('User', userSchema);

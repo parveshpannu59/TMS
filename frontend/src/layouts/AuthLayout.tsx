@@ -111,8 +111,8 @@ export const AuthLayout: React.FC<AuthLayoutProps> = React.memo(({ children }) =
           px: { xs: 2, sm: 3, md: 4 },
           position: 'relative',
           zIndex: 1,
-        }}
-      >
+      }}
+    >
         <Grid container spacing={0} sx={{ height: '100%' }}>
           {/* Left side - Branding (hidden on mobile) */}
           {!isMobile && (
@@ -120,7 +120,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = React.memo(({ children }) =
               item
               xs={0}
               md={5}
-              sx={{
+          sx={{
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',

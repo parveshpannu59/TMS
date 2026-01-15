@@ -12,9 +12,22 @@ export const userApi = {
     return response.data.data as User;
   },
 
-  getAllUsers: async (): Promise<User[]> => {
-    const response = await apiClient.get<ApiResponse<User[]>>(API_ENDPOINTS.USERS.LIST);
-    return response.data.data as User[];
+  getAllUsers: async (params?: { page?: number; limit?: number; search?: string; status?: string; role?: string }): Promise<{ data: User[]; pagination: any }> => {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.role) queryParams.append('role', params.role);
+    
+    const url = `${API_ENDPOINTS.USERS.LIST}${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+    const response = await apiClient.get<ApiResponse<{ data: User[]; pagination: any }>>(url);
+    return response.data.data as { data: User[]; pagination: any };
+  },
+
+  getUsers: async (): Promise<{ users: User[]; pagination: any }> => {
+    const response = await apiClient.get(API_ENDPOINTS.USERS.LIST);
+    return response.data.data;
   },
 
   getUserById: async (id: string): Promise<User> => {

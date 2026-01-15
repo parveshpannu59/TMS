@@ -1,40 +1,47 @@
-import mongoose, { Document, Schema } from 'mongoose';
+import mongoose, { Schema, Document } from 'mongoose';
 
-export interface ITrailer extends Document {
+export interface ITrailer {
   companyId: string;
-  unitNumber: string; // MANDATORY
-  trailerType: 'Dry Van' | 'Reefer' | 'Flatbed';
-  vin?: string;
-  licensePlate?: string;
-  reeferUnitId?: string;
-  status: 'Available' | 'Assigned' | 'In Maintenance';
+  unitNumber: string;
+  type: 'dry_van' | 'reefer' | 'flatbed' | 'step_deck' | 'lowboy' | 'tanker';
+  make?: string;
+  year?: number;
+  vin: string;
+  licensePlate: string;
+  status: 'available' | 'on_road' | 'in_maintenance' | 'out_of_service';
   currentLoadId?: string;
-  createdAt: Date;
-  updatedAt: Date;
+  currentTruckId?: string;
 }
 
-const TrailerSchema = new Schema<ITrailer>({
-  companyId: { type: String, required: true, index: true },
+export interface ITrailerDocument extends Omit<Document, 'type'>, ITrailer {}
+
+const TrailerSchema = new Schema({
+  companyId: { type: Schema.Types.ObjectId, ref: 'Company', required: true },
   unitNumber: { type: String, required: true },
-  trailerType: {
+  type: {
     type: String,
+    enum: ['dry_van', 'reefer', 'flatbed', 'step_deck', 'lowboy', 'tanker'],
     required: true,
-    enum: ['Dry Van', 'Reefer', 'Flatbed']
   },
-  vin: String,
-  licensePlate: String,
-  reeferUnitId: String,
+  make: { type: String },
+  year: { type: Number },
+  vin: { type: String, required: true, unique: true },
+  licensePlate: { type: String, required: true },
   status: {
     type: String,
-    required: true,
-    default: 'Available',
-    enum: ['Available', 'Assigned', 'In Maintenance']
+    enum: ['available', 'on_road', 'in_maintenance', 'out_of_service'],
+    default: 'available',
   },
-  currentLoadId: String,
-}, {
-  timestamps: true
-});
+  currentLoadId: { type: Schema.Types.ObjectId, ref: 'Load' },
+  currentTruckId: { type: Schema.Types.ObjectId, ref: 'Truck' },
+}, { timestamps: true });
 
-TrailerSchema.index({ companyId: 1, unitNumber: 1 }, { unique: true });
+// Indexes for optimized queries
+TrailerSchema.index({ companyId: 1, unitNumber: 1 }, { unique: true }); // Unique unit number per company
+TrailerSchema.index({ companyId: 1, status: 1 }); // Filter by company and status
+TrailerSchema.index({ companyId: 1, type: 1, status: 1 }); // Filter by type and status
+TrailerSchema.index({ vin: 1 }, { unique: true }); // Unique VIN lookup
+TrailerSchema.index({ currentTruckId: 1 }); // Find trailer by truck
+TrailerSchema.index({ currentLoadId: 1 }); // Find trailer by load
 
-export const Trailer = mongoose.model<ITrailer>('Trailer', TrailerSchema);
+export default mongoose.model<ITrailerDocument>('Trailer', TrailerSchema);

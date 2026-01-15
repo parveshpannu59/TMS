@@ -1,4 +1,4 @@
-import Notification, { NotificationType, NotificationPriority } from '../models/Notification';
+import Notification, { NotificationType, NotificationPriority, INotificationDocument } from '../models/Notification';
 import { Schema } from 'mongoose';
 
 interface CreateNotificationOptions {
@@ -15,18 +15,28 @@ interface CreateNotificationOptions {
 /**
  * Helper function to create notifications
  */
-export const createNotification = async (options: CreateNotificationOptions) => {
+export const createNotification = async (options: CreateNotificationOptions): Promise<INotificationDocument> => {
   try {
-    const notification = await Notification.create({
+    const notificationData: any = {
       companyId: options.companyId,
-      userId: options.userId,
       type: options.type,
       priority: options.priority || NotificationPriority.MEDIUM,
       title: options.title,
       message: options.message,
-      metadata: options.metadata,
-      expiresAt: options.expiresAt,
-    });
+    };
+
+    // Only add optional fields if provided
+    if (options.userId) {
+      notificationData.userId = options.userId;
+    }
+    if (options.metadata) {
+      notificationData.metadata = options.metadata;
+    }
+    if (options.expiresAt) {
+      notificationData.expiresAt = options.expiresAt;
+    }
+
+    const notification = await Notification.create(notificationData);
     return notification;
   } catch (error) {
     console.error('Error creating notification:', error);
@@ -42,7 +52,7 @@ export const notifyLoadAssigned = async (
   driverId: string | Schema.Types.ObjectId,
   loadNumber: string,
   driverName: string
-) => {
+): Promise<INotificationDocument> => {
   return createNotification({
     companyId,
     userId: driverId,
@@ -57,7 +67,7 @@ export const notifyLoadAssigned = async (
 export const notifyLoadCompleted = async (
   companyId: string | Schema.Types.ObjectId,
   loadNumber: string
-) => {
+): Promise<INotificationDocument> => {
   return createNotification({
     companyId,
     type: NotificationType.SUCCESS,
@@ -72,7 +82,7 @@ export const notifyLoadDelayed = async (
   companyId: string | Schema.Types.ObjectId,
   loadNumber: string,
   reason: string
-) => {
+): Promise<INotificationDocument> => {
   return createNotification({
     companyId,
     type: NotificationType.WARNING,
@@ -90,7 +100,7 @@ export const notifyDriverStatusChange = async (
   companyId: string | Schema.Types.ObjectId,
   driverName: string,
   status: string
-) => {
+): Promise<INotificationDocument> => {
   return createNotification({
     companyId,
     type: NotificationType.INFO,
@@ -109,7 +119,7 @@ export const notifyMaintenanceDue = async (
   vehicleType: 'truck' | 'trailer',
   vehicleNumber: string,
   daysUntilDue: number
-) => {
+): Promise<INotificationDocument> => {
   const priority = daysUntilDue <= 7 ? NotificationPriority.URGENT : NotificationPriority.HIGH;
   return createNotification({
     companyId,
@@ -129,7 +139,7 @@ export const notifyDocumentExpiring = async (
   userId: string | Schema.Types.ObjectId,
   documentType: string,
   daysUntilExpiry: number
-) => {
+): Promise<INotificationDocument> => {
   const priority = daysUntilExpiry <= 7 ? NotificationPriority.URGENT : NotificationPriority.HIGH;
   return createNotification({
     companyId,

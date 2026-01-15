@@ -14,6 +14,9 @@ import {
   Grid,
   Card,
   CardContent,
+  TextField,
+  MenuItem,
+  InputAdornment,
 } from '@mui/material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import {
@@ -24,6 +27,8 @@ import {
   People,
   CheckCircle,
   Cancel,
+  Search,
+  FilterList,
 } from '@mui/icons-material';
 import { userApi } from '@api/user.api';
 import type { User, UserStats } from '../types/user.types';
@@ -36,6 +41,7 @@ import { format } from 'date-fns';
 
 export const UsersPage: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,16 +50,22 @@ export const UsersPage: React.FC = () => {
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [roleFilter, setRoleFilter] = useState<string>('all');
 
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const [usersData, statsData] = await Promise.all([
-        userApi.getAllUsers(),
+      const [usersResponse, statsData] = await Promise.all([
+        userApi.getAllUsers({ page: 1, limit: 1000 }),
         userApi.getUserStats(),
       ]);
-      setUsers(usersData);
+      // Extract users array from paginated response
+      setUsers(usersResponse.data || []);
       setStats(statsData);
     } catch (err: any) {
       setError(err.message || 'Failed to load users');
@@ -65,6 +77,34 @@ export const UsersPage: React.FC = () => {
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
+
+  // Apply filters
+  useEffect(() => {
+    let result = [...users];
+
+    // Search filter
+    if (searchTerm) {
+      const lowerSearch = searchTerm.toLowerCase();
+      result = result.filter(
+        (user) =>
+          user.name.toLowerCase().includes(lowerSearch) ||
+          user.email.toLowerCase().includes(lowerSearch) ||
+          (user.phone && user.phone.toLowerCase().includes(lowerSearch))
+      );
+    }
+
+    // Status filter
+    if (statusFilter !== 'all') {
+      result = result.filter((user) => user.status === statusFilter);
+    }
+
+    // Role filter
+    if (roleFilter !== 'all') {
+      result = result.filter((user) => user.role === roleFilter);
+    }
+
+    setFilteredUsers(result);
+  }, [users, searchTerm, statusFilter, roleFilter]);
 
   const handleEdit = useCallback((user: User) => {
     setSelectedUser(user);
@@ -221,29 +261,36 @@ export const UsersPage: React.FC = () => {
 
   return (
     <DashboardLayout>
-      <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <Box sx={{ 
+        height: 'calc(100vh - 120px)', 
+        display: 'flex', 
+        flexDirection: 'column', 
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        p: 3
+      }}>
         {/* Compact Header */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Box>
             <Typography variant="h5" component="h1" fontWeight={700} sx={{ mb: 0.5 }}>
-              User Management
-            </Typography>
+          User Management
+        </Typography>
             <Typography variant="body2" color="text.secondary">
               Manage system users and permissions
             </Typography>
           </Box>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => setCreateDialogOpen(true)}
+        <Button
+          variant="contained"
+          startIcon={<Add />}
+          onClick={() => setCreateDialogOpen(true)}
             sx={{ minWidth: 140 }}
-          >
+        >
             Add User
-          </Button>
-        </Box>
+        </Button>
+      </Box>
 
         {/* Compact Stats Row */}
-        {stats && (
+      {stats && (
           <Grid container spacing={2} sx={{ mb: 2 }}>
             <Grid item xs={6} sm={3}>
               <Card sx={{ height: '100%' }}>
@@ -254,14 +301,14 @@ export const UsersPage: React.FC = () => {
                         {stats.totalUsers}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                        Total Users
-                      </Typography>
+                  Total Users
+                </Typography>
                     </Box>
                     <People sx={{ fontSize: 32, color: 'primary.main', opacity: 0.2 }} />
                   </Box>
-                </CardContent>
-              </Card>
-            </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
             <Grid item xs={6} sm={3}>
               <Card sx={{ height: '100%' }}>
                 <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
@@ -271,14 +318,14 @@ export const UsersPage: React.FC = () => {
                         {stats.activeUsers}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                        Active Users
-                      </Typography>
+                  Active Users
+                </Typography>
                     </Box>
                     <CheckCircle sx={{ fontSize: 32, color: 'success.main', opacity: 0.2 }} />
                   </Box>
-                </CardContent>
-              </Card>
-            </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
             <Grid item xs={6} sm={3}>
               <Card sx={{ height: '100%' }}>
                 <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
@@ -288,14 +335,14 @@ export const UsersPage: React.FC = () => {
                         {stats.inactiveUsers}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                        Inactive Users
-                      </Typography>
+                  Inactive Users
+                </Typography>
                     </Box>
                     <Cancel sx={{ fontSize: 32, color: 'error.main', opacity: 0.2 }} />
                   </Box>
-                </CardContent>
-              </Card>
-            </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
             <Grid item xs={6} sm={3}>
               <Card sx={{ height: '100%' }}>
                 <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
@@ -305,33 +352,95 @@ export const UsersPage: React.FC = () => {
                         {stats.roleStats?.owner || 0}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                        Owners
-                      </Typography>
+                  Owners
+                </Typography>
                     </Box>
                     <People sx={{ fontSize: 32, color: 'secondary.main', opacity: 0.2 }} />
                   </Box>
-                </CardContent>
-              </Card>
-            </Grid>
+              </CardContent>
+            </Card>
           </Grid>
-        )}
+        </Grid>
+      )}
 
-        {error && (
+      {error && (
           <Alert 
             severity="error" 
             sx={{ mb: 2 }} 
             onClose={() => setError(null)}
             variant="outlined"
           >
-            {error}
-          </Alert>
-        )}
+          {error}
+        </Alert>
+      )}
+
+        {/* Search and Filters */}
+        <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+          <TextField
+            placeholder="Search users by name, email, or phone..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ flex: 1, minWidth: 300 }}
+            size="small"
+          />
+          
+          <TextField
+            select
+            label="Status"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            sx={{ minWidth: 150 }}
+            size="small"
+          >
+            <MenuItem value="all">All Status</MenuItem>
+            <MenuItem value="active">Active</MenuItem>
+            <MenuItem value="inactive">Inactive</MenuItem>
+          </TextField>
+
+          <TextField
+            select
+            label="Role"
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            sx={{ minWidth: 150 }}
+            size="small"
+          >
+            <MenuItem value="all">All Roles</MenuItem>
+            <MenuItem value="owner">Owner</MenuItem>
+            <MenuItem value="dispatcher">Dispatcher</MenuItem>
+            <MenuItem value="accountant">Accountant</MenuItem>
+            <MenuItem value="driver">Driver</MenuItem>
+          </TextField>
+
+          {(searchTerm || statusFilter !== 'all' || roleFilter !== 'all') && (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<FilterList />}
+              onClick={() => {
+                setSearchTerm('');
+                setStatusFilter('all');
+                setRoleFilter('all');
+              }}
+            >
+              Clear
+            </Button>
+          )}
+        </Box>
 
         {/* Compact DataGrid - Takes remaining space */}
         <Paper 
           sx={{ 
-            flex: 1, 
-            minHeight: 0,
+            minHeight: 600,
+            maxHeight: 900,
+            height: filteredUsers.length > 0 ? Math.min(900, Math.max(600, filteredUsers.length * 52 + 150)) : 600,
             display: 'flex',
             flexDirection: 'column',
             border: '1px solid',
@@ -340,21 +449,23 @@ export const UsersPage: React.FC = () => {
             overflow: 'hidden',
           }}
         >
-          <DataGrid
-            rows={users}
-            columns={columns}
-            loading={loading}
+        <DataGrid
+          rows={filteredUsers}
+          columns={columns}
+          loading={loading}
             pageSizeOptions={[10, 25, 50, 100]}
-            initialState={{
-              pagination: {
-                paginationModel: { pageSize: 25 },
-              },
-            }}
-            disableRowSelectionOnClick
-            sx={{
-              flex: 1,
+          initialState={{
+            pagination: {
+                paginationModel: { pageSize: 10 },
+            },
+          }}
+          disableRowSelectionOnClick
+          autoHeight={false}
+          sx={{
               border: 'none',
-              '& .MuiDataGrid-cell': {
+              height: '100%',
+              width: '100%',
+            '& .MuiDataGrid-cell': {
                 padding: '8px 16px',
                 fontSize: '0.875rem',
               },
@@ -367,10 +478,13 @@ export const UsersPage: React.FC = () => {
                 '&:hover': {
                   backgroundColor: 'action.hover',
                 },
-              },
-            }}
-          />
-        </Paper>
+            },
+            '& .MuiDataGrid-virtualScroller': {
+              overflow: 'auto',
+            },
+          }}
+        />
+      </Paper>
 
       <CreateUserDialog
         open={createDialogOpen}

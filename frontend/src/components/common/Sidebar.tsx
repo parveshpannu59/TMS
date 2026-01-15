@@ -22,6 +22,11 @@ import {
   DirectionsCar,
   Assignment,
   AccountBalance,
+  RvHookup,
+  Build,
+  Assessment,
+  History,
+  Settings,
 } from '@mui/icons-material';
 import { useAuth } from '@hooks/useAuth';
 import { UserRole } from '../../types/user.types';
@@ -67,10 +72,40 @@ const menuItems: MenuItem[] = [
     roles: [UserRole.OWNER, UserRole.DISPATCHER],
   },
   {
+    text: 'Trailers',
+    icon: <RvHookup />,
+    path: '/trailers',
+    roles: [UserRole.OWNER, UserRole.DISPATCHER],
+  },
+  {
     text: 'Accounting',
     icon: <AccountBalance />,
     path: '/accounting',
     roles: [UserRole.OWNER, UserRole.ACCOUNTANT],
+  },
+  {
+    text: 'Maintenance',
+    icon: <Build />,
+    path: '/maintenance',
+    roles: [UserRole.OWNER, UserRole.DISPATCHER],
+  },
+  {
+    text: 'Resources',
+    icon: <Assessment />,
+    path: '/resources',
+    roles: [UserRole.OWNER, UserRole.DISPATCHER],
+  },
+  {
+    text: 'Activity History',
+    icon: <History />,
+    path: '/history',
+    roles: [UserRole.OWNER, UserRole.DISPATCHER],
+  },
+  {
+    text: 'Settings',
+    icon: <Settings />,
+    path: '/settings',
+    roles: [UserRole.OWNER, UserRole.DISPATCHER, UserRole.DRIVER, UserRole.ACCOUNTANT],
   },
 ];
 
@@ -233,19 +268,19 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(
                   whiteSpace: 'nowrap',
                 }}
               >
-                {user?.name}
-              </Typography>
-              <Typography 
-                variant="caption" 
-                color="text.secondary"
+            {user?.name}
+          </Typography>
+          <Typography 
+            variant="caption" 
+            color="text.secondary" 
                 sx={{ 
                   textTransform: 'capitalize',
                   fontSize: '0.75rem',
                   display: 'block',
                 }}
-              >
-                {user?.role}
-              </Typography>
+          >
+            {user?.role}
+          </Typography>
             </Box>
           </Box>
         </Box>

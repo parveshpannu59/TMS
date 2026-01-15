@@ -186,8 +186,8 @@ export const LoginForm: React.FC = React.memo(() => {
             letterSpacing: '-0.5px',
           }}
         >
-          Welcome Back
-        </Typography>
+        Welcome Back
+      </Typography>
         <Typography
           variant="body1"
           sx={{
@@ -197,18 +197,18 @@ export const LoginForm: React.FC = React.memo(() => {
           }}
         >
           Sign in to access your TMS account
-        </Typography>
+      </Typography>
       </Box>
 
       <Fade in={!!error} timeout={300}>
         <Box>
-          {error && (
-            <Alert
-              severity="error"
-              onClose={() => setError(null)}
-              sx={{
-                mb: 1,
-                fontWeight: 500,
+      {error && (
+        <Alert 
+          severity="error" 
+          onClose={() => setError(null)}
+          sx={{
+            mb: 1,
+            fontWeight: 500,
                 backgroundColor: '#fff5f5',
                 color: '#c53030',
                 border: '1px solid #fc8181',
@@ -220,11 +220,11 @@ export const LoginForm: React.FC = React.memo(() => {
                 '& .MuiAlert-action': {
                   color: '#c53030',
                 },
-              }}
-            >
-              {error}
-            </Alert>
-          )}
+          }}
+        >
+          {error}
+        </Alert>
+      )}
         </Box>
       </Fade>
 

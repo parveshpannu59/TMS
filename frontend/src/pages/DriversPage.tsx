@@ -130,8 +130,8 @@ const DriversPage: React.FC = () => {
     if (driver) {
       setEditingDriver(driver);
       const userId = typeof driver.userId === 'string' ? driver.userId : driver.userId._id;
-      // Find the user object for editing
-      const user = users.find(u => u._id === userId);
+      // Find the user object for editing (check both id and _id)
+      const user = users.find(u => (u.id || u._id) === userId);
       setSelectedUser(user || null);
       reset({
         licenseNumber: driver.licenseNumber,
@@ -170,10 +170,11 @@ const DriversPage: React.FC = () => {
         await driverApi.updateDriver(editingDriver._id, data);
         setSuccess('Driver updated successfully');
       } else {
-        // Include userId from selectedUser
+        // Include userId from selectedUser (API returns 'id', not '_id')
+        const userId = selectedUser.id || selectedUser._id;
         const driverData: DriverFormData = {
           ...data,
-          userId: selectedUser._id,
+          userId,
         };
         await driverApi.createDriver(driverData);
         setSuccess('Driver created successfully');
@@ -428,7 +429,8 @@ const DriversPage: React.FC = () => {
                   }
                   isOptionEqualToValue={(option: any, value: any) => {
                     if (!option || !value) return option === value;
-                    return option._id === value._id;
+                    // User API returns 'id', not '_id'
+                    return (option.id || option._id) === (value.id || value._id);
                   }}
                   onChange={(_, newValue) => {
                     setSelectedUser(newValue);

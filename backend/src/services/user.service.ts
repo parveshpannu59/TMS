@@ -51,18 +51,48 @@ export class UserService {
     };
   }
 
-  static async getAllUsers() {
-    const users = await User.find().select('-password').sort({ createdAt: -1 });
+  static async getAllUsers(paginationOptions: any, filters: any = {}) {
+    const { page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc' } = paginationOptions;
+    
+    const query: any = {};
+    if (filters.role) query.role = filters.role;
+    if (filters.status) query.status = filters.status;
+    if (filters.search) {
+      query.$or = [
+        { name: { $regex: filters.search, $options: 'i' } },
+        { email: { $regex: filters.search, $options: 'i' } },
+      ];
+    }
 
-    return users.map((user) => ({
-      id: user._id.toString(),
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      phone: user.phone,
-      status: user.status,
-      createdAt: user.createdAt,
-    }));
+    const skip = (page - 1) * limit;
+    const sort: any = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
+
+    const [users, total] = await Promise.all([
+      User.find(query).select('-password').sort(sort).skip(skip).limit(limit).lean(),
+      User.countDocuments(query),
+    ]);
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data: users.map((user: any) => ({
+        id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        phone: user.phone,
+        status: user.status,
+        createdAt: user.createdAt,
+      })),
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalItems: total,
+        itemsPerPage: limit,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    };
   }
 
   static async getUserById(userId: string) {

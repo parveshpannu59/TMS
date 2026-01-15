@@ -13,6 +13,7 @@ export const authenticate = asyncHandler(
       id: decoded.id,
       email: decoded.email,
       role: decoded.role,
+      companyId: decoded.companyId,
     };
 
     next();
@@ -30,6 +31,7 @@ export const optionalAuth = asyncHandler(
         id: decoded.id,
         email: decoded.email,
         role: decoded.role,
+        companyId: decoded.companyId,
       };
     } catch (error) {
       // Continue without user - token is optional
@@ -47,7 +49,15 @@ export const authorize = (...roles: UserRole[]) => {
       throw ApiError.unauthorized('Authentication required');
     }
 
+    // Debug logging
+    console.log('🔐 Authorization Check:', {
+      userRole: user.role,
+      allowedRoles: roles,
+      isAuthorized: roles.includes(user.role),
+    });
+
     if (!roles.includes(user.role)) {
+      console.log('❌ Authorization FAILED - User role not in allowed roles');
       throw ApiError.forbidden('You do not have permission to access this resource');
     }
 

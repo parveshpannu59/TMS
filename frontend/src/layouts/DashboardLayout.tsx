@@ -15,6 +15,7 @@ import {
 import { AccountCircle, Logout, Menu as MenuIcon } from '@mui/icons-material';
 import { useAuth } from '@hooks/useAuth';
 import { Sidebar, SIDEBAR_WIDTH } from '@components/common/Sidebar';
+import { NotificationMenu } from '@components/common/NotificationMenu';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -50,19 +51,19 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = React.memo(({ chi
         position="fixed"
         elevation={0}
         sx={{
-          width: { 
+          width: {
             xs: '100%',
-            sm: sidebarOpen ? `calc(100% - ${SIDEBAR_WIDTH}px)` : '100%' 
+            sm: sidebarOpen ? `calc(100% - ${SIDEBAR_WIDTH}px)` : '100%'
           },
-          ml: { 
+          ml: {
             xs: 0,
-            sm: sidebarOpen ? `${SIDEBAR_WIDTH}px` : 0 
+            sm: sidebarOpen ? `${SIDEBAR_WIDTH}px` : 0
           },
           transition: theme.transitions.create(['width', 'margin'], {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.enteringScreen,
           }),
-          zIndex: theme.zIndex.drawer + 1,
+          zIndex: theme.zIndex.drawer - 1,
           bgcolor: 'background.paper',
           color: 'text.primary',
           borderBottom: `1px solid ${theme.palette.divider}`,
@@ -120,11 +121,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = React.memo(({ chi
           </Typography>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <NotificationMenu />
             {!isMobile && (
               <Box sx={{ textAlign: 'right', mr: 1 }}>
                 <Typography variant="body2" fontWeight={600} sx={{ lineHeight: 1.2 }}>
-                  {user?.name}
-                </Typography>
+                {user?.name}
+              </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
                   {user?.role}
                 </Typography>
@@ -218,28 +220,32 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = React.memo(({ chi
         onDesktopClose={handleDrawerToggle}
       />
 
+      {/* Main content area - uses flexGrow to automatically fill remaining space.
+          The persistent drawer sidebar already takes up space in the flex layout,
+          so NO margin-left is needed. */}
       <Box
         component="main"
         sx={{
           flexGrow: 1,
-          width: '100%',
           minHeight: '100vh',
           bgcolor: 'background.default',
-          p: { xs: 2, sm: 3 },
-          ml: { 
-            xs: 0,
-            sm: sidebarOpen ? 0 : 0 
-          },
-          transition: theme.transitions.create(['margin'], {
+          transition: theme.transitions.create('all', {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.enteringScreen,
           }),
           display: 'flex',
           flexDirection: 'column',
+          overflow: 'hidden',
         }}
       >
         <Toolbar sx={{ minHeight: '64px !important' }} />
-        <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+        <Box 
+          sx={{ 
+            flex: 1, 
+            minHeight: 0, 
+            overflow: 'auto',
+          }}
+        >
           {children}
         </Box>
       </Box>

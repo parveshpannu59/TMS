@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { UserService } from '../services/user.service';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
+import { PaginationHelper } from '../utils/pagination';
 
 export class UserController {
   static createUser = asyncHandler(async (req: Request, res: Response) => {
@@ -9,9 +10,10 @@ export class UserController {
     return ApiResponse.created(res, userData, 'User created successfully');
   });
 
-  static getAllUsers = asyncHandler(async (_req: Request, res: Response) => {
-    const users = await UserService.getAllUsers();
-    return ApiResponse.success(res, users, 'Users retrieved successfully');
+  static getAllUsers = asyncHandler(async (req: Request, res: Response) => {
+    const paginationOptions = PaginationHelper.parseOptions(req.query);
+    const result = await UserService.getAllUsers(paginationOptions, req.query);
+    return ApiResponse.success(res, result, 'Users retrieved successfully');
   });
 
   static getUserById = asyncHandler(async (req: Request, res: Response) => {

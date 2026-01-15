@@ -40,7 +40,9 @@ export interface INotification {
   readAt?: Date;
 }
 
-interface INotificationDocument extends Omit<INotification, '_id'>, Document {}
+export interface INotificationDocument extends Omit<INotification, '_id'>, Document {
+  markAsRead(): Promise<INotificationDocument>;
+}
 
 const NotificationSchema = new Schema<INotificationDocument>(
   {

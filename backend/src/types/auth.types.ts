@@ -11,6 +11,7 @@ export interface IUser {
   email: string;
   password: string;
   role: UserRole;
+  companyId?: string;
   phone?: string;
   status: 'active' | 'inactive';
   createdAt: Date;
@@ -22,6 +23,7 @@ export interface JWTPayload {
   id: string;
   email: string;
   role: UserRole;
+  companyId?: string;
 }
 
 export interface LoginRequest {
@@ -37,6 +39,7 @@ export interface AuthResponse {
     email: string;
     role: UserRole;
     status: string;
+    companyId?: string;
   };
   expiresAt: string;
 }

@@ -1,6 +1,13 @@
 import { Router } from 'express';
 import authRoutes from './auth.routes';
 import userRoutes from './user.routes';
+import dashboardRoutes from './dashboardRoutes';
+import loadRoutes from './load.routes';
+import truckRoutes from './truck.routes';
+import trailerRoutes from './trailer.routes';
+import driverRoutes from './driver.routes';
+import notificationRoutes from './notification.routes';
+import activityLogRoutes from './activityLog.routes';
 
 const router = Router();
 
@@ -10,5 +17,12 @@ router.get('/health', (_req, res) => {
 
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
+router.use('/dashboard', dashboardRoutes);
+router.use('/loads', loadRoutes);
+router.use('/trucks', truckRoutes);
+router.use('/trailers', trailerRoutes);
+router.use('/drivers', driverRoutes);
+router.use('/notifications', notificationRoutes);
+router.use('/activity-logs', activityLogRoutes);
 
 export default router;

@@ -1,138 +1,195 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Button,
   Card,
-  CardContent,
   Chip,
-  Grid,
-  IconButton,
-  TextField,
-  Typography,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
+  TextField,
+  MenuItem,
+  Typography,
+  IconButton,
   Alert,
-  useMediaQuery,
-  useTheme,
+  CircularProgress,
 } from '@mui/material';
-import {
-  DataGrid,
-  GridColDef,
-  GridRenderCellParams,
-  GridToolbar,
-} from '@mui/x-data-grid';
-import {
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Refresh as RefreshIcon,
-  LocalShipping as TruckIcon,
-  CheckCircle as ActiveIcon,
-  Build as ServiceIcon,
-  Block as InactiveIcon,
-  DirectionsCar as OnTripIcon,
-} from '@mui/icons-material';
-import { truckApi } from '@api/all.api';
-import type { Truck } from '../types/all.types';
-import { TruckStatus } from '../types/all.types';
-import { format } from 'date-fns';
-import CreateTruckDialog from '@components/dialogs/CreateTruckDialog';
-import EditTruckDialog from '@components/dialogs/EditTruckDialog';
+import { DataGrid, GridColDef, GridActionsCellItem } from '@mui/x-data-grid';
+import { Add, Edit, Delete, LocalShipping, Search, FilterList } from '@mui/icons-material';
+import { InputAdornment } from '@mui/material';
+import { DashboardLayout } from '@layouts/DashboardLayout';
+import { EmptyState } from '@/components/common/EmptyState';
+import { StatsCard } from '@/components/common/StatsCard';
+import { truckApi, Truck, TruckFormData } from '@/api/truck.api';
+import { useTheme } from '@mui/material/styles';
+import { CheckCircle, Build, Warning } from '@mui/icons-material';
+import { useForm, Controller } from 'react-hook-form';
+import * as yup from 'yup';
+import { yupResolver } from '@hookform/resolvers/yup';
 
-interface TruckStats {
-  totalTrucks: number;
-  activeTrucks: number;
-  onTripTrucks: number;
-  inServiceTrucks: number;
-  inactiveTrucks: number;
-}
+const truckSchema = yup.object({
+  unitNumber: yup.string().required('Unit number is required'),
+  make: yup.string().required('Make is required'),
+  model: yup.string().required('Model is required'),
+  year: yup.number().required('Year is required').min(1900).max(new Date().getFullYear() + 1),
+  vin: yup.string().required('VIN is required').length(17, 'VIN must be 17 characters'),
+  licensePlate: yup.string().required('License plate is required'),
+  status: yup.string().oneOf(['available', 'on_road', 'in_maintenance', 'out_of_service']),
+});
+
+const statusColors: Record<string, 'success' | 'warning' | 'error' | 'info'> = {
+  available: 'success',
+  on_road: 'info',
+  in_maintenance: 'warning',
+  out_of_service: 'error',
+};
 
 const TrucksPage: React.FC = () => {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [trucks, setTrucks] = useState<Truck[]>([]);
-  const [stats, setStats] = useState<TruckStats | null>(null);
+  const [filteredTrucks, setFilteredTrucks] = useState<Truck[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchText, setSearchText] = useState('');
-  const [selectedTruck, setSelectedTruck] = useState<Truck | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [editingTruck, setEditingTruck] = useState<Truck | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const theme = useTheme();
+  
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const fetchTrucks = async () => {
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<TruckFormData>({
+    resolver: yupResolver(truckSchema),
+    defaultValues: {
+      unitNumber: '',
+      make: '',
+      model: '',
+      year: new Date().getFullYear(),
+      vin: '',
+      licensePlate: '',
+      status: 'available',
+    },
+  });
+
+  const fetchTrucks = useCallback(async () => {
     try {
       setLoading(true);
+      const data = await truckApi.getTrucks();
+      setTrucks(data);
       setError(null);
-      const [trucksData, statsData] = await Promise.all([
-        truckApi.getAllTrucks(),
-        truckApi.getTruckStats(),
-      ]);
-      setTrucks(trucksData);
-      setStats(statsData);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to fetch trucks');
-      console.error('Error fetching trucks:', err);
+      setError(err.message || 'Failed to fetch trucks');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchTrucks();
-  }, []);
+  }, [fetchTrucks]);
 
-  const handleDelete = async () => {
-    if (!selectedTruck) return;
+  // Apply filters
+  useEffect(() => {
+    let result = [...trucks];
+
+    // Search filter
+    if (searchTerm) {
+      const lowerSearch = searchTerm.toLowerCase();
+      result = result.filter(
+        (truck) =>
+          truck.unitNumber?.toLowerCase().includes(lowerSearch) ||
+          truck.vin?.toLowerCase().includes(lowerSearch) ||
+          truck.make?.toLowerCase().includes(lowerSearch) ||
+          truck.model?.toLowerCase().includes(lowerSearch) ||
+          truck.licensePlate?.toLowerCase().includes(lowerSearch)
+      );
+    }
+
+    // Status filter
+    if (statusFilter !== 'all') {
+      result = result.filter((truck) => truck.status === statusFilter);
+    }
+
+    setFilteredTrucks(result);
+  }, [trucks, searchTerm, statusFilter]);
+
+  const handleOpenDialog = (truck?: Truck) => {
+    if (truck) {
+      setEditingTruck(truck);
+      reset({
+        unitNumber: truck.unitNumber,
+        make: truck.make,
+        model: truck.model,
+        year: truck.year,
+        vin: truck.vin,
+        licensePlate: truck.licensePlate,
+        status: truck.status,
+      });
+    } else {
+      setEditingTruck(null);
+      reset({
+        unitNumber: '',
+        make: '',
+        model: '',
+        year: new Date().getFullYear(),
+        vin: '',
+        licensePlate: '',
+        status: 'available',
+      });
+    }
+    setOpenDialog(true);
+  };
+
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+    setEditingTruck(null);
+    reset();
+  };
+
+  const onSubmit = async (data: TruckFormData) => {
     try {
-      await truckApi.deleteTruck(selectedTruck.id);
-      setDeleteDialogOpen(false);
-      setSelectedTruck(null);
+      if (editingTruck) {
+        await truckApi.updateTruck(editingTruck._id, data);
+        setSuccess('Truck updated successfully');
+      } else {
+        await truckApi.createTruck(data);
+        setSuccess('Truck created successfully');
+      }
+      handleCloseDialog();
       fetchTrucks();
+      setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to delete truck');
+      setError(err.message || 'Failed to save truck');
     }
   };
 
-  const getStatusColor = (status: TruckStatus): 'default' | 'success' | 'error' | 'warning' | 'info' => {
-    switch (status) {
-      case TruckStatus.ACTIVE:
-        return 'success';
-      case TruckStatus.ON_TRIP:
-        return 'warning';
-      case TruckStatus.IN_SERVICE:
-        return 'info';
-      case TruckStatus.INACTIVE:
-        return 'error';
-      default:
-        return 'default';
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this truck?')) return;
+
+    try {
+      await truckApi.deleteTruck(id);
+      setSuccess('Truck deleted successfully');
+      fetchTrucks();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete truck');
     }
   };
-
-  const getStatusLabel = (status: TruckStatus): string => {
-    return status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-  };
-
-  const filteredTrucks = useMemo(() => {
-    if (!searchText) return trucks;
-    return trucks.filter(
-      (truck) =>
-        truck.truckNumber.toLowerCase().includes(searchText.toLowerCase()) ||
-        truck.registrationNumber.toLowerCase().includes(searchText.toLowerCase()) ||
-        truck.make.toLowerCase().includes(searchText.toLowerCase()) ||
-        truck.model.toLowerCase().includes(searchText.toLowerCase())
-    );
-  }, [trucks, searchText]);
 
   const columns: GridColDef[] = [
     {
-      field: 'truckNumber',
-      headerName: 'Truck #',
-      width: 120,
-      renderCell: (params: GridRenderCellParams) => (
-        <Typography variant="body2" fontWeight="bold">
+      field: 'unitNumber',
+      headerName: 'Unit #',
+      flex: 0.8,
+      minWidth: 100,
+      renderCell: (params) => (
+        <Typography variant="body2" fontWeight={600}>
           {params.value}
         </Typography>
       ),
@@ -140,305 +197,345 @@ const TrucksPage: React.FC = () => {
     {
       field: 'make',
       headerName: 'Make',
-      width: 120,
+      flex: 1,
+      minWidth: 110,
     },
     {
       field: 'model',
       headerName: 'Model',
-      width: 120,
+      flex: 1,
+      minWidth: 110,
     },
     {
       field: 'year',
       headerName: 'Year',
-      width: 90,
+      flex: 0.6,
+      minWidth: 80,
     },
     {
-      field: 'truckType',
-      headerName: 'Type',
-      width: 150,
+      field: 'vin',
+      headerName: 'VIN',
+      flex: 1.4,
+      minWidth: 140,
     },
     {
-      field: 'capacity',
-      headerName: 'Capacity (tons)',
-      width: 130,
-      valueFormatter: (params: any) => `${params.value} tons`,
-    },
-    {
-      field: 'registrationNumber',
-      headerName: 'Registration',
-      width: 140,
-    },
-    {
-      field: 'registrationExpiry',
-      headerName: 'Reg. Expiry',
-      width: 130,
-      valueFormatter: (params: any) => {
-        if (!params?.value) return 'N/A';
-        try {
-          const date = new Date(params.value);
-          if (isNaN(date.getTime())) return 'N/A';
-          return format(date, 'dd MMM yyyy');
-        } catch {
-          return 'N/A';
-        }
-      },
+      field: 'licensePlate',
+      headerName: 'License Plate',
+      flex: 1,
+      minWidth: 120,
     },
     {
       field: 'status',
       headerName: 'Status',
-      width: 120,
-      renderCell: (params: GridRenderCellParams) => (
+      flex: 1.2,
+      minWidth: 130,
+      renderCell: (params) => (
         <Chip
-          label={getStatusLabel(params.value as TruckStatus)}
-          color={getStatusColor(params.value as TruckStatus)}
+          label={params.value.replace('_', ' ').toUpperCase()}
+          color={statusColors[params.value] || 'default'}
           size="small"
         />
       ),
     },
     {
+      field: 'currentLoadId',
+      headerName: 'Current Load',
+      flex: 1.2,
+      minWidth: 130,
+      renderCell: (params) =>
+        params.value ? (
+          <Typography variant="body2" color="primary">
+            {params.value.loadNumber || 'Assigned'}
+          </Typography>
+        ) : (
+          <Typography variant="body2" color="text.secondary">
+            -
+          </Typography>
+        ),
+    },
+    {
       field: 'actions',
+      type: 'actions',
       headerName: 'Actions',
-      width: 120,
-      sortable: false,
-      renderCell: (params: GridRenderCellParams) => (
-        <Box>
-          <IconButton
-            size="small"
-            onClick={() => {
-              setSelectedTruck(params.row as Truck);
-              setEditDialogOpen(true);
-            }}
-          >
-            <EditIcon fontSize="small" />
-          </IconButton>
-          <IconButton
-            size="small"
-            color="error"
-            onClick={() => {
-              setSelectedTruck(params.row as Truck);
-              setDeleteDialogOpen(true);
-            }}
-          >
-            <DeleteIcon fontSize="small" />
-          </IconButton>
-        </Box>
-      ),
+      width: 100,
+      getActions: (params) => [
+        <GridActionsCellItem
+          icon={<Edit />}
+          label="Edit"
+          onClick={() => handleOpenDialog(params.row as Truck)}
+        />,
+        <GridActionsCellItem
+          icon={<Delete />}
+          label="Delete"
+          onClick={() => handleDelete(params.row._id)}
+          showInMenu
+        />,
+      ],
     },
   ];
 
   return (
-    <Box sx={{ maxWidth: '1400px', mx: 'auto', width: '100%', p: { xs: 2, sm: 3 } }}>
-      {/* Header */}
-      <Box 
-        sx={{ 
-          mb: 3, 
-          display: 'flex', 
-          flexDirection: { xs: 'column', sm: 'row' },
-          justifyContent: 'space-between', 
-          alignItems: { xs: 'stretch', sm: 'center' },
-          gap: 2
-        }}
-      >
-        <Typography variant="h4" fontWeight="bold" sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}>
-          Truck Management
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 2, width: { xs: '100%', sm: 'auto' } }}>
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={fetchTrucks}
-            disabled={loading}
-            fullWidth={isMobile}
-          >
-            Refresh
-          </Button>
+    <DashboardLayout>
+      <Box sx={{ p: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <LocalShipping sx={{ fontSize: 32, color: 'primary.main' }} />
+            <Typography variant="h4" fontWeight={700}>
+              Trucks Management
+            </Typography>
+          </Box>
           <Button
             variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setCreateDialogOpen(true)}
-            fullWidth={isMobile}
+            startIcon={<Add />}
+            onClick={() => handleOpenDialog()}
+            sx={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #5568d3 0%, #6a4196 100%)',
+              },
+            }}
           >
             Add Truck
           </Button>
         </Box>
+
+        {error && (
+          <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+
+        {success && (
+          <Alert severity="success" onClose={() => setSuccess(null)} sx={{ mb: 2 }}>
+            {success}
+          </Alert>
+        )}
+
+        {/* Search and Filters */}
+        <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+          <TextField
+            placeholder="Search by unit#, VIN, make, model, plate..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ flex: 1, minWidth: 300 }}
+            size="small"
+          />
+          
+          <TextField
+            select
+            label="Status"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            sx={{ minWidth: 150 }}
+            size="small"
+          >
+            <MenuItem value="all">All Status</MenuItem>
+            <MenuItem value="available">Available</MenuItem>
+            <MenuItem value="on_trip">On Trip</MenuItem>
+            <MenuItem value="maintenance">Maintenance</MenuItem>
+            <MenuItem value="out_of_service">Out of Service</MenuItem>
+          </TextField>
+
+          {(searchTerm || statusFilter !== 'all') && (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<FilterList />}
+              onClick={() => {
+                setSearchTerm('');
+                setStatusFilter('all');
+              }}
+            >
+              Clear
+            </Button>
+          )}
+        </Box>
+
+        <Card>
+          {!loading && filteredTrucks.length === 0 ? (
+            <EmptyState
+              icon={<LocalShipping />}
+              title={trucks.length === 0 ? "No Trucks Added" : "No Results Found"}
+              description={trucks.length === 0 ? "Start building your fleet by adding your first truck. Include unit number, make, model, and VIN to track your equipment." : "Try adjusting your search or filters"}
+              actionLabel={trucks.length === 0 ? "Add First Truck" : undefined}
+              onAction={trucks.length === 0 ? () => handleOpenDialog() : undefined}
+            />
+          ) : (
+            <Box sx={{ minHeight: 900, height: filteredTrucks.length > 10 ? filteredTrucks.length * 52 + 150 : 900 }}>
+              <DataGrid
+                rows={filteredTrucks}
+                columns={columns}
+                loading={loading}
+                getRowId={(row) => row._id}
+                pageSizeOptions={[10, 25, 50]}
+                initialState={{
+                  pagination: { paginationModel: { pageSize: 10 } },
+                }}
+                disableRowSelectionOnClick
+                autoHeight={false}
+                sx={{
+                  border: 'none',
+                  height: '100%',
+                  width: '100%',
+                  '& .MuiDataGrid-cell:focus': {
+                    outline: 'none',
+                  },
+                  '& .MuiDataGrid-row:hover': {
+                    bgcolor: 'action.hover',
+                  },
+                  '& .MuiDataGrid-virtualScroller': {
+                    overflow: 'auto !important',
+                  },
+                }}
+              />
+            </Box>
+          )}
+        </Card>
+
+        {/* Add/Edit Dialog */}
+        <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+          <DialogTitle>
+            {editingTruck ? 'Edit Truck' : 'Add New Truck'}
+          </DialogTitle>
+          <form onSubmit={handleSubmit(onSubmit)}>
+            <DialogContent>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+                <Controller
+                  name="unitNumber"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      label="Unit Number *"
+                      error={!!errors.unitNumber}
+                      helperText={errors.unitNumber?.message}
+                      disabled={isSubmitting}
+                      fullWidth
+                    />
+                  )}
+                />
+
+                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                  <Controller
+                    name="make"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="Make *"
+                        error={!!errors.make}
+                        helperText={errors.make?.message}
+                        disabled={isSubmitting}
+                      />
+                    )}
+                  />
+
+                  <Controller
+                    name="model"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="Model *"
+                        error={!!errors.model}
+                        helperText={errors.model?.message}
+                        disabled={isSubmitting}
+                      />
+                    )}
+                  />
+                </Box>
+
+                <Controller
+                  name="year"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      label="Year *"
+                      type="number"
+                      error={!!errors.year}
+                      helperText={errors.year?.message}
+                      disabled={isSubmitting}
+                      fullWidth
+                    />
+                  )}
+                />
+
+                <Controller
+                  name="vin"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      label="VIN *"
+                      error={!!errors.vin}
+                      helperText={errors.vin?.message}
+                      disabled={isSubmitting}
+                      inputProps={{ maxLength: 17 }}
+                      fullWidth
+                    />
+                  )}
+                />
+
+                <Controller
+                  name="licensePlate"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      label="License Plate *"
+                      error={!!errors.licensePlate}
+                      helperText={errors.licensePlate?.message}
+                      disabled={isSubmitting}
+                      fullWidth
+                    />
+                  )}
+                />
+
+                <Controller
+                  name="status"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      select
+                      label="Status"
+                      disabled={isSubmitting}
+                      fullWidth
+                    >
+                      <MenuItem value="available">Available</MenuItem>
+                      <MenuItem value="on_road">On Road</MenuItem>
+                      <MenuItem value="in_maintenance">In Maintenance</MenuItem>
+                      <MenuItem value="out_of_service">Out of Service</MenuItem>
+                    </TextField>
+                  )}
+                />
+              </Box>
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+              <Button onClick={handleCloseDialog} disabled={isSubmitting}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={isSubmitting}
+                startIcon={isSubmitting && <CircularProgress size={16} />}
+              >
+                {editingTruck ? 'Update' : 'Create'}
+              </Button>
+            </DialogActions>
+          </form>
+        </Dialog>
       </Box>
-
-      {/* Error Alert */}
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {/* Statistics Cards */}
-      {stats && (
-        <Grid container spacing={{ xs: 2, sm: 3 }} sx={{ mb: 3 }}>
-          <Grid item xs={6} sm={4} md={2.4}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography color="text.secondary" variant="body2">
-                      Total Trucks
-                    </Typography>
-                    <Typography variant="h4" fontWeight="bold">
-                      {stats.totalTrucks}
-                    </Typography>
-                  </Box>
-                  <TruckIcon sx={{ fontSize: 48, color: 'primary.main', opacity: 0.3 }} />
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography color="text.secondary" variant="body2">
-                      Active
-                    </Typography>
-                    <Typography variant="h4" fontWeight="bold" color="success.main">
-                      {stats.activeTrucks}
-                    </Typography>
-                  </Box>
-                  <ActiveIcon sx={{ fontSize: 48, color: 'success.main', opacity: 0.3 }} />
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography color="text.secondary" variant="body2">
-                      On Trip
-                    </Typography>
-                    <Typography variant="h4" fontWeight="bold" color="warning.main">
-                      {stats.onTripTrucks}
-                    </Typography>
-                  </Box>
-                  <OnTripIcon sx={{ fontSize: 48, color: 'warning.main', opacity: 0.3 }} />
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography color="text.secondary" variant="body2">
-                      In Service
-                    </Typography>
-                    <Typography variant="h4" fontWeight="bold" color="info.main">
-                      {stats.inServiceTrucks}
-                    </Typography>
-                  </Box>
-                  <ServiceIcon sx={{ fontSize: 48, color: 'info.main', opacity: 0.3 }} />
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography color="text.secondary" variant="body2">
-                      Inactive
-                    </Typography>
-                    <Typography variant="h4" fontWeight="bold" color="error.main">
-                      {stats.inactiveTrucks}
-                    </Typography>
-                  </Box>
-                  <InactiveIcon sx={{ fontSize: 48, color: 'error.main', opacity: 0.3 }} />
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      )}
-
-      {/* Search */}
-      <Box sx={{ mb: 2 }}>
-        <TextField
-          fullWidth
-          placeholder="Search by truck number, registration, make, or model..."
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          size="small"
-        />
-      </Box>
-
-      {/* Data Grid */}
-      <Card>
-        <DataGrid
-          rows={filteredTrucks}
-          columns={columns}
-          loading={loading}
-          autoHeight
-          pageSizeOptions={[10, 25, 50, 100]}
-          initialState={{
-            pagination: { paginationModel: { pageSize: 25 } },
-          }}
-          slots={{ toolbar: GridToolbar }}
-          slotProps={{
-            toolbar: {
-              showQuickFilter: true,
-              quickFilterProps: { debounceMs: 500 },
-            },
-          }}
-          sx={{
-            '& .MuiDataGrid-cell:focus': {
-              outline: 'none',
-            },
-          }}
-        />
-      </Card>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
-        <DialogTitle>Delete Truck</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to delete truck <strong>{selectedTruck?.truckNumber}</strong>?
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 1 }}>
-            This action cannot be undone.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleDelete} color="error" variant="contained">
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Create Truck Dialog */}
-      <CreateTruckDialog
-        open={createDialogOpen}
-        onClose={() => setCreateDialogOpen(false)}
-        onSuccess={fetchTrucks}
-      />
-
-      {/* Edit Truck Dialog */}
-      <EditTruckDialog
-        open={editDialogOpen}
-        truck={selectedTruck}
-        onClose={() => {
-          setEditDialogOpen(false);
-          setSelectedTruck(null);
-        }}
-        onSuccess={fetchTrucks}
-      />
-    </Box>
+    </DashboardLayout>
   );
 };
 
