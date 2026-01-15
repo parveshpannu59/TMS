@@ -48,7 +48,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = React.memo(({ chi
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
       <AppBar
         position="fixed"
-        elevation={1}
+        elevation={0}
         sx={{
           width: { 
             xs: '100%',
@@ -66,9 +66,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = React.memo(({ chi
           bgcolor: 'background.paper',
           color: 'text.primary',
           borderBottom: `1px solid ${theme.palette.divider}`,
+          backdropFilter: 'blur(8px)',
         }}
       >
-        <Toolbar>
+        <Toolbar sx={{ minHeight: '64px !important', px: { xs: 2, sm: 3 } }}>
           <IconButton
             color="inherit"
             aria-label="toggle drawer"
@@ -89,12 +90,16 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = React.memo(({ chi
             component="div" 
             sx={{ 
               flexGrow: 1,
-              fontWeight: 600,
-              color: 'primary.main',
+              fontWeight: 700,
+              background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
+              backgroundClip: 'text',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
               display: { xs: 'none', sm: 'block' },
+              fontSize: '1.125rem',
             }}
           >
-            TMS - Transportation Management System
+            Transportation Management System
           </Typography>
 
           <Typography 
@@ -102,19 +107,28 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = React.memo(({ chi
             component="div" 
             sx={{ 
               flexGrow: 1,
-              fontWeight: 600,
-              color: 'primary.main',
+              fontWeight: 700,
+              background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
+              backgroundClip: 'text',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
               display: { xs: 'block', sm: 'none' },
+              fontSize: '1.125rem',
             }}
           >
             TMS
           </Typography>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             {!isMobile && (
-              <Typography variant="body2" sx={{ mr: 1 }}>
-                {user?.name}
-              </Typography>
+              <Box sx={{ textAlign: 'right', mr: 1 }}>
+                <Typography variant="body2" fontWeight={600} sx={{ lineHeight: 1.2 }}>
+                  {user?.name}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                  {user?.role}
+                </Typography>
+              </Box>
             )}
             <IconButton 
               color="inherit" 
@@ -123,16 +137,18 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = React.memo(({ chi
                 '&:hover': {
                   bgcolor: 'action.hover',
                 },
+                p: 0.5,
               }}
             >
               <Avatar 
                 sx={{ 
                   bgcolor: 'primary.main',
-                  width: 36,
-                  height: 36,
+                  width: 40,
+                  height: 40,
+                  fontWeight: 600,
                 }}
               >
-                <AccountCircle />
+                {user?.name?.charAt(0).toUpperCase() || <AccountCircle />}
               </Avatar>
             </IconButton>
           </Box>
@@ -218,10 +234,14 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = React.memo(({ chi
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.enteringScreen,
           }),
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
-        <Toolbar />
-        {children}
+        <Toolbar sx={{ minHeight: '64px !important' }} />
+        <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+          {children}
+        </Box>
       </Box>
     </Box>
   );

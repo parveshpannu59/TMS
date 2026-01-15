@@ -101,58 +101,75 @@ export const UsersPage: React.FC = () => {
         field: 'name',
         headerName: 'Name',
         flex: 1,
-        minWidth: 150,
+        minWidth: 140,
       },
       {
         field: 'email',
         headerName: 'Email',
-        flex: 1,
-        minWidth: 200,
+        flex: 1.2,
+        minWidth: 180,
       },
       {
         field: 'role',
         headerName: 'Role',
-        width: 130,
+        width: 110,
         renderCell: (params: GridRenderCellParams) => (
           <Chip
             label={params.value}
             size="small"
             color={params.value === 'owner' ? 'error' : 'primary'}
-            sx={{ textTransform: 'capitalize' }}
+            sx={{ 
+              textTransform: 'capitalize',
+              fontWeight: 600,
+              fontSize: '0.75rem',
+              height: 24,
+            }}
           />
         ),
       },
       {
         field: 'phone',
         headerName: 'Phone',
-        width: 130,
-        renderCell: (params: GridRenderCellParams) => params.value || '-',
+        width: 120,
+        renderCell: (params: GridRenderCellParams) => (
+          <Typography variant="body2" sx={{ fontSize: '0.8125rem' }}>
+            {params.value || '-'}
+          </Typography>
+        ),
       },
       {
         field: 'status',
         headerName: 'Status',
-        width: 110,
+        width: 100,
         renderCell: (params: GridRenderCellParams) => (
           <Chip
             label={params.value}
             size="small"
             color={params.value === 'active' ? 'success' : 'default'}
-            icon={params.value === 'active' ? <CheckCircle /> : <Cancel />}
-            sx={{ textTransform: 'capitalize' }}
+            icon={params.value === 'active' ? <CheckCircle sx={{ fontSize: 14 }} /> : <Cancel sx={{ fontSize: 14 }} />}
+            sx={{ 
+              textTransform: 'capitalize',
+              fontWeight: 600,
+              fontSize: '0.75rem',
+              height: 24,
+            }}
           />
         ),
       },
       {
         field: 'createdAt',
         headerName: 'Created',
-        width: 120,
-        renderCell: (params: GridRenderCellParams) =>
-          format(new Date(params.value), 'MMM dd, yyyy'),
+        width: 110,
+        renderCell: (params: GridRenderCellParams) => (
+          <Typography variant="body2" sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
+            {format(new Date(params.value), 'MMM dd, yyyy')}
+          </Typography>
+        ),
       },
       {
         field: 'actions',
         headerName: 'Actions',
-        width: 180,
+        width: 140,
         sortable: false,
         renderCell: (params: GridRenderCellParams) => (
           <Box sx={{ display: 'flex', gap: 0.5 }}>
@@ -161,24 +178,39 @@ export const UsersPage: React.FC = () => {
               color="primary"
               onClick={() => handleEdit(params.row)}
               title="Edit User"
+              sx={{ 
+                '&:hover': { bgcolor: 'primary.lighter' },
+                width: 32,
+                height: 32,
+              }}
             >
-              <Edit fontSize="small" />
+              <Edit sx={{ fontSize: 16 }} />
             </IconButton>
             <IconButton
               size="small"
               color="warning"
               onClick={() => handleChangePassword(params.row)}
               title="Change Password"
+              sx={{ 
+                '&:hover': { bgcolor: 'warning.lighter' },
+                width: 32,
+                height: 32,
+              }}
             >
-              <VpnKey fontSize="small" />
+              <VpnKey sx={{ fontSize: 16 }} />
             </IconButton>
             <IconButton
               size="small"
               color="error"
               onClick={() => handleDeleteClick(params.row)}
               title="Delete User"
+              sx={{ 
+                '&:hover': { bgcolor: 'error.lighter' },
+                width: 32,
+                height: 32,
+              }}
             >
-              <Delete fontSize="small" />
+              <Delete sx={{ fontSize: 16 }} />
             </IconButton>
           </Box>
         ),
@@ -189,102 +221,156 @@ export const UsersPage: React.FC = () => {
 
   return (
     <DashboardLayout>
-      <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1">
-          User Management
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={() => setCreateDialogOpen(true)}
+      <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* Compact Header */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box>
+            <Typography variant="h5" component="h1" fontWeight={700} sx={{ mb: 0.5 }}>
+              User Management
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Manage system users and permissions
+            </Typography>
+          </Box>
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => setCreateDialogOpen(true)}
+            sx={{ minWidth: 140 }}
+          >
+            Add User
+          </Button>
+        </Box>
+
+        {/* Compact Stats Row */}
+        {stats && (
+          <Grid container spacing={2} sx={{ mb: 2 }}>
+            <Grid item xs={6} sm={3}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Box>
+                      <Typography variant="h4" fontWeight={700} sx={{ mb: 0.5 }}>
+                        {stats.totalUsers}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                        Total Users
+                      </Typography>
+                    </Box>
+                    <People sx={{ fontSize: 32, color: 'primary.main', opacity: 0.2 }} />
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Box>
+                      <Typography variant="h4" fontWeight={700} sx={{ mb: 0.5, color: 'success.main' }}>
+                        {stats.activeUsers}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                        Active Users
+                      </Typography>
+                    </Box>
+                    <CheckCircle sx={{ fontSize: 32, color: 'success.main', opacity: 0.2 }} />
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Box>
+                      <Typography variant="h4" fontWeight={700} sx={{ mb: 0.5, color: 'error.main' }}>
+                        {stats.inactiveUsers}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                        Inactive Users
+                      </Typography>
+                    </Box>
+                    <Cancel sx={{ fontSize: 32, color: 'error.main', opacity: 0.2 }} />
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Box>
+                      <Typography variant="h4" fontWeight={700} sx={{ mb: 0.5, color: 'secondary.main' }}>
+                        {stats.roleStats?.owner || 0}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                        Owners
+                      </Typography>
+                    </Box>
+                    <People sx={{ fontSize: 32, color: 'secondary.main', opacity: 0.2 }} />
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        )}
+
+        {error && (
+          <Alert 
+            severity="error" 
+            sx={{ mb: 2 }} 
+            onClose={() => setError(null)}
+            variant="outlined"
+          >
+            {error}
+          </Alert>
+        )}
+
+        {/* Compact DataGrid - Takes remaining space */}
+        <Paper 
+          sx={{ 
+            flex: 1, 
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 2,
+            overflow: 'hidden',
+          }}
         >
-          Add New User
-        </Button>
-      </Box>
-
-      {stats && (
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                  <People color="primary" />
-                  <Typography variant="h6">{stats.totalUsers}</Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary">
-                  Total Users
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                  <CheckCircle color="success" />
-                  <Typography variant="h6">{stats.activeUsers}</Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary">
-                  Active Users
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                  <Cancel color="error" />
-                  <Typography variant="h6">{stats.inactiveUsers}</Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary">
-                  Inactive Users
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                  <People color="secondary" />
-                  <Typography variant="h6">{stats.roleStats?.owner || 0}</Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary">
-                  Owners
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      )}
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      <Paper sx={{ height: 600, width: '100%' }}>
-        <DataGrid
-          rows={users}
-          columns={columns}
-          loading={loading}
-          pageSizeOptions={[10, 25, 50]}
-          initialState={{
-            pagination: {
-              paginationModel: { pageSize: 10 },
-            },
-          }}
-          disableRowSelectionOnClick
-          sx={{
-            '& .MuiDataGrid-cell': {
-              padding: '8px',
-            },
-          }}
-        />
-      </Paper>
+          <DataGrid
+            rows={users}
+            columns={columns}
+            loading={loading}
+            pageSizeOptions={[10, 25, 50, 100]}
+            initialState={{
+              pagination: {
+                paginationModel: { pageSize: 25 },
+              },
+            }}
+            disableRowSelectionOnClick
+            sx={{
+              flex: 1,
+              border: 'none',
+              '& .MuiDataGrid-cell': {
+                padding: '8px 16px',
+                fontSize: '0.875rem',
+              },
+              '& .MuiDataGrid-columnHeaders': {
+                fontSize: '0.8125rem',
+                fontWeight: 600,
+                backgroundColor: 'background.default',
+              },
+              '& .MuiDataGrid-row': {
+                '&:hover': {
+                  backgroundColor: 'action.hover',
+                },
+              },
+            }}
+          />
+        </Paper>
 
       <CreateUserDialog
         open={createDialogOpen}

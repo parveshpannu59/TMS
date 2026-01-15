@@ -13,6 +13,7 @@ import {
   Typography,
   useTheme,
   alpha,
+  Avatar,
 } from '@mui/material';
 import {
   Dashboard,
@@ -104,13 +105,14 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(
     );
 
     const drawerContent = (
-      <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
         <Toolbar 
           sx={{ 
-            bgcolor: 'primary.main',
+            background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
             color: 'white',
             justifyContent: 'center',
             minHeight: '64px !important',
+            boxShadow: '0 2px 8px rgba(37, 99, 235, 0.2)',
           }}
         >
           <Typography 
@@ -119,15 +121,16 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(
             component="div"
             sx={{ 
               fontWeight: 700,
-              letterSpacing: 1,
+              letterSpacing: 0.5,
+              fontSize: '1.5rem',
             }}
           >
             TMS
           </Typography>
         </Toolbar>
         <Divider />
-        <Box sx={{ flexGrow: 1, overflowY: 'auto', overflowX: 'hidden' }}>
-          <List sx={{ px: 1, py: 2 }}>
+        <Box sx={{ flexGrow: 1, overflowY: 'auto', overflowX: 'hidden', py: 1.5 }}>
+          <List sx={{ px: 1.5 }}>
             {filteredMenuItems.map((item) => {
               const isSelected = location.pathname === item.path;
               return (
@@ -141,11 +144,24 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(
                     onClick={() => handleNavigation(item.path)}
                     sx={{
                       borderRadius: 2,
-                      minHeight: 48,
-                      transition: 'all 0.3s ease-in-out',
+                      minHeight: 44,
+                      px: 2,
+                      transition: 'all 0.2s ease',
                       '&.Mui-selected': {
-                        bgcolor: alpha(theme.palette.primary.main, 0.12),
+                        bgcolor: alpha(theme.palette.primary.main, 0.15),
                         color: 'primary.main',
+                        fontWeight: 600,
+                        '&::before': {
+                          content: '""',
+                          position: 'absolute',
+                          left: 0,
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          width: 3,
+                          height: '60%',
+                          bgcolor: 'primary.main',
+                          borderRadius: '0 2px 2px 0',
+                        },
                         '&:hover': {
                           bgcolor: alpha(theme.palette.primary.main, 0.2),
                         },
@@ -155,7 +171,13 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(
                       },
                       '&:hover': {
                         bgcolor: alpha(theme.palette.primary.main, 0.08),
-                        transform: 'translateX(4px)',
+                        transform: 'translateX(2px)',
+                      },
+                      '@media (prefers-reduced-motion: reduce)': {
+                        transition: 'none',
+                        '&:hover': {
+                          transform: 'none',
+                        },
                       },
                     }}
                   >
@@ -163,7 +185,7 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(
                       sx={{
                         minWidth: 40,
                         color: isSelected ? 'primary.main' : 'text.secondary',
-                        transition: 'color 0.3s ease',
+                        transition: 'color 0.2s ease',
                       }}
                     >
                       {item.icon}
@@ -171,7 +193,7 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(
                     <ListItemText 
                       primary={item.text}
                       primaryTypographyProps={{
-                        fontSize: '0.95rem',
+                        fontSize: '0.9375rem',
                         fontWeight: isSelected ? 600 : 500,
                       }}
                     />
@@ -182,19 +204,50 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(
           </List>
         </Box>
         <Divider />
-        <Box sx={{ p: 2, bgcolor: alpha(theme.palette.primary.main, 0.03) }}>
-          <Typography variant="caption" color="text.secondary" align="center" display="block">
-            {user?.name}
-          </Typography>
-          <Typography 
-            variant="caption" 
-            color="text.secondary" 
-            align="center" 
-            display="block"
-            sx={{ textTransform: 'capitalize', mt: 0.5 }}
-          >
-            {user?.role}
-          </Typography>
+        <Box 
+          sx={{ 
+            p: 2, 
+            bgcolor: alpha(theme.palette.primary.main, 0.04),
+            borderTop: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+            <Avatar 
+              sx={{ 
+                bgcolor: 'primary.main',
+                width: 36,
+                height: 36,
+                fontWeight: 600,
+                fontSize: '0.875rem',
+              }}
+            >
+              {user?.name?.charAt(0).toUpperCase() || 'U'}
+            </Avatar>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography 
+                variant="body2" 
+                fontWeight={600}
+                sx={{ 
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {user?.name}
+              </Typography>
+              <Typography 
+                variant="caption" 
+                color="text.secondary"
+                sx={{ 
+                  textTransform: 'capitalize',
+                  fontSize: '0.75rem',
+                  display: 'block',
+                }}
+              >
+                {user?.role}
+              </Typography>
+            </Box>
+          </Box>
         </Box>
       </Box>
     );
@@ -229,7 +282,8 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(
               boxSizing: 'border-box',
               width: DRAWER_WIDTH,
               backgroundImage: 'none',
-              boxShadow: theme.shadows[8],
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
+              borderRight: `1px solid ${theme.palette.divider}`,
             },
           }}
         >
@@ -246,6 +300,7 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(
               width: DRAWER_WIDTH,
               backgroundImage: 'none',
               borderRight: `1px solid ${theme.palette.divider}`,
+              boxShadow: 'none',
               transition: theme.transitions.create('width', {
                 easing: theme.transitions.easing.sharp,
                 duration: theme.transitions.duration.enteringScreen,
