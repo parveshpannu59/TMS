@@ -55,4 +55,78 @@ router.delete(
   LoadController.deleteLoad
 );
 
+// Broker confirms rate (Owner, Dispatcher, Broker)
+router.post(
+  '/:id/confirm-rate',
+  authorize(UserRole.OWNER, UserRole.DISPATCHER),
+  LoadController.confirmRate
+);
+
+// Driver accepts trip (Driver)
+router.post(
+  '/:id/accept-trip',
+  authorize(UserRole.DRIVER),
+  LoadController.acceptTrip
+);
+
+// Driver submits form details (Driver)
+router.post(
+  '/:id/driver-form',
+  authorize(UserRole.DRIVER),
+  LoadController.submitDriverForm
+);
+
+// Trip workflow endpoints (Driver)
+router.post(
+  '/:id/start-trip',
+  authorize(UserRole.DRIVER),
+  LoadController.startTrip
+);
+
+router.post(
+  '/:id/shipper-check-in',
+  authorize(UserRole.DRIVER),
+  LoadController.shipperCheckIn
+);
+
+router.post(
+  '/:id/shipper-load-in',
+  authorize(UserRole.DRIVER),
+  LoadController.shipperLoadIn
+);
+
+router.post(
+  '/:id/shipper-load-out',
+  authorize(UserRole.DRIVER),
+  LoadController.shipperLoadOut
+);
+
+// Receiver check-in (Driver or Receiver role)
+router.post(
+  '/:id/receiver-check-in',
+  authorize(UserRole.DRIVER),
+  LoadController.receiverCheckIn
+);
+
+// Receiver offload (Driver or Receiver role)
+router.post(
+  '/:id/receiver-offload',
+  authorize(UserRole.DRIVER),
+  LoadController.receiverOffload
+);
+
+// End trip (Driver)
+router.post(
+  '/:id/end-trip',
+  authorize(UserRole.DRIVER),
+  LoadController.endTrip
+);
+
+// SOS/Emergency notification (Driver)
+router.post(
+  '/:id/sos',
+  authorize(UserRole.DRIVER),
+  LoadController.sendSOS
+);
+
 export default router;

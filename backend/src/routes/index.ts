@@ -8,6 +8,7 @@ import trailerRoutes from './trailer.routes';
 import driverRoutes from './driver.routes';
 import notificationRoutes from './notification.routes';
 import activityLogRoutes from './activityLog.routes';
+import messageRoutes from './message.routes';
 
 const router = Router();
 
@@ -24,5 +25,6 @@ router.use('/trailers', trailerRoutes);
 router.use('/drivers', driverRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/activity-logs', activityLogRoutes);
+router.use('/messages', messageRoutes);
 
 export default router;

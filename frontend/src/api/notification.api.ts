@@ -1,4 +1,5 @@
-import { apiClient, ApiResponse } from './client';
+import { apiClient } from './client';
+import type { ApiResponse } from '../types/api.types';
 import {
   Notification,
   NotificationResponse,
@@ -22,7 +23,7 @@ export const notificationApi = {
       '/notifications',
       { params }
     );
-    return response.data.data;
+    return response.data.data!;
   },
 
   /**
@@ -32,7 +33,7 @@ export const notificationApi = {
     const response = await apiClient.get<ApiResponse<UnreadCountResponse>>(
       '/notifications/unread-count'
     );
-    return response.data.data.count;
+    return response.data.data?.count || 0;
   },
 
   /**
@@ -42,7 +43,7 @@ export const notificationApi = {
     const response = await apiClient.patch<ApiResponse<Notification>>(
       `/notifications/${id}/read`
     );
-    return response.data.data;
+    return response.data.data!;
   },
 
   /**
@@ -52,7 +53,7 @@ export const notificationApi = {
     const response = await apiClient.patch<ApiResponse<{ count: number }>>(
       '/notifications/read-all'
     );
-    return response.data.data;
+    return response.data.data!;
   },
 
   /**
@@ -69,7 +70,7 @@ export const notificationApi = {
     const response = await apiClient.delete<ApiResponse<{ count: number }>>(
       '/notifications/clear-read'
     );
-    return response.data.data;
+    return response.data.data!;
   },
 
   /**
@@ -88,6 +89,6 @@ export const notificationApi = {
       '/notifications',
       data
     );
-    return response.data.data;
+    return response.data.data!;
   },
 };

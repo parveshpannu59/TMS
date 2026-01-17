@@ -109,11 +109,18 @@ const DriversPage: React.FC = () => {
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
       result = result.filter(
-        (driver) =>
-          driver.userId?.name?.toLowerCase().includes(lowerSearch) ||
-          driver.userId?.email?.toLowerCase().includes(lowerSearch) ||
-          driver.userId?.phone?.toLowerCase().includes(lowerSearch) ||
-          driver.licenseNumber?.toLowerCase().includes(lowerSearch)
+        (driver) => {
+          // Driver model has name, email, phone directly (not via userId)
+          const driverName = (driver as any).name || driver.userId?.name || '';
+          const driverEmail = (driver as any).email || driver.userId?.email || '';
+          const driverPhone = (driver as any).phone || driver.userId?.phone || '';
+          return (
+            driverName.toLowerCase().includes(lowerSearch) ||
+            driverEmail.toLowerCase().includes(lowerSearch) ||
+            driverPhone.toLowerCase().includes(lowerSearch) ||
+            driver.licenseNumber?.toLowerCase().includes(lowerSearch)
+          );
+        }
       );
     }
 
@@ -166,28 +173,70 @@ const DriversPage: React.FC = () => {
     }
     
     try {
+      setError(null); // Clear previous errors
+      setUserError(null);
+      
       if (editingDriver) {
-        await driverApi.updateDriver(editingDriver._id, data);
+        const driverId = editingDriver.id || editingDriver._id;
+        if (!driverId) {
+          setError('Invalid driver ID for update');
+          return;
+        }
+        // For update, only send the form fields (licenseNumber, licenseExpiry, status)
+        await driverApi.updateDriver(driverId, data);
         setSuccess('Driver updated successfully');
       } else {
-        // Include userId from selectedUser (API returns 'id', not '_id')
-        const userId = selectedUser.id || selectedUser._id;
-        const driverData: DriverFormData = {
-          ...data,
-          userId,
+        // For create, we need to send all required fields
+        // Extract user data to build complete driver object
+        const userId = selectedUser!.id || selectedUser!._id;
+        if (!userId) {
+          setError('Invalid user ID');
+          return;
+        }
+        
+        // Validate user has required fields
+        if (!selectedUser!.phone) {
+          setError('Selected user must have a phone number. Please update the user profile first.');
+          return;
+        }
+        
+        // Build complete driver data with user info
+        // Backend expects CreateDriverData format
+        const driverData: any = {
+          name: selectedUser!.name || '',
+          phone: selectedUser!.phone || '',
+          email: selectedUser!.email || '',
+          licenseNumber: data.licenseNumber,
+          licenseExpiry: data.licenseExpiry,
+          // Required fields with placeholder values - these should be updated later
+          address: 'Please update address',
+          city: 'Please update city',
+          state: 'Please update state',
+          pincode: '000000',
+          emergencyContact: selectedUser!.phone || '0000000000',
+          emergencyContactName: selectedUser!.name || 'Please update',
         };
+        
         await driverApi.createDriver(driverData);
-        setSuccess('Driver created successfully');
+        setSuccess('Driver created successfully. Please update address and emergency contact details later.');
       }
       handleCloseDialog();
       fetchDrivers();
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
-      setError(err.message || 'Failed to save driver');
+      // Extract error message from API response
+      const errorMessage = err.response?.data?.message || err.response?.data?.error || err.message || 'Failed to save driver';
+      setError(errorMessage);
+      setTimeout(() => setError(null), 5000);
     }
   };
 
   const handleDelete = async (id: string) => {
+    if (!id || id === 'undefined' || id === 'null') {
+      setError('Invalid driver ID');
+      return;
+    }
+
     if (!window.confirm('Are you sure you want to delete this driver?')) return;
 
     try {
@@ -196,35 +245,64 @@ const DriversPage: React.FC = () => {
       fetchDrivers();
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
-      setError(err.message || 'Failed to delete driver');
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to delete driver';
+      setError(errorMessage);
+      setTimeout(() => setError(null), 5000);
     }
   };
 
   const columns: GridColDef[] = [
     {
-      field: 'userId.name',
+      field: 'name',
       headerName: 'Driver Name',
       flex: 1.2,
       minWidth: 150,
-      renderCell: (params) => (
-        <Typography variant="body2" fontWeight={600}>
-          {params.row.userId?.name || '-'}
-        </Typography>
-      ),
+      valueGetter: (params) => {
+        if (!params.row) return '-';
+        const row = params.row as any;
+        return row.name || row.userId?.name || '-';
+      },
+      renderCell: (params) => {
+        if (!params.row) return '-';
+        const row = params.row as any;
+        return (
+          <Typography variant="body2" fontWeight={600}>
+            {row.name || row.userId?.name || '-'}
+          </Typography>
+        );
+      },
     },
     {
-      field: 'userId.email',
+      field: 'email',
       headerName: 'Email',
       flex: 1.4,
       minWidth: 180,
-      renderCell: (params) => params.row.userId?.email || '-',
+      valueGetter: (params) => {
+        if (!params.row) return '-';
+        const row = params.row as any;
+        return row.email || row.userId?.email || '-';
+      },
+      renderCell: (params) => {
+        if (!params.row) return '-';
+        const row = params.row as any;
+        return row.email || row.userId?.email || '-';
+      },
     },
     {
-      field: 'userId.phone',
+      field: 'phone',
       headerName: 'Phone',
       flex: 1,
       minWidth: 120,
-      renderCell: (params) => params.row.userId?.phone || '-',
+      valueGetter: (params) => {
+        if (!params.row) return '-';
+        const row = params.row as any;
+        return row.phone || row.userId?.phone || '-';
+      },
+      renderCell: (params) => {
+        if (!params.row) return '-';
+        const row = params.row as any;
+        return row.phone || row.userId?.phone || '-';
+      },
     },
     {
       field: 'licenseNumber',
@@ -275,14 +353,16 @@ const DriversPage: React.FC = () => {
       width: 100,
       getActions: (params) => [
         <GridActionsCellItem
+          key="edit"
           icon={<Edit />}
           label="Edit"
           onClick={() => handleOpenDialog(params.row as Driver)}
         />,
         <GridActionsCellItem
+          key="delete"
           icon={<Delete />}
           label="Delete"
-          onClick={() => handleDelete(params.row._id)}
+          onClick={() => handleDelete(params.row.id || params.row._id)}
           showInMenu
         />,
       ],
@@ -388,7 +468,7 @@ const DriversPage: React.FC = () => {
                 rows={filteredDrivers}
                 columns={columns}
                 loading={loading}
-                getRowId={(row) => row._id}
+                getRowId={(row) => row.id || row._id || String(Math.random())}
                 pageSizeOptions={[10, 25, 50]}
                 initialState={{
                   pagination: { paginationModel: { pageSize: 10 } },
@@ -505,6 +585,42 @@ const DriversPage: React.FC = () => {
                     </TextField>
                   )}
                 />
+
+                {!editingDriver && selectedUser && (
+                  <>
+                    <Typography variant="subtitle2" sx={{ mt: 2, mb: 1, fontWeight: 600 }}>
+                      Driver Details (from selected user)
+                    </Typography>
+                    <TextField
+                      label="Name"
+                      value={selectedUser.name || ''}
+                      disabled
+                      fullWidth
+                      size="small"
+                    />
+                    <TextField
+                      label="Phone"
+                      value={selectedUser.phone || 'Not set'}
+                      disabled
+                      fullWidth
+                      size="small"
+                      helperText="Phone is required for driver. Please update user profile if missing."
+                      error={!selectedUser.phone}
+                    />
+                    <TextField
+                      label="Email"
+                      value={selectedUser.email || ''}
+                      disabled
+                      fullWidth
+                      size="small"
+                    />
+                    {!selectedUser.phone && (
+                      <Alert severity="warning" sx={{ mt: 1 }}>
+                        Phone number is required for driver. Please ensure the selected user has a phone number in their profile.
+                      </Alert>
+                    )}
+                  </>
+                )}
               </Box>
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2 }}>

@@ -1,4 +1,5 @@
-import { apiClient, ApiResponse } from './client';
+import { apiClient } from './client';
+import type { ApiResponse } from '../types/api.types';
 import { ActivityLog, ActivityLogResponse, ActivityStats, ActivityAction, ActivityEntity } from '../types/activityLog.types';
 
 export const activityLogApi = {
@@ -19,7 +20,7 @@ export const activityLogApi = {
       '/activity-logs',
       { params }
     );
-    return response.data.data;
+    return response.data.data!;
   },
 
   /**
@@ -29,7 +30,7 @@ export const activityLogApi = {
     const response = await apiClient.get<ApiResponse<ActivityLog>>(
       `/activity-logs/${id}`
     );
-    return response.data.data;
+    return response.data.data!;
   },
 
   /**
@@ -44,7 +45,7 @@ export const activityLogApi = {
       `/activity-logs/entity/${entity}/${entityId}`,
       { params }
     );
-    return response.data.data;
+    return response.data.data!;
   },
 
   /**
@@ -67,7 +68,7 @@ export const activityLogApi = {
       '/activity-logs',
       data
     );
-    return response.data.data;
+    return response.data.data!;
   },
 
   /**
@@ -81,6 +82,6 @@ export const activityLogApi = {
       '/activity-logs/stats',
       { params }
     );
-    return response.data.data;
+    return response.data.data!;
   },
 };

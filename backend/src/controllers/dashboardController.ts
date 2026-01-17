@@ -82,3 +82,32 @@ export const resetUserWidgets = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const getAccountantDashboard = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const userId = user?.id;
+    const companyId = user?.companyId ?? user?.id;
+    if (!userId || !companyId) {
+      return res.status(401).json({ success: false, message: 'User not authenticated' });
+    }
+    const { dateRange = 'month' } = req.query;
+
+    const data = await dashboardService.getAccountantDashboard(
+      userId,
+      companyId,
+      dateRange as string
+    );
+
+    return res.json({
+      success: true,
+      data,
+    });
+  } catch (error: any) {
+    console.error('Accountant dashboard error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch accountant dashboard data',
+    });
+  }
+};

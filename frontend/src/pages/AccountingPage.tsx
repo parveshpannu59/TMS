@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Grid,
@@ -16,6 +16,7 @@ import {
   Alert,
   alpha,
   useTheme,
+  CircularProgress,
 } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import {
@@ -29,8 +30,9 @@ import {
   Description,
 } from '@mui/icons-material';
 import { DashboardLayout } from '@layouts/DashboardLayout';
-import { loadApi, Load } from '@/api/load.api';
+import { dashboardApi, type AccountantDashboardData } from '@/api/dashboardApi';
 import { useAuth } from '@hooks/useAuth';
+import { useMediaQuery } from '@mui/material';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -59,88 +61,90 @@ interface AccountingSummary {
 
 const AccountingPage: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
-  const [dateFilter, setDateFilter] = useState('this_month');
-  const [loads, setLoads] = useState<Load[]>([]);
+  const [dateFilter, setDateFilter] = useState('month');
+  const [data, setData] = useState<AccountantDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const [summary, setSummary] = useState<AccountingSummary>({
-    totalRevenue: 0,
-    totalExpenses: 0,
-    totalDriverPay: 0,
-    netProfit: 0,
-    invoicesPaid: 0,
-    invoicesPending: 0,
-    invoicesSubmitted: 0,
-  });
-
-  const fetchLoads = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await loadApi.getLoads();
-      setLoads(data.loads);
-      
-      // Calculate summary
-      const completedLoads = data.loads.filter(l => l.status === 'completed' || l.status === 'delivered');
-      const totalRevenue = completedLoads.reduce((sum, load) => sum + load.rate, 0);
-      const totalDriverPay = completedLoads.reduce((sum, load) => sum + (load.driverRate || 0), 0);
-      const totalExpenses = totalDriverPay * 0.2; // Estimated 20% additional expenses
-      const netProfit = totalRevenue - totalExpenses - totalDriverPay;
-      
-      setSummary({
-        totalRevenue,
-        totalExpenses,
-        totalDriverPay,
-        netProfit,
-        invoicesPaid: completedLoads.filter(l => l.status === 'completed').length,
-        invoicesPending: data.loads.filter(l => l.status === 'delivered').length,
-        invoicesSubmitted: completedLoads.length,
-      });
-      
+      const result = await dashboardApi.getAccountantDashboard(dateFilter);
+      setData(result);
       setError(null);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch accounting data');
+      console.error('Accounting dashboard error:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [dateFilter]);
 
   useEffect(() => {
-    fetchLoads();
-  }, [fetchLoads]);
+    fetchData();
+  }, [fetchData]);
 
-  const summaryCards = [
-    {
-      title: 'Total Trip Revenue',
-      value: `$${summary.totalRevenue.toLocaleString()}`,
-      icon: <MonetizationOn />,
-      color: theme.palette.primary.main,
-      subtitle: `${summary.invoicesSubmitted} trips`,
-    },
-    {
-      title: 'Total Trip Expenses',
-      value: `$${summary.totalExpenses.toLocaleString()}`,
-      icon: <Receipt />,
-      color: theme.palette.error.main,
-      subtitle: 'Fuel, tolls, fees',
-    },
-    {
-      title: 'Total Driver Pay',
-      value: `$${summary.totalDriverPay.toLocaleString()}`,
-      icon: <AttachMoney />,
-      color: theme.palette.warning.main,
-      subtitle: `${summary.invoicesPaid} drivers paid`,
-    },
-    {
-      title: 'Net Profit',
-      value: `$${summary.netProfit.toLocaleString()}`,
-      icon: <TrendingUp />,
-      color: summary.netProfit >= 0 ? theme.palette.success.main : theme.palette.error.main,
-      subtitle: `${((summary.netProfit / summary.totalRevenue) * 100 || 0).toFixed(1)}% margin`,
-    },
-  ];
+  const summaryCards = useMemo(() => {
+    if (!data?.profitLoss) return [];
+    
+    const pl = data.profitLoss;
+    return [
+      {
+        title: 'Total Revenue',
+        value: `$${pl.revenue.toLocaleString()}`,
+        icon: <MonetizationOn />,
+        color: theme.palette.primary.main,
+        subtitle: `${data.payments.length} payments`,
+      },
+      {
+        title: 'Total Expenses',
+        value: `$${pl.expenses.toLocaleString()}`,
+        icon: <Receipt />,
+        color: theme.palette.error.main,
+        subtitle: `${data.expenses.count} expense entries`,
+      },
+      {
+        title: 'Total Payments',
+        value: `$${data.payments.reduce((sum, p) => sum + p.totalPayment, 0).toLocaleString()}`,
+        icon: <AttachMoney />,
+        color: theme.palette.warning.main,
+        subtitle: `${data.payments.length} driver payments`,
+      },
+      {
+        title: 'Net Profit',
+        value: `$${pl.profit.toLocaleString()}`,
+        icon: <TrendingUp />,
+        color: pl.profit >= 0 ? theme.palette.success.main : theme.palette.error.main,
+        subtitle: `${pl.margin}% margin`,
+      },
+    ];
+  }, [data, theme]);
+
+  // Documents summary cards
+  const documentCards = useMemo(() => {
+    if (!data?.documents) return [];
+    
+    const docs = data.documents;
+    return [
+      {
+        title: 'BOL Documents',
+        value: docs.bolDocuments,
+        subtitle: `${docs.missingBol} missing`,
+        icon: <Description />,
+        color: docs.missingBol === 0 ? theme.palette.success.main : theme.palette.warning.main,
+      },
+      {
+        title: 'POD Documents',
+        value: docs.podDocuments,
+        subtitle: `${docs.missingPod} missing`,
+        icon: <CheckCircle />,
+        color: docs.missingPod === 0 ? theme.palette.success.main : theme.palette.warning.main,
+      },
+    ];
+  }, [data, theme]);
 
   const tripsColumns: GridColDef[] = [
     {
@@ -258,11 +262,8 @@ const AccountingPage: React.FC = () => {
               onChange={(e) => setDateFilter(e.target.value)}
             >
               <MenuItem value="today">Today</MenuItem>
-              <MenuItem value="this_week">This Week</MenuItem>
-              <MenuItem value="this_month">This Month</MenuItem>
-              <MenuItem value="last_month">Last Month</MenuItem>
-              <MenuItem value="this_quarter">This Quarter</MenuItem>
-              <MenuItem value="this_year">This Year</MenuItem>
+              <MenuItem value="week">This Week</MenuItem>
+              <MenuItem value="month">This Month</MenuItem>
             </Select>
           </FormControl>
         </Box>
@@ -321,48 +322,6 @@ const AccountingPage: React.FC = () => {
           ))}
         </Grid>
 
-        {/* Invoice Status Summary */}
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
-              <Box sx={{ textAlign: 'center' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, mb: 1 }}>
-                  <CheckCircle sx={{ color: 'success.main' }} />
-                  <Typography variant="h5" fontWeight={700}>
-                    {summary.invoicesPaid}
-                  </Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary">
-                  Invoices Paid
-                </Typography>
-              </Box>
-              
-              <Box sx={{ textAlign: 'center' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, mb: 1 }}>
-                  <PendingActions sx={{ color: 'warning.main' }} />
-                  <Typography variant="h5" fontWeight={700}>
-                    {summary.invoicesPending}
-                  </Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary">
-                  Invoices Pending
-                </Typography>
-              </Box>
-              
-              <Box sx={{ textAlign: 'center' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, mb: 1 }}>
-                  <Description sx={{ color: 'info.main' }} />
-                  <Typography variant="h5" fontWeight={700}>
-                    {summary.invoicesSubmitted}
-                  </Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary">
-                  Total Invoices
-                </Typography>
-              </Box>
-            </Box>
-          </CardContent>
-        </Card>
 
         {/* Tabs */}
         <Card>
@@ -376,43 +335,148 @@ const AccountingPage: React.FC = () => {
           </Box>
 
           <TabPanel value={tabValue} index={0}>
-            <Box sx={{ height: 500 }}>
-              <DataGrid
-                rows={loads.filter(l => l.status === 'completed' || l.status === 'delivered' || l.status === 'in_transit')}
-                columns={tripsColumns}
-                loading={loading}
-                getRowId={(row) => row._id}
-                pageSizeOptions={[10, 25, 50]}
-                initialState={{
-                  pagination: { paginationModel: { pageSize: 25 } },
-                }}
-                disableRowSelectionOnClick
-                sx={{
-                  border: 'none',
-                  '& .MuiDataGrid-cell:focus': {
-                    outline: 'none',
-                  },
-                }}
-              />
+            <Box sx={{ height: { xs: 400, sm: 500 }, width: '100%' }}>
+              {loading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                  <CircularProgress />
+                </Box>
+              ) : data ? (
+                <DataGrid
+                  rows={data.driverAssignments.map((assignment, idx) => ({
+                    id: idx,
+                    ...assignment,
+                  }))}
+                  getRowId={(row) => row.id || String(row.loadNumber || idx)}
+                  columns={[
+                    { field: 'loadNumber', headerName: 'Load #', flex: 1, minWidth: 100 },
+                    { field: 'driverName', headerName: 'Driver', flex: 1, minWidth: 120 },
+                    { field: 'truckNumber', headerName: 'Truck', flex: 1, minWidth: 100 },
+                    {
+                      field: 'rate',
+                      headerName: 'Rate',
+                      flex: 1,
+                      minWidth: 100,
+                      renderCell: (params) => `$${params.value.toLocaleString()}`,
+                    },
+                    {
+                      field: 'status',
+                      headerName: 'Status',
+                      flex: 1,
+                      minWidth: 100,
+                      renderCell: (params) => <Chip label={params.value} size="small" />,
+                    },
+                  ]}
+                  pageSizeOptions={[10, 25, 50]}
+                  initialState={{
+                    pagination: { paginationModel: { pageSize: 25 } },
+                  }}
+                  disableRowSelectionOnClick
+                  sx={{
+                    border: 'none',
+                    '& .MuiDataGrid-cell:focus': { outline: 'none' },
+                  }}
+                />
+              ) : (
+                <Alert severity="info">No data available</Alert>
+              )}
             </Box>
           </TabPanel>
 
           <TabPanel value={tabValue} index={1}>
-            <Alert severity="info">
-              Expense tracking feature coming soon. This will show fuel, tolls, lumper fees, and other trip expenses.
-            </Alert>
+            {data?.expenses ? (
+              <Box>
+                <Typography variant="h6" gutterBottom>
+                  Total Expenses: ${data.expenses.total.toLocaleString()}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  {data.expenses.count} expense entries
+                </Typography>
+                <Grid container spacing={2}>
+                  {Object.entries(data.expenses.byCategory).map(([category, amount]) => (
+                    <Grid item xs={12} sm={6} md={3} key={category}>
+                      <Card>
+                        <CardContent>
+                          <Typography variant="body2" color="text.secondary">
+                            {category.replace('_', ' ').toUpperCase()}
+                          </Typography>
+                          <Typography variant="h6">${Number(amount).toLocaleString()}</Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Box>
+            ) : (
+              <Alert severity="info">No expense data available</Alert>
+            )}
           </TabPanel>
 
           <TabPanel value={tabValue} index={2}>
-            <Alert severity="info">
-              Driver pay calculation and pay stub generation coming soon.
-            </Alert>
+            {data?.payments && data.payments.length > 0 ? (
+              <Box sx={{ height: { xs: 400, sm: 500 } }}>
+                <DataGrid
+                  rows={data.payments.map((payment, idx) => ({ id: idx, ...payment }))}
+                  getRowId={(row) => row.id || String(row.loadNumber || idx)}
+                  columns={[
+                    { field: 'loadNumber', headerName: 'Load #', flex: 1, minWidth: 100 },
+                    { field: 'driverName', headerName: 'Driver', flex: 1, minWidth: 120 },
+                    {
+                      field: 'totalPayment',
+                      headerName: 'Payment',
+                      flex: 1,
+                      minWidth: 120,
+                      renderCell: (params) => `$${params.value.toLocaleString()}`,
+                    },
+                    {
+                      field: 'totalMiles',
+                      headerName: 'Miles',
+                      flex: 1,
+                      minWidth: 100,
+                      renderCell: (params) => params.value.toLocaleString(),
+                    },
+                    {
+                      field: 'payPerMile',
+                      headerName: 'Rate/Mile',
+                      flex: 1,
+                      minWidth: 100,
+                      renderCell: (params) => `$${params.value.toFixed(2)}`,
+                    },
+                  ]}
+                  pageSizeOptions={[10, 25, 50]}
+                  initialState={{
+                    pagination: { paginationModel: { pageSize: 25 } },
+                  }}
+                  disableRowSelectionOnClick
+                />
+              </Box>
+            ) : (
+              <Alert severity="info">No payment data available</Alert>
+            )}
           </TabPanel>
 
           <TabPanel value={tabValue} index={3}>
-            <Alert severity="info">
-              Invoice dispute tracking coming soon.
-            </Alert>
+            <Typography variant="body2" color="text.secondary">
+              Documents Summary
+            </Typography>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              {documentCards.map((card, idx) => (
+                <Grid item xs={12} sm={6} key={idx}>
+                  <Card>
+                    <CardContent>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Box sx={{ color: card.color }}>{card.icon}</Box>
+                        <Box>
+                          <Typography variant="h5">{card.value}</Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {card.title} - {card.subtitle}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
           </TabPanel>
         </Card>
       </Box>

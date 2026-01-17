@@ -9,6 +9,7 @@ import type {
   Truck,
   CreateTruckData,
   GPSLocation,
+  Location,
 } from '../types/all.types';
 import { LoadStatus } from '../types/all.types';
 
@@ -49,6 +50,139 @@ export const loadApi = {
   getLoadStats: async (): Promise<LoadStats> => {
     const response = await apiClient.get<ApiResponse<LoadStats>>('/loads/stats');
     return response.data.data as LoadStats;
+  },
+
+  // Broker confirms rate
+  confirmRate: async (
+    id: string,
+    data: {
+      trackingLink: string;
+      pickupAddress: Location;
+      deliveryAddress: Location;
+      miles: number;
+    }
+  ): Promise<Load> => {
+    const response = await apiClient.post<ApiResponse<Load>>(`/loads/${id}/confirm-rate`, data);
+    return response.data.data as Load;
+  },
+
+  // Driver accepts trip
+  acceptTrip: async (id: string): Promise<Load> => {
+    const response = await apiClient.post<ApiResponse<Load>>(`/loads/${id}/accept-trip`);
+    return response.data.data as Load;
+  },
+
+  // Driver submits form details
+  submitDriverForm: async (
+    id: string,
+    data: {
+      loadNumber: string;
+      pickupReferenceNumber: string;
+      pickupTime: string;
+      pickupPlace: string;
+      pickupDate: string;
+      pickupLocation: string;
+      dropoffReferenceNumber: string;
+      dropoffTime: string;
+      dropoffLocation: string;
+      dropoffDate: string;
+    }
+  ): Promise<Load> => {
+    const response = await apiClient.post<ApiResponse<Load>>(`/loads/${id}/driver-form`, data);
+    return response.data.data as Load;
+  },
+
+  // Trip workflow endpoints
+  startTrip: async (
+    id: string,
+    data: {
+      startingMileage: number;
+      startingPhoto: string;
+    }
+  ): Promise<Load> => {
+    const response = await apiClient.post<ApiResponse<Load>>(`/loads/${id}/start-trip`, data);
+    return response.data.data as Load;
+  },
+
+  shipperCheckIn: async (
+    id: string,
+    data: {
+      poNumber: string;
+      loadNumber: string;
+      referenceNumber: string;
+    }
+  ): Promise<Load> => {
+    const response = await apiClient.post<ApiResponse<Load>>(`/loads/${id}/shipper-check-in`, data);
+    return response.data.data as Load;
+  },
+
+  shipperLoadIn: async (
+    id: string,
+    data?: {
+      confirmationDetails?: string;
+    }
+  ): Promise<Load> => {
+    const response = await apiClient.post<ApiResponse<Load>>(`/loads/${id}/shipper-load-in`, data || {});
+    return response.data.data as Load;
+  },
+
+  shipperLoadOut: async (
+    id: string,
+    data: {
+      bolDocument: string;
+    }
+  ): Promise<Load> => {
+    const response = await apiClient.post<ApiResponse<Load>>(`/loads/${id}/shipper-load-out`, data);
+    return response.data.data as Load;
+  },
+
+  receiverCheckIn: async (id: string): Promise<Load> => {
+    const response = await apiClient.post<ApiResponse<Load>>(`/loads/${id}/receiver-check-in`);
+    return response.data.data as Load;
+  },
+
+  receiverOffload: async (
+    id: string,
+    data: {
+      quantity?: string;
+      additionalDetails?: string;
+      bolAcknowledged: boolean;
+      podDocument?: string;
+      podPhoto?: string;
+    }
+  ): Promise<Load> => {
+    const response = await apiClient.post<ApiResponse<Load>>(`/loads/${id}/receiver-offload`, data);
+    return response.data.data as Load;
+  },
+
+  endTrip: async (
+    id: string,
+    data?: {
+      endingMileage?: number;
+      endingPhoto?: string;
+      totalMiles?: number;
+      rate?: number;
+      fuelExpenses?: number;
+      tolls?: number;
+      otherCosts?: number;
+      additionalExpenseDetails?: string;
+    }
+  ): Promise<Load> => {
+    const response = await apiClient.post<ApiResponse<Load>>(`/loads/${id}/end-trip`, data || {});
+    return response.data.data as Load;
+  },
+
+  // SOS/Emergency notification
+  sendSOS: async (
+    id: string,
+    data: {
+      message: string;
+      location?: string;
+      emergencyType?: string;
+    }
+  ): Promise<any> => {
+    const response = await apiClient.post<ApiResponse<any>>(`/loads/${id}/sos`, data);
+    return response.data.data;
   },
 };
 

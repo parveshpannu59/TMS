@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DashboardData } from '@/types/dashboard.types';
-import { dashboardApi } from '@/api/dashboardApi';
+import { dashboardApi, type OwnerDashboardData } from '@/api/dashboardApi';
 
 export const useDashboard = (dateRange: string) => {
-  const [data, setData] = useState<DashboardData | null>(null);
+  const [data, setData] = useState<OwnerDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 

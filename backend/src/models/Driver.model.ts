@@ -25,6 +25,7 @@ export interface IDriver extends Document {
   currentLoadId?: string;
   joiningDate: Date;
   salary?: number;
+  payPerMile?: number; // Pay per mile for owner-operators
   bankAccount?: {
     accountNumber: string;
     ifscCode: string;
@@ -145,6 +146,10 @@ const driverSchema = new Schema<IDriver>(
       default: Date.now,
     },
     salary: {
+      type: Number,
+      min: 0,
+    },
+    payPerMile: {
       type: Number,
       min: 0,
     },

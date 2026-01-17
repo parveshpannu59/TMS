@@ -1,9 +1,17 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export enum LoadStatus {
-  CREATED = 'created',
+  BOOKED = 'booked',
+  RATE_CONFIRMED = 'rate_confirmed',
   ASSIGNED = 'assigned',
+  TRIP_ACCEPTED = 'trip_accepted',
+  TRIP_STARTED = 'trip_started',
+  SHIPPER_CHECK_IN = 'shipper_check_in',
+  SHIPPER_LOAD_IN = 'shipper_load_in',
+  SHIPPER_LOAD_OUT = 'shipper_load_out',
   IN_TRANSIT = 'in_transit',
+  RECEIVER_CHECK_IN = 'receiver_check_in',
+  RECEIVER_OFFLOAD = 'receiver_offload',
   DELIVERED = 'delivered',
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',
@@ -45,7 +53,82 @@ interface IDocuments {
   others: string[];
 }
 
+interface IBrokerConfirmationDetails {
+  pickupAddress: ILocation;
+  deliveryAddress: ILocation;
+  miles: number;
+}
+
+interface IDriverFormDetails {
+  loadNumber: string;
+  pickupReferenceNumber: string;
+  pickupTime: Date;
+  pickupPlace: string;
+  pickupDate: Date;
+  pickupLocation: string;
+  dropoffReferenceNumber: string;
+  dropoffTime: Date;
+  dropoffLocation: string;
+  dropoffDate: Date;
+}
+
+interface ITripStartDetails {
+  startingMileage: number;
+  startingPhoto: string; // URL or path to odometer/speedometer photo
+  tripStartedAt: Date;
+}
+
+interface ITripExpenses {
+  fuelExpenses: number;
+  tolls: number;
+  otherCosts: number;
+  totalExpenses: number;
+  additionalDetails?: string;
+}
+
+interface ITripCompletionDetails {
+  endingMileage: number;
+  endingPhoto?: string; // URL or path to ending odometer photo
+  totalMiles: number;
+  rate: number;
+  totalPayment: number;
+  expenses: ITripExpenses;
+  completedAt: Date;
+}
+
+interface IShipperCheckInDetails {
+  poNumber: string;
+  loadNumber: string;
+  referenceNumber: string;
+  checkInAt: Date;
+}
+
+interface IShipperLoadInDetails {
+  confirmationDetails?: string;
+  loadInAt: Date;
+}
+
+interface IShipperLoadOutDetails {
+  loadOutAt: Date;
+  bolDocument?: string; // URL or path to BOL PDF
+}
+
+interface IReceiverCheckInDetails {
+  checkInAt: Date;
+  arrivalConfirmed: boolean;
+}
+
+interface IReceiverOffloadDetails {
+  offloadAt: Date;
+  quantity?: string;
+  additionalDetails?: string;
+  bolAcknowledged: boolean;
+  podDocument?: string; // URL or path to POD document/photo
+  podPhoto?: string; // URL or path to proof of delivery photo
+}
+
 export interface ILoad extends Document {
+  companyId?: string;
   loadNumber: string;
   customerName: string;
   customerContact: string;
@@ -57,6 +140,7 @@ export interface ILoad extends Document {
   actualDeliveryDate?: Date;
   driverId?: string;
   truckId?: string;
+  trailerId?: string;
   cargoType: string;
   cargoDescription: string;
   weight: number;
@@ -73,6 +157,31 @@ export interface ILoad extends Document {
   currentLocation?: IGPSLocation;
   locationHistory: IGPSLocation[];
   statusHistory: IStatusHistory[];
+  // Broker confirmation fields
+  trackingLink?: string;
+  brokerConfirmedRate?: boolean;
+  brokerConfirmedAt?: Date;
+  brokerConfirmationDetails?: IBrokerConfirmationDetails;
+  // Driver acceptance and form fields
+  tripAcceptedAt?: Date;
+  driverFormDetails?: IDriverFormDetails;
+  // Trip start details
+  tripStartDetails?: ITripStartDetails;
+  // Trip completion details
+  tripCompletionDetails?: ITripCompletionDetails;
+  // Shipper check-in and load details
+  shipperCheckInDetails?: IShipperCheckInDetails;
+  shipperLoadInDetails?: IShipperLoadInDetails;
+  shipperLoadOutDetails?: IShipperLoadOutDetails;
+  // Receiver check-in and offload details
+  receiverCheckInDetails?: IReceiverCheckInDetails;
+  receiverOffloadDetails?: IReceiverOffloadDetails;
+  // Status tracking timestamps
+  assignedAt?: Date;
+  tripEndedAt?: Date;
+  completedAt?: Date;
+  cancelledAt?: Date;
+  cancellationReason?: string;
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
@@ -109,8 +218,86 @@ const DocumentsSchema = new Schema({
   others: [{ type: String }],
 });
 
+const BrokerConfirmationDetailsSchema = new Schema({
+  pickupAddress: { type: LocationSchema, required: true },
+  deliveryAddress: { type: LocationSchema, required: true },
+  miles: { type: Number, required: true, min: 0 },
+});
+
+const DriverFormDetailsSchema = new Schema({
+  loadNumber: { type: String, required: true },
+  pickupReferenceNumber: { type: String, required: true },
+  pickupTime: { type: Date, required: true },
+  pickupPlace: { type: String, required: true },
+  pickupDate: { type: Date, required: true },
+  pickupLocation: { type: String, required: true },
+  dropoffReferenceNumber: { type: String, required: true },
+  dropoffTime: { type: Date, required: true },
+  dropoffLocation: { type: String, required: true },
+  dropoffDate: { type: Date, required: true },
+});
+
+const TripStartDetailsSchema = new Schema({
+  startingMileage: { type: Number, required: true, min: 0 },
+  startingPhoto: { type: String, required: true }, // URL or path to photo
+  tripStartedAt: { type: Date, required: true },
+});
+
+const TripExpensesSchema = new Schema({
+  fuelExpenses: { type: Number, required: true, min: 0, default: 0 },
+  tolls: { type: Number, required: true, min: 0, default: 0 },
+  otherCosts: { type: Number, required: true, min: 0, default: 0 },
+  totalExpenses: { type: Number, required: true, min: 0 },
+  additionalDetails: { type: String },
+});
+
+const TripCompletionDetailsSchema = new Schema({
+  endingMileage: { type: Number, required: true, min: 0 },
+  endingPhoto: { type: String }, // URL or path to ending odometer photo
+  totalMiles: { type: Number, required: true, min: 0 },
+  rate: { type: Number, required: true, min: 0 }, // Pay per mile rate
+  totalPayment: { type: Number, required: true, min: 0 },
+  expenses: { type: TripExpensesSchema, required: true },
+  completedAt: { type: Date, required: true },
+});
+
+const ShipperCheckInDetailsSchema = new Schema({
+  poNumber: { type: String, required: true },
+  loadNumber: { type: String, required: true },
+  referenceNumber: { type: String, required: true },
+  checkInAt: { type: Date, required: true },
+});
+
+const ShipperLoadInDetailsSchema = new Schema({
+  confirmationDetails: { type: String },
+  loadInAt: { type: Date, required: true },
+});
+
+const ShipperLoadOutDetailsSchema = new Schema({
+  loadOutAt: { type: Date, required: true },
+  bolDocument: { type: String }, // URL or path to BOL PDF
+});
+
+const ReceiverCheckInDetailsSchema = new Schema({
+  checkInAt: { type: Date, required: true },
+  arrivalConfirmed: { type: Boolean, default: true },
+});
+
+const ReceiverOffloadDetailsSchema = new Schema({
+  offloadAt: { type: Date, required: true },
+  quantity: { type: String },
+  additionalDetails: { type: String },
+  bolAcknowledged: { type: Boolean, required: true },
+  podDocument: { type: String }, // URL or path to POD document
+  podPhoto: { type: String }, // URL or path to POD photo
+});
+
 const loadSchema = new Schema<ILoad>(
   {
+    companyId: {
+      type: String,
+      required: false, // Optional for backward compatibility
+    },
     loadNumber: {
       type: String,
       required: true,
@@ -157,6 +344,10 @@ const loadSchema = new Schema<ILoad>(
     truckId: {
       type: String,
       ref: 'Truck',
+    },
+    trailerId: {
+      type: String,
+      ref: 'Trailer',
     },
     cargoType: {
       type: String,
@@ -212,7 +403,7 @@ const loadSchema = new Schema<ILoad>(
     status: {
       type: String,
       enum: Object.values(LoadStatus),
-      default: LoadStatus.CREATED,
+      default: LoadStatus.BOOKED,
     },
     specialInstructions: {
       type: String,
@@ -227,6 +418,68 @@ const loadSchema = new Schema<ILoad>(
     statusHistory: {
       type: [StatusHistorySchema],
       default: [],
+    },
+    // Broker confirmation fields
+    trackingLink: {
+      type: String,
+    },
+    brokerConfirmedRate: {
+      type: Boolean,
+      default: false,
+    },
+    brokerConfirmedAt: {
+      type: Date,
+    },
+    brokerConfirmationDetails: {
+      type: BrokerConfirmationDetailsSchema,
+    },
+    // Driver acceptance and form fields
+    tripAcceptedAt: {
+      type: Date,
+    },
+    driverFormDetails: {
+      type: DriverFormDetailsSchema,
+    },
+    // Trip start details
+    tripStartDetails: {
+      type: TripStartDetailsSchema,
+    },
+    // Trip completion details
+    tripCompletionDetails: {
+      type: TripCompletionDetailsSchema,
+    },
+    // Shipper check-in and load details
+    shipperCheckInDetails: {
+      type: ShipperCheckInDetailsSchema,
+    },
+    shipperLoadInDetails: {
+      type: ShipperLoadInDetailsSchema,
+    },
+    shipperLoadOutDetails: {
+      type: ShipperLoadOutDetailsSchema,
+    },
+    // Receiver check-in and offload details
+    receiverCheckInDetails: {
+      type: ReceiverCheckInDetailsSchema,
+    },
+    receiverOffloadDetails: {
+      type: ReceiverOffloadDetailsSchema,
+    },
+    // Status tracking timestamps
+    assignedAt: {
+      type: Date,
+    },
+    tripEndedAt: {
+      type: Date,
+    },
+    completedAt: {
+      type: Date,
+    },
+    cancelledAt: {
+      type: Date,
+    },
+    cancellationReason: {
+      type: String,
     },
     createdBy: {
       type: String,
@@ -255,6 +508,7 @@ loadSchema.pre('save', async function () {
 loadSchema.index({ status: 1, createdAt: -1 });
 loadSchema.index({ driverId: 1, status: 1 });
 loadSchema.index({ createdBy: 1 });
-loadSchema.index({ loadNumber: 1 });
+// Make loadNumber unique per company, not globally
+loadSchema.index({ companyId: 1, loadNumber: 1 }, { unique: true });
 
 export const Load = mongoose.model<ILoad>('Load', loadSchema);

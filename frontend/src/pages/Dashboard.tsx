@@ -308,13 +308,27 @@ import {
   IconButton,
   Toolbar,
   Alert,
-  Skeleton
+  Skeleton,
+  Card,
+  CardContent,
+  Chip,
+  useTheme,
+  useMediaQuery,
+  Divider,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import PeopleIcon from '@mui/icons-material/People';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import TrendingDownIcon from '@mui/icons-material/TrendingDown';
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import ReceiptIcon from '@mui/icons-material/Receipt';
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import RouteIcon from '@mui/icons-material/Route';
+import DescriptionIcon from '@mui/icons-material/Description';
+import PendingActionsIcon from '@mui/icons-material/PendingActions';
 
 import { useDashboard } from '../hooks/useDashboard';
 import { useDashboardLayout } from '../hooks/useDashboardLayout';
@@ -326,6 +340,9 @@ import { useAuth } from '../hooks/useAuth';
 import { DashboardLayout } from '@layouts/DashboardLayout';
 
 const Dashboard = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
   const [dateRange, setDateRange] = useState('today');
   const { data, loading, error, refetch } = useDashboard(dateRange);
   const { resetLayout, loading: layoutLoading } = useDashboardLayout();
@@ -386,6 +403,86 @@ const Dashboard = () => {
     ];
   }, [data]);
 
+  // Financial metrics widgets
+  const financialWidgets = useMemo(() => {
+    if (!data?.financialMetrics) return [];
+    
+    const fm = data.financialMetrics;
+    return [
+      {
+        id: 'revenue',
+        title: 'Total Revenue',
+        value: `$${fm.totalRevenue.toLocaleString()}`,
+        subtitle: 'Completed loads',
+        icon: <AttachMoneyIcon />,
+        color: 'success.main',
+        trend: undefined
+      },
+      {
+        id: 'profit',
+        title: 'Total Profit',
+        value: `$${fm.totalProfit.toLocaleString()}`,
+        subtitle: `${fm.profitMargin.toFixed(2)}% margin`,
+        icon: <AccountBalanceIcon />,
+        color: fm.totalProfit >= 0 ? 'success.main' : 'error.main',
+        trend: undefined
+      },
+      {
+        id: 'distance',
+        title: 'Distance Traveled',
+        value: `${fm.totalDistanceMiles.toFixed(0)} mi`,
+        subtitle: `${fm.totalDistanceKm.toFixed(2)} km`,
+        icon: <RouteIcon />,
+        color: 'info.main',
+        trend: undefined
+      }
+    ];
+  }, [data]);
+
+  // Invoices widgets
+  const invoiceWidgets = useMemo(() => {
+    if (!data?.invoices) return [];
+    
+    const inv = data.invoices;
+    return [
+      {
+        id: 'total-invoices',
+        title: 'Total Invoices',
+        value: inv.total,
+        subtitle: `$${inv.totalAmount.toLocaleString()}`,
+        icon: <ReceiptIcon />,
+        color: 'primary.main'
+      },
+      {
+        id: 'paid-invoices',
+        title: 'Paid',
+        value: inv.paid,
+        subtitle: `$${inv.paidAmount.toLocaleString()}`,
+        icon: <CheckCircleIcon />,
+        color: 'success.main'
+      },
+      {
+        id: 'unpaid-invoices',
+        title: 'Unpaid',
+        value: inv.unpaid,
+        subtitle: `$${inv.unpaidAmount.toLocaleString()}`,
+        icon: <PendingActionsIcon />,
+        color: 'warning.main'
+      },
+      {
+        id: 'overdue-invoices',
+        title: 'Overdue',
+        value: inv.overdue,
+        subtitle: 'Requires attention',
+        icon: <DescriptionIcon />,
+        color: 'error.main'
+      }
+    ];
+  }, [data]);
+
+  // Operational metrics
+  const operationalMetrics = data?.operationalMetrics;
+
   if (loading || layoutLoading) {
     return (
       <Box sx={{ p: 3 }}>
@@ -421,12 +518,17 @@ const Dashboard = () => {
     <DashboardLayout>
       <Box sx={{ p: 3 }}>
       {/* Header */}
-      <Box mb={3}>
-        <Typography variant="h4" gutterBottom fontWeight={700}>
+      <Box mb={{ xs: 2, sm: 3 }}>
+        <Typography 
+          variant={isMobile ? 'h5' : 'h4'} 
+          gutterBottom 
+          fontWeight={700}
+          sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}
+        >
           Welcome back, {user?.name}! 👋
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Here's your fleet overview for today
+          Here's your fleet overview for {dateRange === 'today' ? 'today' : dateRange === 'week' ? 'this week' : 'this month'}
         </Typography>
       </Box>
 
@@ -469,8 +571,8 @@ const Dashboard = () => {
         </Alert>
       )}
 
-      {/* KPI Cards */}
-      <Grid container spacing={3} mb={3}>
+      {/* KPI Cards - Operational */}
+      <Grid container spacing={{ xs: 2, sm: 3 }} mb={3}>
         {kpiWidgets.map((widget) => (
           <Grid item xs={12} sm={6} md={3} key={widget.id}>
             <Suspense fallback={<Skeleton variant="rectangular" height={120} />}>
@@ -480,8 +582,92 @@ const Dashboard = () => {
         ))}
       </Grid>
 
+      {/* Financial Metrics */}
+      {data?.financialMetrics && (
+        <Grid container spacing={{ xs: 2, sm: 3 }} mb={3}>
+          <Grid item xs={12}>
+            <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
+              Financial Overview
+            </Typography>
+          </Grid>
+          {financialWidgets.map((widget) => (
+            <Grid item xs={12} sm={6} md={4} key={widget.id}>
+              <Suspense fallback={<Skeleton variant="rectangular" height={120} />}>
+                <KPICard {...widget} />
+              </Suspense>
+            </Grid>
+          ))}
+        </Grid>
+      )}
+
+      {/* Invoices Summary */}
+      {data?.invoices && (
+        <Grid container spacing={{ xs: 2, sm: 3 }} mb={3}>
+          <Grid item xs={12}>
+            <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
+              Invoices Summary
+            </Typography>
+          </Grid>
+          {invoiceWidgets.map((widget) => (
+            <Grid item xs={12} sm={6} md={3} key={widget.id}>
+              <Suspense fallback={<Skeleton variant="rectangular" height={120} />}>
+                <KPICard {...widget} />
+              </Suspense>
+            </Grid>
+          ))}
+        </Grid>
+      )}
+
+      {/* Operational Metrics */}
+      {operationalMetrics && (
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
+              Operational Metrics
+            </Typography>
+            <Grid container spacing={{ xs: 2, sm: 3 }}>
+              <Grid item xs={6} sm={3}>
+                <Typography variant="caption" color="text.secondary">
+                  Total Loads
+                </Typography>
+                <Typography variant="h5" fontWeight={700}>
+                  {operationalMetrics.totalLoads}
+                </Typography>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Typography variant="caption" color="text.secondary">
+                  Assigned Drivers
+                </Typography>
+                <Typography variant="h5" fontWeight={700}>
+                  {operationalMetrics.assignedDrivers}
+                </Typography>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Typography variant="caption" color="text.secondary">
+                  Completed Loads
+                </Typography>
+                <Typography variant="h5" fontWeight={700}>
+                  {operationalMetrics.completedLoads}
+                </Typography>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Typography variant="caption" color="text.secondary">
+                  Total Distance
+                </Typography>
+                <Typography variant="h5" fontWeight={700}>
+                  {operationalMetrics.totalDistanceMiles.toFixed(0)} mi
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {operationalMetrics.totalDistanceKm} km
+                </Typography>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      )}
+
         {/* Main Content Grid */}
-        <Grid container spacing={3}>
+        <Grid container spacing={{ xs: 2, sm: 3 }}>
           {/* Load Status Chart */}
           <Grid item xs={12} md={6}>
             <Suspense fallback={<Skeleton variant="rectangular" height={250} />}>

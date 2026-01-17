@@ -4,6 +4,7 @@ import {
   getUserWidgets,
   saveUserWidgets,
   resetUserWidgets,
+  getAccountantDashboard,
 } from '../controllers/dashboardController';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { UserRole } from '../types/auth.types';
@@ -41,6 +42,14 @@ router.delete(
   '/widgets',
   authenticate,
   resetUserWidgets
+);
+
+// Accountant dashboard
+router.get(
+  '/accountant',
+  authenticate,
+  authorize(UserRole.OWNER, UserRole.ACCOUNTANT),
+  getAccountantDashboard
 );
 
 export default router;

@@ -143,4 +143,54 @@ export const loadApi = {
   deleteLoad: async (id: string): Promise<void> => {
     await apiClient.delete(`/loads/${id}`);
   },
+
+  // Broker confirms rate
+  confirmRate: async (
+    id: string,
+    data: {
+      trackingLink: string;
+      pickupAddress: {
+        address: string;
+        city: string;
+        state: string;
+        pincode: string;
+      };
+      deliveryAddress: {
+        address: string;
+        city: string;
+        state: string;
+        pincode: string;
+      };
+      miles: number;
+    }
+  ): Promise<Load> => {
+    const response = await apiClient.post(`/loads/${id}/confirm-rate`, data);
+    return response.data.data;
+  },
+
+  // Driver accepts trip
+  acceptTrip: async (id: string): Promise<Load> => {
+    const response = await apiClient.post(`/loads/${id}/accept-trip`);
+    return response.data.data;
+  },
+
+  // Driver submits form details
+  submitDriverForm: async (
+    id: string,
+    data: {
+      loadNumber: string;
+      pickupReferenceNumber: string;
+      pickupTime: string;
+      pickupPlace: string;
+      pickupDate: string;
+      pickupLocation: string;
+      dropoffReferenceNumber: string;
+      dropoffTime: string;
+      dropoffLocation: string;
+      dropoffDate: string;
+    }
+  ): Promise<Load> => {
+    const response = await apiClient.post(`/loads/${id}/driver-form`, data);
+    return response.data.data;
+  },
 };

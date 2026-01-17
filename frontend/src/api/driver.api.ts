@@ -7,15 +7,21 @@ export interface DriverFormData {
   status?: 'available' | 'on_duty' | 'off_duty' | 'on_leave';
 }
 
-export interface Driver extends DriverFormData {
+export interface Driver {
   _id: string;
-  companyId: string;
-  userId: {
+  id?: string;
+  companyId?: string;
+  name?: string; // Driver model has name directly
+  email?: string; // Driver model has email directly
+  phone?: string; // Driver model has phone directly
+  userId?: string | {
     _id: string;
     name: string;
     email: string;
     phone?: string;
   };
+  licenseNumber: string;
+  licenseExpiry: Date | string;
   status: 'available' | 'on_duty' | 'off_duty' | 'on_leave';
   currentLoadId?: any;
   createdAt: string;

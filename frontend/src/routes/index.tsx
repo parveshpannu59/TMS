@@ -54,6 +54,7 @@ const DriversPage = lazy(() => import('@pages/DriversPage'));
 const AccountingPage = lazy(() => import('@pages/AccountingPage'));
 const SettingsPage = lazy(() => import('@pages/SettingsPage'));
 const ActivityHistoryPage = lazy(() => import('@pages/ActivityHistoryPage'));
+const DriverDashboard = lazy(() => import('@pages/DriverDashboard'));
 
 export const AppRoutes = () => {
   return (
@@ -129,6 +130,14 @@ export const AppRoutes = () => {
           element={
             <ProtectedRoute>
               <ActivityHistoryPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/driver"
+          element={
+            <ProtectedRoute>
+              <DriverDashboard />
             </ProtectedRoute>
           }
         />

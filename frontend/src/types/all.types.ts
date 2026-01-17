@@ -1,8 +1,16 @@
 // LOAD TYPES
 export enum LoadStatus {
-    CREATED = 'created',
+    BOOKED = 'booked',
+    RATE_CONFIRMED = 'rate_confirmed',
     ASSIGNED = 'assigned',
+    TRIP_ACCEPTED = 'trip_accepted',
+    TRIP_STARTED = 'trip_started',
+    SHIPPER_CHECK_IN = 'shipper_check_in',
+    SHIPPER_LOAD_IN = 'shipper_load_in',
+    SHIPPER_LOAD_OUT = 'shipper_load_out',
     IN_TRANSIT = 'in_transit',
+    RECEIVER_CHECK_IN = 'receiver_check_in',
+    RECEIVER_OFFLOAD = 'receiver_offload',
     DELIVERED = 'delivered',
     COMPLETED = 'completed',
     CANCELLED = 'cancelled',
@@ -30,6 +38,62 @@ export enum LoadStatus {
     heading?: number;
   }
   
+  export interface BrokerConfirmationDetails {
+    pickupAddress: Location;
+    deliveryAddress: Location;
+    miles: number;
+  }
+
+  export interface DriverFormDetails {
+    loadNumber: string;
+    pickupReferenceNumber: string;
+    pickupTime: string;
+    pickupPlace: string;
+    pickupDate: string;
+    pickupLocation: string;
+    dropoffReferenceNumber: string;
+    dropoffTime: string;
+    dropoffLocation: string;
+    dropoffDate: string;
+  }
+
+  export interface TripStartDetails {
+    startingMileage: number;
+    startingPhoto: string;
+    tripStartedAt: string;
+  }
+
+  export interface ShipperCheckInDetails {
+    poNumber: string;
+    loadNumber: string;
+    referenceNumber: string;
+    checkInAt: string;
+  }
+
+  export interface ShipperLoadInDetails {
+    confirmationDetails?: string;
+    loadInAt: string;
+  }
+
+  export interface ShipperLoadOutDetails {
+    loadOutAt: string;
+    bolDocument?: string;
+  }
+
+  export interface ReceiverCheckInDetails {
+    checkInAt: string;
+    arrivalConfirmed: boolean;
+  }
+
+  export interface ReceiverOffloadDetails {
+    offloadAt: string;
+    quantity?: string;
+    additionalDetails?: string;
+    bolAcknowledged: boolean;
+    podDocument?: string;
+    podPhoto?: string;
+  }
+
   export interface Load {
     id: string;
     loadNumber: string;
@@ -61,6 +125,22 @@ export enum LoadStatus {
     status: LoadStatus;
     specialInstructions?: string;
     currentLocation?: GPSLocation;
+    // Broker confirmation fields
+    trackingLink?: string;
+    brokerConfirmedRate?: boolean;
+    brokerConfirmedAt?: string;
+    brokerConfirmationDetails?: BrokerConfirmationDetails;
+    // Driver acceptance and form fields
+    tripAcceptedAt?: string;
+    driverFormDetails?: DriverFormDetails;
+    // Trip workflow fields
+    tripStartDetails?: TripStartDetails;
+    shipperCheckInDetails?: ShipperCheckInDetails;
+    shipperLoadInDetails?: ShipperLoadInDetails;
+    shipperLoadOutDetails?: ShipperLoadOutDetails;
+    receiverCheckInDetails?: ReceiverCheckInDetails;
+    receiverOffloadDetails?: ReceiverOffloadDetails;
+    tripEndedAt?: string;
     createdAt: string;
     updatedAt: string;
   }

@@ -72,8 +72,9 @@ const loadSchema = yup.object({
 
 const statusColors: Record<string, 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'> = {
   booked: 'default',
+  rate_confirmed: 'info',
   assigned: 'info',
-  on_duty: 'primary',
+  trip_accepted: 'primary',
   in_transit: 'primary',
   arrived_receiver: 'secondary',
   delivered: 'success',
@@ -95,6 +96,13 @@ const LoadsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const theme = useTheme();
+  
+  // Additional form state for fields not in react-hook-form
+  const [customerName, setCustomerName] = useState('');
+  const [customerContact, setCustomerContact] = useState('');
+  const [cargoType, setCargoType] = useState('');
+  const [cargoDescription, setCargoDescription] = useState('');
+  const [loadType, setLoadType] = useState<'FTL' | 'LTL'>('FTL');
   
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -118,8 +126,8 @@ const LoadsPage: React.FC = () => {
   // Calculate stats from loads
   const stats = useMemo(() => {
     const total = loads.length;
-    const booked = loads.filter(l => l.status === 'booked').length;
-    const inTransit = loads.filter(l => ['assigned', 'on_duty', 'in_transit', 'arrived_shipper', 'loading', 'departed_shipper', 'arrived_receiver', 'unloading'].includes(l.status)).length;
+    const booked = loads.filter(l => l.status === 'booked' || l.status === 'rate_confirmed').length;
+    const inTransit = loads.filter(l => ['assigned', 'trip_accepted', 'in_transit'].includes(l.status)).length;
     const completed = loads.filter(l => ['delivered', 'completed'].includes(l.status)).length;
     const totalRevenue = loads.filter(l => ['delivered', 'completed'].includes(l.status)).reduce((sum, load) => sum + load.rate, 0);
 
@@ -173,14 +181,20 @@ const LoadsPage: React.FC = () => {
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
       result = result.filter(
-        (load) =>
-          load.loadNumber?.toLowerCase().includes(lowerSearch) ||
-          load.origin?.city?.toLowerCase().includes(lowerSearch) ||
-          load.origin?.state?.toLowerCase().includes(lowerSearch) ||
-          load.destination?.city?.toLowerCase().includes(lowerSearch) ||
-          load.destination?.state?.toLowerCase().includes(lowerSearch) ||
-          load.broker?.toLowerCase().includes(lowerSearch) ||
-          load.commodity?.toLowerCase().includes(lowerSearch)
+        (load) => {
+          const pickup = load.pickupLocation || load.origin;
+          const delivery = load.deliveryLocation || load.destination;
+          return (
+            load.loadNumber?.toLowerCase().includes(lowerSearch) ||
+            pickup?.city?.toLowerCase().includes(lowerSearch) ||
+            pickup?.state?.toLowerCase().includes(lowerSearch) ||
+            delivery?.city?.toLowerCase().includes(lowerSearch) ||
+            delivery?.state?.toLowerCase().includes(lowerSearch) ||
+            load.broker?.toLowerCase().includes(lowerSearch) ||
+            load.commodity?.toLowerCase().includes(lowerSearch) ||
+            load.cargoType?.toLowerCase().includes(lowerSearch)
+          );
+        }
       );
     }
 
@@ -200,19 +214,41 @@ const LoadsPage: React.FC = () => {
   const handleOpenDialog = (load?: Load) => {
     if (load) {
       setEditingLoad(load);
+      setCustomerName(load.customerName || '');
+      setCustomerContact(load.customerContact || '');
+      setCargoType(load.cargoType || '');
+      setCargoDescription(load.cargoDescription || '');
+      setLoadType(load.loadType as 'FTL' | 'LTL' || 'FTL');
       reset({
-        origin: load.origin,
-        destination: load.destination,
+        origin: {
+          name: load.pickupLocation?.address || '',
+          address: load.pickupLocation?.address || '',
+          city: load.pickupLocation?.city || '',
+          state: load.pickupLocation?.state || '',
+          zipCode: load.pickupLocation?.pincode || '',
+        },
+        destination: {
+          name: load.deliveryLocation?.address || '',
+          address: load.deliveryLocation?.address || '',
+          city: load.deliveryLocation?.city || '',
+          state: load.deliveryLocation?.state || '',
+          zipCode: load.deliveryLocation?.pincode || '',
+        },
         pickupDate: new Date(load.pickupDate),
-        deliveryDate: new Date(load.deliveryDate),
-        miles: load.miles,
-        rate: load.rate,
-        broker: load.broker,
-        weight: load.weight,
-        commodity: load.commodity,
+        deliveryDate: new Date(load.expectedDeliveryDate || load.deliveryDate),
+        miles: load.distance || 0,
+        rate: load.rate || 0,
+        broker: '',
+        weight: load.weight || 0,
+        commodity: load.cargoType || '',
       } as LoadFormData);
     } else {
       setEditingLoad(null);
+      setCustomerName('');
+      setCustomerContact('');
+      setCargoType('');
+      setCargoDescription('');
+      setLoadType('FTL');
       reset({
         origin: {
           name: '',
@@ -233,6 +269,8 @@ const LoadsPage: React.FC = () => {
         miles: 0,
         rate: 0,
         broker: '',
+        weight: 0,
+        commodity: '',
       } as LoadFormData);
     }
     setOpenDialog(true);
@@ -241,23 +279,86 @@ const LoadsPage: React.FC = () => {
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setEditingLoad(null);
+    setCustomerName('');
+    setCustomerContact('');
+    setCargoType('');
+    setCargoDescription('');
+    setLoadType('FTL');
     reset();
   };
 
   const onSubmit = async (data: LoadFormData) => {
     try {
+      // Validate required fields
+      if (!customerName || !customerContact) {
+        setError('Customer name and contact are required');
+        return;
+      }
+      if (!data.origin?.address || !data.origin?.city || !data.origin?.state || !data.origin?.zipCode) {
+        setError('Pickup location details are required');
+        return;
+      }
+      if (!data.destination?.address || !data.destination?.city || !data.destination?.state || !data.destination?.zipCode) {
+        setError('Delivery location details are required');
+        return;
+      }
+      if (!cargoType || !cargoDescription) {
+        setError('Cargo type and description are required');
+        return;
+      }
+      if (!data.miles || data.miles <= 0) {
+        setError('Distance (miles) is required and must be greater than 0');
+        return;
+      }
+
+      // Transform form data to match backend API format
+      const loadData: any = {
+        customerName: customerName,
+        customerContact: customerContact,
+        customerEmail: '',
+        pickupLocation: {
+          address: data.origin.address,
+          city: data.origin.city,
+          state: data.origin.state,
+          pincode: data.origin.zipCode,
+        },
+        deliveryLocation: {
+          address: data.destination.address,
+          city: data.destination.city,
+          state: data.destination.state,
+          pincode: data.destination.zipCode,
+        },
+        pickupDate: data.pickupDate instanceof Date 
+          ? data.pickupDate.toISOString() 
+          : new Date(data.pickupDate).toISOString(),
+        expectedDeliveryDate: data.deliveryDate instanceof Date 
+          ? data.deliveryDate.toISOString() 
+          : new Date(data.deliveryDate).toISOString(),
+        cargoType: cargoType || data.commodity || 'General',
+        cargoDescription: cargoDescription || data.commodity || 'General cargo',
+        weight: data.weight || 0,
+        loadType: loadType,
+        rate: data.rate || 0,
+        distance: data.miles || 0,
+        advancePaid: 0,
+        fuelAdvance: 0,
+        specialInstructions: '',
+      };
+
       if (editingLoad) {
-        await loadApi.updateLoad(editingLoad._id, data);
+        await loadApi.updateLoad(editingLoad._id, loadData);
         setSuccess('Load updated successfully');
       } else {
-        await loadApi.createLoad(data);
+        await loadApi.createLoad(loadData);
         setSuccess('Load created successfully');
       }
       handleCloseDialog();
       fetchLoads();
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
-      setError(err.message || 'Failed to save load');
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to save load';
+      setError(errorMessage);
+      setTimeout(() => setError(null), 5000);
     }
   };
 
@@ -325,18 +426,40 @@ const LoadsPage: React.FC = () => {
       ),
     },
     {
-      field: 'origin',
+      field: 'pickupLocation',
       headerName: 'Origin',
       flex: 1.2,
       minWidth: 130,
-      renderCell: (params) => `${params.value.city}, ${params.value.state}`,
+      valueGetter: (params) => {
+        if (!params.row) return '-';
+        const location = params.row.pickupLocation || params.row.origin;
+        if (!location) return '-';
+        return `${location.city || ''}, ${location.state || ''}`.trim() || '-';
+      },
+      renderCell: (params) => {
+        if (!params.row) return '-';
+        const location = params.row.pickupLocation || params.row.origin;
+        if (!location || !location.city) return '-';
+        return `${location.city}, ${location.state || ''}`;
+      },
     },
     {
-      field: 'destination',
+      field: 'deliveryLocation',
       headerName: 'Destination',
       flex: 1.2,
       minWidth: 130,
-      renderCell: (params) => `${params.value.city}, ${params.value.state}`,
+      valueGetter: (params) => {
+        if (!params.row) return '-';
+        const location = params.row.deliveryLocation || params.row.destination;
+        if (!location) return '-';
+        return `${location.city || ''}, ${location.state || ''}`.trim() || '-';
+      },
+      renderCell: (params) => {
+        if (!params.row) return '-';
+        const location = params.row.deliveryLocation || params.row.destination;
+        if (!location || !location.city) return '-';
+        return `${location.city}, ${location.state || ''}`;
+      },
     },
     {
       field: 'pickupDate',
@@ -400,6 +523,7 @@ const LoadsPage: React.FC = () => {
       getActions: (params) => {
         const actions = [
           <GridActionsCellItem
+            key="view"
             icon={<Visibility />}
             label="View"
             onClick={() => handleOpenDialog(params.row as Load)}
@@ -409,6 +533,7 @@ const LoadsPage: React.FC = () => {
         if (params.row.status === 'booked') {
           actions.push(
             <GridActionsCellItem
+              key="assign"
               icon={<Assignment />}
               label="Assign"
               onClick={() => handleOpenAssignDialog(params.row as Load)}
@@ -419,12 +544,14 @@ const LoadsPage: React.FC = () => {
 
         actions.push(
           <GridActionsCellItem
+            key="edit"
             icon={<Edit />}
             label="Edit"
             onClick={() => handleOpenDialog(params.row as Load)}
             showInMenu
           />,
           <GridActionsCellItem
+            key="delete"
             icon={<Delete />}
             label="Delete"
             onClick={() => handleDelete(params.row._id)}
@@ -733,10 +860,45 @@ const LoadsPage: React.FC = () => {
           <form onSubmit={handleSubmit(onSubmit)}>
             <DialogContent>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {/* Customer Details */}
+                <Box>
+                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                    Customer Details
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        label="Customer Name *"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        required
+                        fullWidth
+                        disabled={isSubmitting}
+                        error={!customerName && isSubmitting}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        label="Customer Contact *"
+                        value={customerContact}
+                        onChange={(e) => setCustomerContact(e.target.value)}
+                        required
+                        fullWidth
+                        disabled={isSubmitting}
+                        placeholder="10 digits"
+                        inputProps={{ maxLength: 10 }}
+                        error={!customerContact && isSubmitting}
+                      />
+                    </Grid>
+                  </Grid>
+                </Box>
+
+                <Divider />
+
                 {/* Origin Section */}
                 <Box>
                   <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                    Origin Details
+                    Pickup Location (Origin)
                   </Typography>
                   <Grid container spacing={2}>
                     <Grid item xs={12}>
@@ -827,7 +989,7 @@ const LoadsPage: React.FC = () => {
                 {/* Destination Section */}
                 <Box>
                   <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                    Destination Details
+                    Delivery Location (Destination)
                   </Typography>
                   <Grid container spacing={2}>
                     <Grid item xs={12}>
@@ -1024,18 +1186,45 @@ const LoadsPage: React.FC = () => {
                         )}
                       />
                     </Grid>
-                    <Grid item xs={6}>
-                      <Controller
-                        name="commodity"
-                        control={control}
-                        render={({ field }) => (
-                          <TextField
-                            {...field}
-                            label="Commodity"
-                            disabled={isSubmitting}
-                            fullWidth
-                          />
-                        )}
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        label="Cargo Type *"
+                        value={cargoType}
+                        onChange={(e) => setCargoType(e.target.value)}
+                        required
+                        disabled={isSubmitting}
+                        fullWidth
+                        placeholder="e.g., Electronics, Food, Steel"
+                        error={!cargoType && isSubmitting}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        label="Load Type *"
+                        select
+                        value={loadType}
+                        onChange={(e) => setLoadType(e.target.value as 'FTL' | 'LTL')}
+                        required
+                        disabled={isSubmitting}
+                        fullWidth
+                        error={!loadType && isSubmitting}
+                      >
+                        <MenuItem value="FTL">FTL (Full Truck Load)</MenuItem>
+                        <MenuItem value="LTL">LTL (Less Than Truck Load)</MenuItem>
+                      </TextField>
+                    </Grid>
+                    <Grid item xs={12}>
+                      <TextField
+                        label="Cargo Description *"
+                        value={cargoDescription}
+                        onChange={(e) => setCargoDescription(e.target.value)}
+                        required
+                        multiline
+                        rows={2}
+                        disabled={isSubmitting}
+                        fullWidth
+                        placeholder="Detailed description of the cargo"
+                        error={!cargoDescription && isSubmitting}
                       />
                     </Grid>
                   </Grid>
@@ -1065,7 +1254,7 @@ const LoadsPage: React.FC = () => {
               <Typography variant="h6">Assign Load</Typography>
               {assigningLoad && (
                 <Typography variant="body2" color="text.secondary">
-                  Load #{assigningLoad.loadNumber} • {assigningLoad.origin.city}, {assigningLoad.origin.state} → {assigningLoad.destination.city}, {assigningLoad.destination.state}
+                  Load #{assigningLoad.loadNumber} • {(assigningLoad.pickupLocation || assigningLoad.origin)?.city || 'N/A'}, {(assigningLoad.pickupLocation || assigningLoad.origin)?.state || 'N/A'} → {(assigningLoad.deliveryLocation || assigningLoad.destination)?.city || 'N/A'}, {(assigningLoad.deliveryLocation || assigningLoad.destination)?.state || 'N/A'}
                 </Typography>
               )}
             </Box>
