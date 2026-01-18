@@ -13,6 +13,7 @@ import {
   ListItemAvatar,
   CircularProgress,
   Alert,
+  Chip,
 } from '@mui/material';
 import {
   Notifications as NotificationsIcon,
@@ -28,14 +29,25 @@ import {
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { notificationApi } from '@api/notification.api';
+import assignmentApi from '@api/assignment.api';
+import { loadApi } from '@api/all.api';
 import { Notification, NotificationType } from '@/types/notification.types';
+import { AcceptRejectAssignmentDialog } from '@/components/driver/AcceptRejectAssignmentDialog';
+import { useAuth } from '@/contexts/AuthContext';
+import type { Load } from '@/types/all.types';
 
 export const NotificationMenu: React.FC = () => {
+  const { user } = useAuth();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  
+  // Assignment dialog state
+  const [assignmentDialogOpen, setAssignmentDialogOpen] = useState(false);
+  const [selectedLoad, setSelectedLoad] = useState<Load | null>(null);
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
 
   // Fetch notifications
   const fetchNotifications = useCallback(async () => {
@@ -73,6 +85,101 @@ export const NotificationMenu: React.FC = () => {
     setAnchorEl(null);
   };
 
+  const handleNotificationClick = async (notification: Notification) => {
+    // Mark as read
+    try {
+      await notificationApi.markAsRead(notification._id);
+      setNotifications((prev) =>
+        prev.map((n) => (n._id === notification._id ? { ...n, read: true } : n))
+      );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    } catch (err: any) {
+      console.error('Failed to mark notification as read:', err);
+    }
+
+    // Handle load assignment notifications
+    if (notification.type === NotificationType.LOAD) {
+      try {
+        let load: Load | undefined;
+        
+        // Try to get load by ID first (new notifications)
+        if (notification.metadata?.loadId) {
+          try {
+            load = await loadApi.getLoadById(notification.metadata.loadId);
+          } catch (err: any) {
+            // If not found by ID, try loadNumber fallback if available
+            if (err.statusCode === 404 || err.response?.status === 404) {
+              console.log('Load not found by ID, trying loadNumber fallback...');
+              // Fall through to loadNumber search
+              load = undefined;
+            } else {
+              throw err;
+            }
+          }
+        }
+        
+        // Fallback: search by loadNumber if ID fetch failed or not available
+        if (!load && notification.metadata?.loadNumber) {
+          // Try driver-specific endpoint first, fallback to all loads
+          let allLoads: Load[] = [];
+          try {
+            allLoads = await loadApi.getMyAssignedLoads();
+          } catch (err) {
+            // If driver endpoint fails, try general endpoint
+            try {
+              allLoads = await loadApi.getAllLoads({ limit: 1000 });
+            } catch (err2) {
+              setError('Unable to fetch loads. Please try again later.');
+              return;
+            }
+          }
+          
+          const searchNumber = notification.metadata.loadNumber;
+          
+          // Try multiple search patterns
+          const foundLoad = allLoads.find((l: Load) => {
+            // Exact match
+            if (l.loadNumber === searchNumber) return true;
+            // Without # prefix
+            if (l.loadNumber === searchNumber.replace('#', '')) return true;
+            // With # prefix
+            if (l.loadNumber === `#${searchNumber}`) return true;
+            // Case insensitive
+            if (l.loadNumber.toLowerCase() === searchNumber.toLowerCase()) return true;
+            return false;
+          });
+          
+          if (!foundLoad) {
+            console.error('Load not found. Searched for:', searchNumber, 'in', allLoads.length, 'loads');
+            setError(`Load ${searchNumber} is no longer available. It may have been completed or cancelled.`);
+            return;
+          }
+          load = foundLoad;
+        }
+        
+        // If still no load found, show error
+        if (!load) {
+          setError('This load assignment has expired or been deleted.');
+          return;
+        }
+        
+        // Only open dialog for drivers with pending assignments
+        if (user?.role === 'driver' && notification.metadata?.assignmentId) {
+          setSelectedLoad(load);
+          setSelectedAssignmentId(notification.metadata?.assignmentId || null);
+          setAssignmentDialogOpen(true);
+          handleClose(); // Close notification menu
+        } else {
+          // For owners/dispatchers, just mark as read - assignment already handled by driver
+          handleClose();
+        }
+      } catch (err: any) {
+        console.error('Failed to fetch load details:', err);
+        setError(err.response?.data?.message || err.message || 'Failed to load assignment details');
+      }
+    }
+  };
+
   const handleMarkAsRead = async (id: string) => {
     try {
       await notificationApi.markAsRead(id);
@@ -93,6 +200,85 @@ export const NotificationMenu: React.FC = () => {
     } catch (err: any) {
       console.error('Failed to mark all notifications as read:', err);
     }
+  };
+
+  const handleAcceptAssignment = async (assignmentId: string) => {
+    await assignmentApi.acceptAssignment(assignmentId);
+    // Refresh notifications
+    await fetchNotifications();
+  };
+
+  const handleRejectAssignment = async (assignmentId: string, reason: string) => {
+    await assignmentApi.rejectAssignment(assignmentId, reason);
+    // Refresh notifications
+    await fetchNotifications();
+  };
+
+  const getStatusColor = (metadata: any): { color: any; label: string } => {
+    const status = metadata?.status;
+    if (status === 'unassigned') {
+      return { color: 'warning', label: 'UNASSIGNED' };
+    }
+    if (status === 'accepted') {
+      return { color: 'success', label: 'ACCEPTED' };
+    }
+    if (status === 'rejected') {
+      return { color: 'error', label: 'REJECTED' };
+    }
+    // Pending or new assignments
+    return { color: 'info', label: 'PENDING' };
+  };
+
+  const renderNotificationRow = (notification: Notification) => {
+    const statusInfo = getStatusColor(notification.metadata);
+    return (
+      <MenuItem
+        key={notification._id}
+        onClick={() => handleNotificationClick(notification)}
+        sx={{
+          py: 1.5,
+          px: 2,
+          bgcolor: notification.read ? 'transparent' : 'action.hover',
+          '&:hover': {
+            bgcolor: notification.read ? 'action.hover' : 'action.selected',
+          },
+          borderLeft: notification.read ? 'none' : '3px solid',
+          borderColor: 'primary.main',
+          cursor: 'pointer',
+        }}
+      >
+        <ListItemAvatar>
+          <Avatar sx={{ bgcolor: 'background.paper' }}>
+            {getNotificationIcon(notification.type)}
+          </Avatar>
+        </ListItemAvatar>
+        <ListItemText
+          primary={
+            <Box display="flex" alignItems="center" gap={1}>
+              <Typography variant="body2" fontWeight={notification.read ? 400 : 600}>
+                {notification.title}
+              </Typography>
+              <Chip
+                label={statusInfo.label}
+                size="small"
+                color={statusInfo.color}
+                variant="outlined"
+              />
+            </Box>
+          }
+          secondary={
+            <>
+              <Typography variant="caption" display="block" sx={{ mb: 0.5 }}>
+                {notification.message}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {format(new Date(notification.createdAt), 'MMM dd, HH:mm')}
+              </Typography>
+            </>
+          }
+        />
+      </MenuItem>
+    );
   };
 
   const getNotificationIcon = (type: NotificationType) => {
@@ -190,45 +376,7 @@ export const NotificationMenu: React.FC = () => {
           </Box>
         ) : (
           <Box sx={{ maxHeight: 400, overflow: 'auto' }}>
-            {notifications.map((notification) => (
-              <MenuItem
-                key={notification._id}
-                onClick={() => handleMarkAsRead(notification._id)}
-                sx={{
-                  py: 1.5,
-                  px: 2,
-                  bgcolor: notification.read ? 'transparent' : 'action.hover',
-                  '&:hover': {
-                    bgcolor: notification.read ? 'action.hover' : 'action.selected',
-                  },
-                  borderLeft: notification.read ? 'none' : '3px solid',
-                  borderColor: 'primary.main',
-                }}
-              >
-                <ListItemAvatar>
-                  <Avatar sx={{ bgcolor: 'background.paper' }}>
-                    {getNotificationIcon(notification.type)}
-                  </Avatar>
-                </ListItemAvatar>
-                <ListItemText
-                  primary={
-                    <Typography variant="body2" fontWeight={notification.read ? 400 : 600}>
-                      {notification.title}
-                    </Typography>
-                  }
-                  secondary={
-                    <>
-                      <Typography variant="caption" display="block" sx={{ mb: 0.5 }}>
-                        {notification.message}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {format(new Date(notification.createdAt), 'MMM dd, HH:mm')}
-                      </Typography>
-                    </>
-                  }
-                />
-              </MenuItem>
-            ))}
+            {notifications.map((notification) => renderNotificationRow(notification))}
           </Box>
         )}
 
@@ -239,6 +387,20 @@ export const NotificationMenu: React.FC = () => {
           </Button>
         </Box>
       </Menu>
+
+      {/* Assignment Accept/Reject Dialog */}
+      <AcceptRejectAssignmentDialog
+        open={assignmentDialogOpen}
+        onClose={() => {
+          setAssignmentDialogOpen(false);
+          setSelectedLoad(null);
+          setSelectedAssignmentId(null);
+        }}
+        load={selectedLoad}
+        assignmentId={selectedAssignmentId}
+        onAccept={handleAcceptAssignment}
+        onReject={handleRejectAssignment}
+      />
     </>
   );
 };

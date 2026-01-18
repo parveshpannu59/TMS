@@ -10,6 +10,8 @@ import notificationRoutes from './notification.routes';
 import activityLogRoutes from './activityLog.routes';
 import messageRoutes from './message.routes';
 import assignmentRoutes from './assignment.routes';
+import tripRoutes from './trip.routes';
+import sosRoutes from './sos.routes';
 
 const router = Router();
 
@@ -28,5 +30,7 @@ router.use('/notifications', notificationRoutes);
 router.use('/activity-logs', activityLogRoutes);
 router.use('/messages', messageRoutes);
 router.use('/assignments', assignmentRoutes);
+router.use('/trips', tripRoutes);
+router.use('/sos', sosRoutes);
 
 export default router;

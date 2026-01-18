@@ -56,6 +56,7 @@ const AccountingPage = lazy(() => import('@pages/AccountingPage'));
 const SettingsPage = lazy(() => import('@pages/SettingsPage'));
 const ActivityHistoryPage = lazy(() => import('@pages/ActivityHistoryPage'));
 const DriverDashboard = lazy(() => import('@pages/DriverDashboard'));
+const PendingAssignmentsPage = lazy(() => import('@pages/driver/PendingAssignmentsPage'));
 
 export const AppRoutes = () => {
   return (
@@ -147,6 +148,14 @@ export const AppRoutes = () => {
           element={
             <ProtectedRoute>
               <DriverDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/assignments"
+          element={
+            <ProtectedRoute>
+              <PendingAssignmentsPage />
             </ProtectedRoute>
           }
         />

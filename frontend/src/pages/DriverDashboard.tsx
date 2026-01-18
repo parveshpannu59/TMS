@@ -65,6 +65,7 @@ import { LoadOutDialog } from '@/components/driver/LoadOutDialog';
 import { ReceiverOffloadDialog } from '@/components/driver/ReceiverOffloadDialog';
 import { EndTripDialog } from '@/components/driver/EndTripDialog';
 import AssignmentNotifications from '@/components/dialogs/AssignmentNotifications';
+import TripWorkflow from '@/components/driver/TripWorkflow';
 
 const DriverDashboard: React.FC = () => {
   const theme = useTheme();
@@ -303,6 +304,18 @@ const DriverDashboard: React.FC = () => {
 
         {/* Pending Assignment Notifications */}
         <AssignmentNotifications />
+
+        {/* Trip Workflow - Show when load is accepted */}
+        {currentLoad && ['trip_accepted', 'trip_started', 'arrived_shipper', 'loading', 'departed_shipper', 'in_transit', 'arrived_receiver', 'unloading'].includes(currentLoad.status) && (
+          <Box sx={{ mb: 3 }}>
+            <TripWorkflow
+              loadId={currentLoad._id || currentLoad.id}
+              loadNumber={currentLoad.loadNumber}
+              currentStatus={currentLoad.status}
+              onStatusUpdate={fetchLoads}
+            />
+          </Box>
+        )}
 
         {/* Current Load Card - Main Focus for Driver */}
         {currentLoad ? (

@@ -47,7 +47,12 @@ router.post(
   authorize(UserRole.OWNER, UserRole.DISPATCHER),
   LoadController.assignLoad
 );
-
+// Unassign load from driver (Owner, Dispatcher)
+router.post(
+  '/:id/unassign',
+  authorize(UserRole.OWNER, UserRole.DISPATCHER),
+  LoadController.unassignLoad
+);
 // Update status (Owner, Dispatcher, Driver)
 router.patch(
   '/:id/status',

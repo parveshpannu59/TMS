@@ -30,6 +30,7 @@ export interface Notification {
     driverId?: string;
     truckId?: string;
     trailerId?: string;
+    assignmentId?: string;
     actionUrl?: string;
     [key: string]: any;
   };

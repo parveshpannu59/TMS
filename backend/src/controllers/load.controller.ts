@@ -4,10 +4,12 @@ import Truck from '../models/Truck';
 import Trailer from '../models/Trailer';
 import { Driver, DriverStatus } from '../models/Driver.model';
 import { User } from '../models/User.model';
+import Assignment from '../models/Assignment';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
 import { ApiError } from '../utils/ApiError';
-import { notifyLoadAssigned } from '../utils/notificationHelper';
+import { notifyLoadAssigned, notifyAssignmentCancelled } from '../utils/notificationHelper';
+import Notification, { NotificationType } from '../models/Notification';
 import AssignmentService from '../services/assignment.service';
 
 export class LoadController {
@@ -81,8 +83,20 @@ export class LoadController {
   static getLoadById = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const companyId = req.user?.companyId ?? req.user?.id;
-    
-    const load = await Load.findOne({ _id: id, companyId })
+
+    // Allow drivers to fetch loads assigned to them even if companyId differs
+    let query: any = { _id: id };
+    if (req.user?.role === 'driver') {
+      const driver = await Driver.findOne({ userId: req.user!.id }).select('_id').lean();
+      if (driver) {
+        query.driverId = driver._id.toString();
+      }
+    } else {
+      // For owner/dispatcher, restrict by company
+      query.companyId = companyId;
+    }
+
+    const load = await Load.findOne(query)
       .populate('driverId', 'name email phone')
       .populate('truckId', 'unitNumber make model year licensePlate')
       .populate('trailerId', 'unitNumber type licensePlate')
@@ -255,8 +269,9 @@ export class LoadController {
     }
     
     // Validate driver, truck, and trailer exist and are available
+    // Note: Driver model uses 'createdBy' instead of 'companyId'
     const [driver, truck, trailer] = await Promise.all([
-      Driver.findOne({ _id: driverId, companyId }),
+      Driver.findOne({ _id: driverId, createdBy: companyId }),
       Truck.findOne({ _id: truckId, companyId }),
       Trailer.findOne({ _id: trailerId, companyId }),
     ]);
@@ -312,7 +327,7 @@ export class LoadController {
     
     // Create Assignment record (tracks accept/reject workflow)
     try {
-      await AssignmentService.createAssignment({
+      const assignment = await AssignmentService.createAssignment({
         loadId,
         driverId: driverId,
         truckId: truckId,
@@ -321,13 +336,24 @@ export class LoadController {
         expiresIn: 24, // 24 hours to accept/reject
       });
       
+      console.log('✅ Assignment created:', {
+        _id: assignment._id,
+        loadId: assignment.loadId,
+        driverId: assignment.driverId,
+        status: assignment.status,
+        expiresAt: assignment.expiresAt,
+      });
+      
       // Get driver's user account
       let driverUserId = driver.userId; // If driver has userId field from earlier fix
+      
+      console.log('🔍 Driver linked userId:', driverUserId);
       
       if (!driverUserId && driver.email) {
         const driverUser = await User.findOne({ email: driver.email, role: 'driver' });
         if (driverUser) {
           driverUserId = driverUser._id.toString();
+          console.log('✅ Found driver user by email:', driverUserId);
         }
       }
       
@@ -335,6 +361,7 @@ export class LoadController {
         const driverUser = await User.findOne({ phone: driver.phone, role: 'driver' });
         if (driverUser) {
           driverUserId = driverUser._id.toString();
+          console.log('✅ Found driver user by phone:', driverUserId);
         }
       }
       
@@ -344,7 +371,9 @@ export class LoadController {
           companyId as string,
           driverUserId,
           load.loadNumber,
-          driver.name
+          driver.name,
+          loadId,
+          assignment._id.toString()
         );
       } else {
         console.warn(`Driver ${driver.name} not linked to user account - notification not sent`);
@@ -355,6 +384,110 @@ export class LoadController {
     }
     
     return ApiResponse.success(res, load, 'Load assigned successfully. Driver has been notified to accept or reject.');
+  });
+
+  // Unassign/Reject load from driver (Owner/Dispatcher can reassign to another driver)
+  static unassignLoad = asyncHandler(async (req: Request, res: Response) => {
+    const loadId = String(req.params.id);
+    const { reason } = req.body;
+    const companyId = req.user?.companyId ?? req.user?.id;
+    const userId = req.user!.id;
+
+    // Find the load
+    const load = await Load.findOne({ _id: loadId, companyId });
+    if (!load) {
+      throw ApiError.notFound('Load not found');
+    }
+
+    // Can only unassign if load is ASSIGNED or TRIP_ACCEPTED status
+    if (load.status !== LoadStatus.ASSIGNED && load.status !== LoadStatus.TRIP_ACCEPTED) {
+      throw ApiError.badRequest('Load must be assigned or trip accepted to unassign');
+    }
+
+    // Get driver, truck, trailer info before unassigning
+    const driverId = load.driverId?.toString();
+    const truckId = load.truckId?.toString();
+    const trailerId = load.trailerId?.toString();
+
+    // Unassign the load
+    load.driverId = undefined;
+    load.truckId = undefined;
+    load.trailerId = undefined;
+    load.status = LoadStatus.BOOKED;
+    load.statusHistory.push({
+      status: LoadStatus.BOOKED,
+      timestamp: new Date(),
+      notes: reason || 'Load unassigned by dispatcher',
+      updatedBy: userId,
+    } as any);
+
+    // Update driver, truck, trailer status
+    if (driverId) {
+      await Driver.findByIdAndUpdate(driverId, {
+        status: DriverStatus.ACTIVE,
+        currentLoadId: undefined,
+      });
+    }
+    if (truckId) {
+      await Truck.findByIdAndUpdate(truckId, {
+        status: 'available',
+        currentLoadId: undefined,
+        currentDriverId: undefined,
+      });
+    }
+    if (trailerId) {
+      await Trailer.findByIdAndUpdate(trailerId, {
+        status: 'available',
+        currentLoadId: undefined,
+        currentTruckId: undefined,
+      });
+    }
+
+    // Delete the assignment record
+    try {
+      await Assignment.deleteMany({ loadId });
+    } catch (err) {
+      console.error('Failed to delete assignment:', err);
+    }
+
+    // Notify driver of cancellation and mark previous assignment notifications as read
+    try {
+      if (driverId) {
+        const driver = await Driver.findById(driverId).lean();
+        let driverUserId: string | undefined = (driver as any)?.userId;
+
+        if (!driverUserId && driver?.email) {
+          const driverUser = await User.findOne({ email: driver.email, role: 'driver' });
+          if (driverUser) driverUserId = driverUser._id.toString();
+        }
+        if (!driverUserId && driver?.phone) {
+          const driverUser = await User.findOne({ phone: driver.phone, role: 'driver' });
+          if (driverUser) driverUserId = driverUser._id.toString();
+        }
+
+        if (driverUserId) {
+          await notifyAssignmentCancelled(
+            companyId as string,
+            driverUserId,
+            load.loadNumber,
+            loadId,
+            reason
+          );
+
+          // Mark any previous 'New Load Assigned' notifications for this load as read and annotated
+          await Notification.updateMany(
+            { userId: driverUserId as any, 'metadata.loadId': loadId, type: NotificationType.LOAD },
+            { $set: { read: true, title: 'Assignment Cancelled', message: `Assignment for Load #${load.loadNumber} has been cancelled`, 'metadata.status': 'unassigned', readAt: new Date() } }
+          );
+        }
+      }
+    } catch (nErr) {
+      console.error('Failed to notify cancellation or update notifications:', nErr);
+    }
+
+    await load.save();
+
+    return ApiResponse.success(res, load, 'Load unassigned successfully. Load is now available for reassignment.');
   });
 
   // Update load status

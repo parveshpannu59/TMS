@@ -1,4 +1,4 @@
-import React, { createContext, useState, useCallback, useEffect, useMemo } from 'react';
+import React, { createContext, useState, useCallback, useEffect, useMemo, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '@api/auth.api';
 import { setAuthToken, clearAuthToken, getAuthToken } from '@api/client';
@@ -10,6 +10,14 @@ import type {
 } from '../types/auth.types';
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = React.memo(
   ({ children }) => {

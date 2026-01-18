@@ -45,6 +45,7 @@ export const AssignmentNotifications: React.FC = () => {
   const [actionInProgress, setActionInProgress] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [showDetailsDialog, setShowDetailsDialog] = useState(false);
 
   useEffect(() => {
     loadAssignments();
@@ -55,13 +56,20 @@ export const AssignmentNotifications: React.FC = () => {
       setLoading(true);
       setError(null);
       const data = await assignmentApi.getPendingAssignments();
+      console.log('Pending assignments loaded:', data);
       setAssignments(data);
     } catch (err: any) {
       setError(err.message || 'Failed to load assignments');
-      console.error(err);
+      console.error('Error loading assignments:', err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleViewDetails = (assignment: Assignment) => {
+    console.log('Opening details for assignment:', assignment);
+    setSelectedAssignment(assignment);
+    setShowDetailsDialog(true);
   };
 
   const handleAccept = async (assignmentId: string) => {
@@ -70,8 +78,10 @@ export const AssignmentNotifications: React.FC = () => {
       await assignmentApi.acceptAssignment(assignmentId);
       setAssignments(assignments.filter((a) => a._id !== assignmentId));
       setSelectedAssignment(null);
-      alert('Assignment accepted successfully!');
-      loadAssignments(); // Refresh list
+      setShowDetailsDialog(false);
+      alert('Assignment accepted successfully! You can now start the trip.');
+      // Refresh to show trip workflow
+      window.location.reload();
     } catch (err: any) {
       alert(`Error accepting assignment: ${err.message}`);
     } finally {
@@ -128,92 +138,172 @@ export const AssignmentNotifications: React.FC = () => {
 
   return (
     <>
-      <Card sx={{ mb: 3 }}>
+      <Card 
+        sx={{ 
+          mb: 3,
+          border: '3px solid',
+          borderColor: 'warning.main',
+          boxShadow: '0 4px 20px rgba(255, 152, 0, 0.3)',
+          animation: assignments.length > 0 ? 'pulse 2s infinite' : 'none',
+          '@keyframes pulse': {
+            '0%, 100%': {
+              boxShadow: '0 4px 20px rgba(255, 152, 0, 0.3)',
+            },
+            '50%': {
+              boxShadow: '0 8px 30px rgba(255, 152, 0, 0.6)',
+            },
+          },
+        }}
+      >
         <CardHeader
+          sx={{
+            bgcolor: 'warning.main',
+            color: 'white',
+          }}
           title={
             <Box display="flex" alignItems="center" gap={1}>
-              <LocalShippingIcon />
-              Pending Load Assignments ({assignments.length})
+              <LocalShippingIcon sx={{ fontSize: 32 }} />
+              <Box>
+                <Typography variant="h6" fontWeight={700}>
+                  🚨 New Load Assignment! ({assignments.length})
+                </Typography>
+                <Typography variant="body2">
+                  You have pending load assignments - Accept to start trip
+                </Typography>
+              </Box>
             </Box>
           }
-          subheader="Review and respond to assigned loads"
         />
-        <CardContent>
+        <CardContent sx={{ p: 3 }}>
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
           {assignments.map((assignment) => (
             <Box
               key={assignment._id}
               sx={{
-                p: 2,
+                p: 3,
                 mb: 2,
-                border: '1px solid #e0e0e0',
-                borderRadius: 1,
-                bgcolor: '#fafafa',
-                '&:hover': {
-                  bgcolor: '#f5f5f5',
-                },
+                border: '2px solid',
+                borderColor: 'success.main',
+                borderRadius: 2,
+                bgcolor: '#f0f9ff',
+                boxShadow: 2,
               }}
             >
-              <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="h6">
-                    Load #{assignment.loadId?.loadNumber || 'Unknown'}
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary" sx={{ mt: 0.5 }}>
-                    📍 {assignment.loadId?.origin} → {assignment.loadId?.destination}
-                  </Typography>
-                  {assignment.loadId?.pickupDate && (
-                    <Typography variant="body2" color="textSecondary">
-                      📅 Pickup: {new Date(assignment.loadId.pickupDate).toLocaleDateString()}
-                    </Typography>
-                  )}
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <Box display="flex" alignItems="center" gap={2} mb={2}>
+                    <LocalShippingIcon sx={{ fontSize: 48, color: 'primary.main' }} />
+                    <Box flex={1}>
+                      <Typography variant="h5" fontWeight={700} color="primary.main">
+                        Load #{assignment.loadId?.loadNumber || 'Unknown'}
+                      </Typography>
+                      <Typography variant="body1" color="textSecondary" sx={{ mt: 0.5 }}>
+                        📍 {assignment.loadId?.origin?.city || 'N/A'}, {assignment.loadId?.origin?.state || 'N/A'} → {assignment.loadId?.destination?.city || 'N/A'}, {assignment.loadId?.destination?.state || 'N/A'}
+                      </Typography>
+                    </Box>
+                  </Box>
                 </Grid>
 
                 <Grid item xs={12} sm={6}>
-                  <Box display="flex" gap={1} flexWrap="wrap" mb={1}>
+                  <Typography variant="body2" color="text.secondary">
+                    Pickup Date
+                  </Typography>
+                  <Typography variant="body1" fontWeight={600}>
+                    {assignment.loadId?.pickupDate 
+                      ? new Date(assignment.loadId.pickupDate).toLocaleDateString('en-IN', { 
+                          day: 'numeric', 
+                          month: 'short', 
+                          year: 'numeric' 
+                        })
+                      : 'N/A'}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Delivery Date
+                  </Typography>
+                  <Typography variant="body1" fontWeight={600}>
+                    {assignment.loadId?.deliveryDate 
+                      ? new Date(assignment.loadId.deliveryDate).toLocaleDateString('en-IN', { 
+                          day: 'numeric', 
+                          month: 'short', 
+                          year: 'numeric' 
+                        })
+                      : 'N/A'}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Box display="flex" gap={1} flexWrap="wrap" mb={2}>
                     {assignment.truckId?.unitNumber && (
                       <Chip
-                        label={`🚚 ${assignment.truckId.unitNumber}`}
+                        label={`🚚 Truck: ${assignment.truckId.unitNumber}`}
+                        color="primary"
                         variant="outlined"
-                        size="small"
                       />
                     )}
                     {assignment.trailerId?.unitNumber && (
                       <Chip
-                        label={`🚛 ${assignment.trailerId.unitNumber}`}
+                        label={`🚛 Trailer: ${assignment.trailerId.unitNumber}`}
+                        color="primary"
                         variant="outlined"
-                        size="small"
                       />
                     )}
-                    <Chip
-                      label="⏱️ 24h to respond"
-                      variant="outlined"
-                      size="small"
-                      color="warning"
-                    />
+                    {assignment.loadId?.rate && (
+                      <Chip
+                        label={`💰 Rate: $${assignment.loadId.rate.toLocaleString()}`}
+                        color="success"
+                        variant="filled"
+                      />
+                    )}
                   </Box>
+                </Grid>
 
-                  <Box display="flex" gap={1}>
+                <Grid item xs={12}>
+                  <Alert severity="warning" sx={{ mb: 2 }}>
+                    <Typography variant="body2" fontWeight={600}>
+                      ⏰ Please respond within 24 hours or this assignment will expire
+                    </Typography>
+                  </Alert>
+
+                  <Box display="flex" gap={2} flexDirection={{ xs: 'column', sm: 'row' }}>
                     <Button
                       variant="contained"
                       color="success"
-                      size="small"
+                      size="large"
+                      fullWidth
                       startIcon={<CheckCircleIcon />}
-                      onClick={() => handleAccept(assignment._id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm(`Accept Load ${assignment.loadId?.loadNumber}?\n\nThis will start your trip workflow.`)) {
+                          handleAccept(assignment._id);
+                        }
+                      }}
                       disabled={actionInProgress}
+                      sx={{ 
+                        py: 2,
+                        fontSize: '1.1rem',
+                        fontWeight: 700,
+                      }}
                     >
-                      Accept
+                      ✅ Accept & Start Trip
                     </Button>
                     <Button
                       variant="outlined"
                       color="error"
-                      size="small"
+                      size="large"
+                      fullWidth
                       startIcon={<CancelIcon />}
-                      onClick={() => handleRejectClick(assignment)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRejectClick(assignment);
+                      }}
                       disabled={actionInProgress}
+                      sx={{ py: 2 }}
                     >
-                      Reject
+                      ❌ Decline Load
                     </Button>
                   </Box>
                 </Grid>
@@ -223,16 +313,145 @@ export const AssignmentNotifications: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* Assignment Details Dialog */}
+      <Dialog 
+        open={showDetailsDialog} 
+        onClose={() => setShowDetailsDialog(false)} 
+        maxWidth="md" 
+        fullWidth
+      >
+        <DialogTitle>
+          <Box display="flex" alignItems="center" gap={1}>
+            <LocalShippingIcon />
+            Load Assignment Details
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          {selectedAssignment && (
+            <Box>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                You have been assigned this load. Please review the details and accept or decline within 24 hours.
+              </Alert>
+
+              <Typography variant="h6" gutterBottom>
+                Load #{selectedAssignment.loadId?.loadNumber}
+              </Typography>
+
+              <Grid container spacing={2} sx={{ mt: 1 }}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Origin
+                  </Typography>
+                  <Typography variant="body1" fontWeight={600}>
+                    {selectedAssignment.loadId?.origin || 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Destination
+                  </Typography>
+                  <Typography variant="body1" fontWeight={600}>
+                    {selectedAssignment.loadId?.destination || 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Pickup Date
+                  </Typography>
+                  <Typography variant="body1" fontWeight={600}>
+                    {selectedAssignment.loadId?.pickupDate
+                      ? new Date(selectedAssignment.loadId.pickupDate).toLocaleDateString()
+                      : 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Delivery Date
+                  </Typography>
+                  <Typography variant="body1" fontWeight={600}>
+                    {selectedAssignment.loadId?.deliveryDate
+                      ? new Date(selectedAssignment.loadId.deliveryDate).toLocaleDateString()
+                      : 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Assigned Truck
+                  </Typography>
+                  <Typography variant="body1" fontWeight={600}>
+                    {selectedAssignment.truckId?.unitNumber || 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="body2" color="text.secondary">
+                    Assigned Trailer
+                  </Typography>
+                  <Typography variant="body1" fontWeight={600}>
+                    {selectedAssignment.trailerId?.unitNumber || 'N/A'}
+                  </Typography>
+                </Grid>
+              </Grid>
+
+              <Alert severity="warning" sx={{ mt: 3 }}>
+                <Typography variant="body2" fontWeight={600}>
+                  This assignment expires in {' '}
+                  {selectedAssignment.expiresAt
+                    ? Math.max(0, Math.round((new Date(selectedAssignment.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60)))
+                    : '24'}{' '}
+                  hours
+                </Typography>
+              </Alert>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button 
+            onClick={() => setShowDetailsDialog(false)}
+            variant="outlined"
+          >
+            Close
+          </Button>
+          <Button
+            onClick={() => {
+              if (selectedAssignment) {
+                setShowDetailsDialog(false);
+                handleRejectClick(selectedAssignment);
+              }
+            }}
+            variant="outlined"
+            color="error"
+            startIcon={<CancelIcon />}
+            disabled={actionInProgress}
+          >
+            Decline
+          </Button>
+          <Button
+            onClick={() => {
+              if (selectedAssignment) {
+                setShowDetailsDialog(false);
+                handleAccept(selectedAssignment._id);
+              }
+            }}
+            variant="contained"
+            color="success"
+            startIcon={<CheckCircleIcon />}
+            disabled={actionInProgress}
+          >
+            Accept & Start Trip
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Reject Dialog */}
       <Dialog open={showRejectDialog} onClose={() => setShowRejectDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Reject Assignment</DialogTitle>
+        <DialogTitle>Decline Assignment</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-            Are you sure you want to reject this load assignment?
+            Are you sure you want to decline this load assignment?
           </Typography>
           <TextField
             fullWidth
-            label="Reason for rejection"
+            label="Reason for declining"
             placeholder="e.g., Not suitable for my truck, Too far, Insufficient rate, etc."
             multiline
             rows={3}
@@ -248,7 +467,7 @@ export const AssignmentNotifications: React.FC = () => {
             variant="contained"
             disabled={actionInProgress}
           >
-            {actionInProgress ? 'Rejecting...' : 'Reject'}
+            {actionInProgress ? 'Declining...' : 'Decline'}
           </Button>
         </DialogActions>
       </Dialog>

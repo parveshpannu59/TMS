@@ -51,7 +51,9 @@ export const notifyLoadAssigned = async (
   companyId: string | Schema.Types.ObjectId,
   driverId: string | Schema.Types.ObjectId,
   loadNumber: string,
-  driverName: string
+  driverName: string,
+  loadId: string,
+  assignmentId?: string
 ): Promise<INotificationDocument> => {
   return createNotification({
     companyId,
@@ -60,7 +62,35 @@ export const notifyLoadAssigned = async (
     priority: NotificationPriority.HIGH,
     title: 'New Load Assigned',
     message: `Load #${loadNumber} has been assigned to you`,
-    metadata: { loadNumber, driverName },
+    metadata: { 
+      loadNumber, 
+      driverName,
+      loadId,
+      assignmentId 
+    },
+  });
+};
+
+export const notifyAssignmentCancelled = async (
+  companyId: string | Schema.Types.ObjectId,
+  driverId: string | Schema.Types.ObjectId,
+  loadNumber: string,
+  loadId: string,
+  reason?: string
+): Promise<INotificationDocument> => {
+  return createNotification({
+    companyId,
+    userId: driverId,
+    type: NotificationType.WARNING,
+    priority: NotificationPriority.HIGH,
+    title: 'Assignment Cancelled',
+    message: `Assignment for Load #${loadNumber} has been cancelled${reason ? `: ${reason}` : ''}`,
+    metadata: {
+      loadNumber,
+      loadId,
+      status: 'unassigned',
+      reason,
+    },
   });
 };
 

@@ -387,9 +387,10 @@ const LoadsPage: React.FC = () => {
 
     try {
       await loadApi.assignLoad(assigningLoad._id, {
-        driverId: selectedDriver._id,
-        truckId: selectedTruck._id,
-        trailerId: selectedTrailer._id,
+        // Some models serialize id as `id` instead of `_id` in responses
+        driverId: (selectedDriver as any)._id || (selectedDriver as any).id,
+        truckId: (selectedTruck as any)._id || (selectedTruck as any).id,
+        trailerId: (selectedTrailer as any)._id || (selectedTrailer as any).id,
       });
       setSuccess('Load assigned successfully!');
       handleCloseAssignDialog();
@@ -410,6 +411,22 @@ const LoadsPage: React.FC = () => {
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.message || 'Failed to delete load');
+    }
+  };
+
+  const handleUnassignLoad = async (load: Load) => {
+    const reason = window.prompt('Enter reason for unassigning this load (optional):', 'Driver reassignment');
+    if (reason === null) return; // User cancelled
+
+    try {
+      await loadApi.unassignLoad(load._id, reason || undefined);
+      setSuccess(`Load unassigned from ${load.driverId}. Now available for reassignment.`);
+      fetchLoads();
+      // Optionally open assign dialog to reassign immediately
+      handleOpenAssignDialog(load);
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to unassign load');
     }
   };
 
@@ -538,6 +555,19 @@ const LoadsPage: React.FC = () => {
               icon={<Assignment />}
               label="Assign Driver"
               onClick={() => handleOpenAssignDialog(params.row as Load)}
+            />
+          );
+        }
+
+        // Show unassign button for assigned loads
+        if (params.row.status === 'assigned' || params.row.status === 'trip_accepted') {
+          actions.push(
+            <GridActionsCellItem
+              key="unassign"
+              icon={<PendingActions />}
+              label="Unassign / Reassign"
+              onClick={() => handleUnassignLoad(params.row as Load)}
+              showInMenu
             />
           );
         }
@@ -1289,18 +1319,22 @@ const LoadsPage: React.FC = () => {
                       helperText={`${drivers.length} available drivers`}
                     />
                   )}
-                  renderOption={(props, option) => (
-                    <li {...props}>
-                      <Box>
-                        <Typography variant="body2" fontWeight={600}>
-                          {option.name || option.userId?.name || 'Unknown Driver'}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          License: {option.licenseNumber} • {option.phone || option.userId?.phone || 'N/A'}
-                        </Typography>
-                      </Box>
-                    </li>
-                  )}
+                  renderOption={(props, option) => {
+                    // React warns if a `key` inside props is spread; pass it explicitly
+                    const { key, ...rest } = props as any;
+                    return (
+                      <li key={key} {...rest}>
+                        <Box>
+                          <Typography variant="body2" fontWeight={600}>
+                            {option.name || option.userId?.name || 'Unknown Driver'}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            License: {option.licenseNumber} • {option.phone || option.userId?.phone || 'N/A'}
+                          </Typography>
+                        </Box>
+                      </li>
+                    );
+                  }}
                 />
 
                 <Autocomplete
@@ -1315,18 +1349,21 @@ const LoadsPage: React.FC = () => {
                       helperText={`${trucks.length} available trucks`}
                     />
                   )}
-                  renderOption={(props, option) => (
-                    <li {...props}>
-                      <Box>
-                        <Typography variant="body2" fontWeight={600}>
-                          {option.unitNumber}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {option.make} {option.model} ({option.year}) • VIN: {option.vin}
-                        </Typography>
-                      </Box>
-                    </li>
-                  )}
+                  renderOption={(props, option) => {
+                    const { key, ...rest } = props as any;
+                    return (
+                      <li key={key} {...rest}>
+                        <Box>
+                          <Typography variant="body2" fontWeight={600}>
+                            {option.unitNumber}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {option.make} {option.model} ({option.year}) • VIN: {option.vin}
+                          </Typography>
+                        </Box>
+                      </li>
+                    );
+                  }}
                 />
 
                 <Autocomplete
@@ -1341,18 +1378,21 @@ const LoadsPage: React.FC = () => {
                       helperText={`${trailers.length} available trailers`}
                     />
                   )}
-                  renderOption={(props, option) => (
-                    <li {...props}>
-                      <Box>
-                        <Typography variant="body2" fontWeight={600}>
-                          {option.unitNumber}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {option.type.replace('_', ' ').toUpperCase()} • VIN: {option.vin}
-                        </Typography>
-                      </Box>
-                    </li>
-                  )}
+                  renderOption={(props, option) => {
+                    const { key, ...rest } = props as any;
+                    return (
+                      <li key={key} {...rest}>
+                        <Box>
+                          <Typography variant="body2" fontWeight={600}>
+                            {option.unitNumber}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {option.type.replace('_', ' ').toUpperCase()} • VIN: {option.vin}
+                          </Typography>
+                        </Box>
+                      </li>
+                    );
+                  }}
                 />
               </Box>
 

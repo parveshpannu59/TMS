@@ -126,6 +126,31 @@ export class AssignmentService {
       { new: true }
     );
 
+    // Update the original "New Load Assigned" notification sent to driver
+    try {
+      const driver = await import('../models/Driver.model');
+      const driverDoc = await driver.Driver.findById(driverId);
+      if (driverDoc?.userId) {
+        await Notification.updateMany(
+          {
+            userId: driverDoc.userId as any,
+            'metadata.assignmentId': assignmentId,
+            'metadata.loadId': assignment.loadId.toString(),
+          },
+          {
+            $set: {
+              read: true,
+              'metadata.status': 'accepted',
+              title: 'Assignment Accepted',
+              message: `You have accepted the assignment for Load #${assignment.loadId}`,
+            },
+          }
+        );
+      }
+    } catch (err) {
+      console.error('Failed to update driver notification:', err);
+    }
+
     // Notify dispatcher
     await this.createNotification({
       userId: assignment.assignedBy.toString(),
@@ -185,6 +210,31 @@ export class AssignmentService {
       { status: 'booked', driverId: undefined },
       { new: true }
     );
+
+    // Update the original "New Load Assigned" notification sent to driver
+    try {
+      const driver = await import('../models/Driver.model');
+      const driverDoc = await driver.Driver.findById(driverId);
+      if (driverDoc?.userId) {
+        await Notification.updateMany(
+          {
+            userId: driverDoc.userId as any,
+            'metadata.assignmentId': assignmentId,
+            'metadata.loadId': assignment.loadId.toString(),
+          },
+          {
+            $set: {
+              read: true,
+              'metadata.status': 'rejected',
+              title: 'Assignment Rejected',
+              message: `You have rejected the assignment for Load #${assignment.loadId}`,
+            },
+          }
+        );
+      }
+    } catch (err) {
+      console.error('Failed to update driver notification:', err);
+    }
 
     // Notify dispatcher
     await this.createNotification({

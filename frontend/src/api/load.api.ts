@@ -132,6 +132,12 @@ export const loadApi = {
     return response.data.data;
   },
 
+  // Unassign load from driver
+  unassignLoad: async (id: string, reason?: string): Promise<Load> => {
+    const response = await apiClient.post(`/loads/${id}/unassign`, { reason });
+    return response.data.data;
+  },
+
   // Update status
   updateStatus: async (
     id: string,
@@ -198,5 +204,69 @@ export const loadApi = {
   ): Promise<Load> => {
     const response = await apiClient.post(`/loads/${id}/driver-form`, data);
     return response.data.data;
+  },
+
+  // Trip workflow endpoints
+  startTrip: async (
+    id: string,
+    data: { startingMileage: number; startingPhoto: string }
+  ): Promise<Load> => {
+    const response = await apiClient.post(`/loads/${id}/start-trip`, data);
+    return response.data.data;
+  },
+
+  shipperCheckIn: async (
+    id: string,
+    data: { arrivedAt: string }
+  ): Promise<Load> => {
+    const response = await apiClient.post(`/loads/${id}/shipper-check-in`, data);
+    return response.data.data;
+  },
+
+  shipperLoadIn: async (
+    id: string,
+    data: { poNumber: string; loadNumber: string; referenceNumber: string }
+  ): Promise<Load> => {
+    const response = await apiClient.post(`/loads/${id}/shipper-load-in`, data);
+    return response.data.data;
+  },
+
+  shipperLoadOut: async (
+    id: string,
+    data: { bolDocument: string }
+  ): Promise<Load> => {
+    const response = await apiClient.post(`/loads/${id}/shipper-load-out`, data);
+    return response.data.data;
+  },
+
+  receiverCheckIn: async (
+    id: string,
+    data: { arrivedAt: string }
+  ): Promise<Load> => {
+    const response = await apiClient.post(`/loads/${id}/receiver-check-in`, data);
+    return response.data.data;
+  },
+
+  receiverOffload: async (
+    id: string,
+    data: { podDocument: string; notes?: string }
+  ): Promise<Load> => {
+    const response = await apiClient.post(`/loads/${id}/receiver-offload`, data);
+    return response.data.data;
+  },
+
+  endTrip: async (
+    id: string,
+    data: { endingMileage: number }
+  ): Promise<Load> => {
+    const response = await apiClient.post(`/loads/${id}/end-trip`, data);
+    return response.data.data;
+  },
+
+  sendSOS: async (
+    id: string,
+    data: { location: { lat: number; lng: number }; message: string }
+  ): Promise<void> => {
+    await apiClient.post(`/loads/${id}/sos`, data);
   },
 };

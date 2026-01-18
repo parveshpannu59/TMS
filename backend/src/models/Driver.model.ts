@@ -65,7 +65,7 @@ const driverSchema = new Schema<IDriver>(
     userId: {
       type: String,
       ref: 'User',
-      index: true,
+      sparse: true,
     },
     name: {
       type: String,
@@ -188,5 +188,6 @@ driverSchema.index({ phone: 1 });
 driverSchema.index({ licenseNumber: 1 });
 driverSchema.index({ status: 1 });
 driverSchema.index({ createdBy: 1 });
+driverSchema.index({ userId: 1 }, { sparse: true }); // Sparse index allows multiple null values
 
 export const Driver = mongoose.model<IDriver>('Driver', driverSchema);

@@ -48,6 +48,12 @@ const menuItems: MenuItem[] = [
     roles: [UserRole.OWNER, UserRole.DISPATCHER, UserRole.DRIVER, UserRole.ACCOUNTANT],
   },
   {
+    text: 'Pending Assignments',
+    icon: <Assignment />,
+    path: '/assignments',
+    roles: [UserRole.DRIVER],
+  },
+  {
     text: 'Users',
     icon: <People />,
     path: '/users',

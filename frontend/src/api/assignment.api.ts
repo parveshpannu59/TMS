@@ -1,13 +1,13 @@
-import axios from 'axios';
+import { apiClient } from './client';
 
-const API_URL = `${import.meta.env.VITE_API_URL}/assignments`;
+const API_PREFIX = '/assignments';
 
 export const assignmentApi = {
   /**
    * Get pending assignments for current driver
    */
   getPendingAssignments: async () => {
-    const response = await axios.get(`${API_URL}/me/pending`);
+    const response = await apiClient.get(`${API_PREFIX}/me/pending`);
     return response.data.data;
   },
 
@@ -15,7 +15,7 @@ export const assignmentApi = {
    * Get all assignments for current driver (including history)
    */
   getMyAssignments: async () => {
-    const response = await axios.get(`${API_URL}/me`);
+    const response = await apiClient.get(`${API_PREFIX}/me`);
     return response.data.data;
   },
 
@@ -23,7 +23,7 @@ export const assignmentApi = {
    * Get single assignment by ID
    */
   getAssignment: async (id: string) => {
-    const response = await axios.get(`${API_URL}/${id}`);
+    const response = await apiClient.get(`${API_PREFIX}/${id}`);
     return response.data.data;
   },
 
@@ -31,7 +31,7 @@ export const assignmentApi = {
    * Accept an assignment
    */
   acceptAssignment: async (id: string) => {
-    const response = await axios.post(`${API_URL}/${id}/accept`);
+    const response = await apiClient.post(`${API_PREFIX}/${id}/accept`);
     return response.data.data;
   },
 
@@ -39,7 +39,7 @@ export const assignmentApi = {
    * Reject an assignment
    */
   rejectAssignment: async (id: string, reason?: string) => {
-    const response = await axios.post(`${API_URL}/${id}/reject`, { reason });
+    const response = await apiClient.post(`${API_PREFIX}/${id}/reject`, { reason });
     return response.data.data;
   },
 
@@ -53,7 +53,7 @@ export const assignmentApi = {
     page?: number;
     limit?: number;
   }) => {
-    const response = await axios.get(API_URL, { params: filters });
+    const response = await apiClient.get(API_PREFIX, { params: filters });
     return response.data.data;
   },
 };

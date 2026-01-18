@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import AssignmentService from '../services/assignment.service';
 import Assignment from '../models/Assignment';
+import { Driver } from '../models/Driver.model';
 import { ApiError } from '../utils/ApiError';
 import { asyncHandler } from '../utils/asyncHandler';
 import { ApiResponse } from '../utils/ApiResponse';
@@ -15,7 +16,22 @@ export class AssignmentController {
       throw ApiError.unauthorized('User ID not found in request');
     }
 
-    const assignments = await AssignmentService.getPendingAssignments(userId);
+    // Find driver profile for this user
+    const driver = await Driver.findOne({ userId });
+    console.log('🔍 Looking for driver with userId:', userId);
+    console.log('✅ Found driver:', driver ? { _id: driver._id, name: driver.name, userId: driver.userId } : null);
+    
+    if (!driver) {
+      throw ApiError.notFound('Driver profile not found');
+    }
+
+    const driverId = driver._id.toString();
+    console.log('📍 Fetching pending assignments for driverId:', driverId);
+    
+    const assignments = await AssignmentService.getPendingAssignments(driverId);
+    console.log('📦 Found assignments:', assignments.length);
+    console.log('📋 Assignment details:', assignments);
+    
     return ApiResponse.success(res, assignments, 'Pending assignments fetched successfully');
   });
 
@@ -56,7 +72,13 @@ export class AssignmentController {
       throw ApiError.unauthorized('User ID not found in request');
     }
 
-    const assignment = await AssignmentService.acceptAssignment(id, userId);
+    // Map user -> driver
+    const driver = await Driver.findOne({ userId });
+    if (!driver) {
+      throw ApiError.notFound('Driver profile not found');
+    }
+
+    const assignment = await AssignmentService.acceptAssignment(id, driver._id.toString());
     return ApiResponse.success(res, assignment, 'Assignment accepted successfully');
   });
 
@@ -71,7 +93,13 @@ export class AssignmentController {
     }
     const { reason } = req.body;
 
-    const assignment = await AssignmentService.rejectAssignment(id, userId, reason);
+    // Map user -> driver
+    const driver = await Driver.findOne({ userId });
+    if (!driver) {
+      throw ApiError.notFound('Driver profile not found');
+    }
+
+    const assignment = await AssignmentService.rejectAssignment(id, driver._id.toString(), reason);
     return ApiResponse.success(res, assignment, 'Assignment rejected successfully');
   });
 
