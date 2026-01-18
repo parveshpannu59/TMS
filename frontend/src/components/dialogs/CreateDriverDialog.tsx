@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -11,11 +11,13 @@ import {
   CircularProgress,
   Typography,
   Divider,
+  MenuItem,
+  FormHelperText,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { driverApi } from '@api/all.api';
+import { driverApi, userApi } from '@api/all.api';
 import type { CreateDriverData } from '../../types/all.types';
 
 interface CreateDriverDialogProps {
@@ -27,8 +29,11 @@ interface CreateDriverDialogProps {
 const CreateDriverDialog: React.FC<CreateDriverDialogProps> = ({ open, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [users, setUsers] = useState<any[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   const [formData, setFormData] = useState<CreateDriverData>({
+    userId: '',
     name: '',
     email: '',
     phone: '',
@@ -43,11 +48,46 @@ const CreateDriverDialog: React.FC<CreateDriverDialogProps> = ({ open, onClose, 
     salary: 0,
   });
 
+  useEffect(() => {
+    if (open) {
+      fetchUsers();
+    }
+  }, [open]);
+
+  const fetchUsers = async () => {
+    try {
+      setLoadingUsers(true);
+      const allUsers = await userApi.getUsers();
+      // Filter users with driver role who don't already have a driver profile
+      const driverUsers = allUsers.filter((u: any) => u.role === 'driver');
+      setUsers(driverUsers);
+    } catch (err) {
+      console.error('Failed to fetch users:', err);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
   const handleChange = (field: keyof CreateDriverData, value: any) => {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
     }));
+  };
+
+  const handleUserSelect = (userId: string) => {
+    const selectedUser = users.find(u => u.id === userId);
+    if (selectedUser) {
+      setFormData((prev) => ({
+        ...prev,
+        userId: userId,
+        name: selectedUser.name || prev.name,
+        email: selectedUser.email || prev.email,
+        phone: selectedUser.phone || prev.phone,
+      }));
+    } else {
+      handleChange('userId', userId);
+    }
   };
 
   const handleSubmit = async () => {
@@ -87,6 +127,7 @@ const CreateDriverDialog: React.FC<CreateDriverDialogProps> = ({ open, onClose, 
 
   const handleClose = () => {
     setFormData({
+      userId: '',
       name: '',
       email: '',
       phone: '',
@@ -116,6 +157,45 @@ const CreateDriverDialog: React.FC<CreateDriverDialogProps> = ({ open, onClose, 
 
         <LocalizationProvider dateAdapter={AdapterDateFns}>
           <Grid container spacing={2} sx={{ mt: 1 }}>
+            {/* User Account Selection */}
+            <Grid item xs={12}>
+              <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                Link to User Account
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                select
+                label="Select User"
+                value={formData.userId || ''}
+                onChange={(e) => handleUserSelect(e.target.value)}
+                helperText="Select the user account this driver will use to log in"
+                disabled={loadingUsers}
+              >
+                <MenuItem value="">
+                  <em>None (Create without user account)</em>
+                </MenuItem>
+                {users.map((user) => (
+                  <MenuItem key={user.id} value={user.id}>
+                    {user.name} ({user.email}) - {user.role}
+                  </MenuItem>
+                ))}
+              </TextField>
+              {formData.userId && (
+                <FormHelperText sx={{ color: 'success.main', mt: 1 }}>
+                  ✓ Driver will be able to log in and see assigned loads
+                </FormHelperText>
+              )}
+              {!formData.userId && (
+                <FormHelperText sx={{ color: 'warning.main', mt: 1 }}>
+                  ⚠ Without a user account, this driver won't be able to log in
+                </FormHelperText>
+              )}
+            </Grid>
+
             {/* Personal Information */}
             <Grid item xs={12}>
               <Typography variant="subtitle2" fontWeight="bold" gutterBottom>

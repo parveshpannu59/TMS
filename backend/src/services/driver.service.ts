@@ -78,6 +78,16 @@ export class DriverService {
     return this.formatDriver(driver);
   }
 
+  static async getDriverByUserId(userId: string) {
+    const driver = await Driver.findOne({ userId }).populate('currentLoadId', 'loadNumber status');
+
+    if (!driver) {
+      throw ApiError.notFound('Driver profile not found. Please contact administrator.');
+    }
+
+    return this.formatDriver(driver);
+  }
+
   static async updateDriver(driverId: string, updateData: Partial<CreateDriverData>) {
     const driver = await Driver.findById(driverId);
 
@@ -140,6 +150,7 @@ export class DriverService {
   private static formatDriver(driver: any) {
     return {
       id: driver._id.toString(),
+      userId: driver.userId,
       name: driver.name,
       email: driver.email,
       phone: driver.phone,

@@ -86,6 +86,12 @@ export interface LoadsResponse {
 }
 
 export const loadApi = {
+  // Get my assigned loads (for logged-in driver)
+  getMyAssignedLoads: async (): Promise<Load[]> => {
+    const response = await apiClient.get('/loads/me/assigned');
+    return response.data.data;
+  },
+
   // Get all loads
   getLoads: async (params?: {
     status?: string;

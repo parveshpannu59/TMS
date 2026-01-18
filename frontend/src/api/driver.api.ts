@@ -29,6 +29,12 @@ export interface Driver {
 }
 
 export const driverApi = {
+  // Get my driver profile (for logged-in driver)
+  getMyProfile: async (): Promise<Driver> => {
+    const response = await apiClient.get('/drivers/me/profile');
+    return response.data.data;
+  },
+
   // Get all drivers
   getDrivers: async (status?: string): Promise<Driver[]> => {
     const response = await apiClient.get('/drivers', { params: { status, limit: 100 } });

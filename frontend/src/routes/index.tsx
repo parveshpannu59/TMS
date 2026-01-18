@@ -51,6 +51,7 @@ const LoadsPage = lazy(() => import('@pages/LoadsPage'));
 const TrucksPage = lazy(() => import('@pages/TrucksPage'));
 const TrailersPage = lazy(() => import('@pages/TrailersPage'));
 const DriversPage = lazy(() => import('@pages/DriversPage'));
+const TripManagementDashboard = lazy(() => import('@pages/TripManagementDashboard'));
 const AccountingPage = lazy(() => import('@pages/AccountingPage'));
 const SettingsPage = lazy(() => import('@pages/SettingsPage'));
 const ActivityHistoryPage = lazy(() => import('@pages/ActivityHistoryPage'));
@@ -106,6 +107,14 @@ export const AppRoutes = () => {
           element={
             <ProtectedRoute>
               <DriversPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/trips"
+          element={
+            <ProtectedRoute>
+              <TripManagementDashboard />
             </ProtectedRoute>
           }
         />

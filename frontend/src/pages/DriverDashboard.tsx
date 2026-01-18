@@ -56,6 +56,7 @@ import { useAuth } from '@hooks/useAuth';
 import { loadApi } from '@/api/all.api';
 import { messageApi } from '@/api/message.api';
 import { driverApi } from '@/api/driver.api';
+import assignmentApi from '@/api/assignment.api';
 import type { Load, LoadStatus } from '@/types/all.types';
 import { DriverFormDialog } from '@/components/driver/DriverFormDialog';
 import { StartTripDialog } from '@/components/driver/StartTripDialog';
@@ -63,6 +64,7 @@ import { ShipperCheckInDialog } from '@/components/driver/ShipperCheckInDialog';
 import { LoadOutDialog } from '@/components/driver/LoadOutDialog';
 import { ReceiverOffloadDialog } from '@/components/driver/ReceiverOffloadDialog';
 import { EndTripDialog } from '@/components/driver/EndTripDialog';
+import AssignmentNotifications from '@/components/dialogs/AssignmentNotifications';
 
 const DriverDashboard: React.FC = () => {
   const theme = useTheme();
@@ -90,79 +92,39 @@ const DriverDashboard: React.FC = () => {
   const [receiverOffloadDialogOpen, setReceiverOffloadDialogOpen] = useState(false);
   const [endTripDialogOpen, setEndTripDialogOpen] = useState(false);
 
-  // First, fetch the driver record for current user
-  const fetchDriver = useCallback(async () => {
-    if (!user?.id) return null;
-    try {
-      const allDrivers = await driverApi.getDrivers();
-      // Find driver linked to current user
-      // Driver might be linked via userId field or we need to match by email/phone
-      const currentDriver = allDrivers.find((d: any) => {
-        // Check if driver has userId that matches user.id
-        const driverUserId = typeof d.userId === 'string' 
-          ? d.userId 
-          : (d.userId as any)?.id || (d.userId as any)?._id;
-        
-        // Also check by email/phone as fallback
-        return driverUserId === user.id || 
-               d.email === user.email || 
-               (d.userId?.email === user.email);
-      });
-      return currentDriver || null;
-    } catch (err) {
-      console.error('Failed to fetch driver:', err);
-      return null;
-    }
-  }, [user]);
-
   // Fetch driver's current and assigned loads
   const fetchLoads = useCallback(async () => {
     try {
       setLoading(true);
       
-      // First, get the driver record for current user
-      const currentDriver = await fetchDriver();
-      setDriver(currentDriver);
-      
-      if (!currentDriver) {
-        setError('Driver profile not found. Please contact administrator.');
-        setLoads([]);
-        return;
-      }
-
-      const driverId = currentDriver.id || currentDriver._id;
-      if (!driverId) {
-        setError('Invalid driver ID');
-        setLoads([]);
-        return;
-      }
-
-      const response = await loadApi.getAllLoads();
-      // Filter loads assigned to current driver using driver._id
-      const driverLoads = response.filter(
-        (load: Load) => {
-          const loadDriverId = typeof load.driverId === 'string' 
-            ? load.driverId 
-            : (load.driverId as any)?.id || (load.driverId as any)?._id || load.driverId;
-          return loadDriverId === driverId;
-        }
-      );
-      setLoads(driverLoads);
+      // Use the new API endpoint to get loads assigned to current driver
+      const assignedLoads = await loadApi.getMyAssignedLoads();
+      setLoads(assignedLoads);
       
       // Get current active load
-      const activeLoad = driverLoads.find(
+      const activeLoad = assignedLoads.find(
         (load: Load) =>
           !['completed', 'cancelled', 'delivered'].includes(load.status)
       ) || null;
       setCurrentLoad(activeLoad);
       
+      // Also fetch driver profile for display
+      try {
+        const driverProfile = await driverApi.getMyProfile();
+        setDriver(driverProfile);
+      } catch (err) {
+        console.error('Failed to fetch driver profile:', err);
+        setDriver(null);
+      }
+      
       setError(null);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch loads');
+      setLoads([]);
     } finally {
       setLoading(false);
     }
-  }, [user, fetchDriver]);
+  }, []);
 
   // Fetch unread message count
   const fetchUnreadCount = useCallback(async () => {
@@ -338,6 +300,9 @@ const DriverDashboard: React.FC = () => {
             {error}
           </Alert>
         )}
+
+        {/* Pending Assignment Notifications */}
+        <AssignmentNotifications />
 
         {/* Current Load Card - Main Focus for Driver */}
         {currentLoad ? (

@@ -8,6 +8,9 @@ const router = express.Router();
 // All routes require authentication
 router.use(authenticate);
 
+// Get my profile (Driver role - must be before /:id to avoid route conflict)
+router.get('/me/profile', DriverController.getMyProfile);
+
 // Get all drivers (all roles)
 router.get('/', DriverController.getDrivers);
 

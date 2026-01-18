@@ -10,6 +10,13 @@ export class DriverController {
     return ApiResponse.success(res, drivers, 'Drivers fetched successfully');
   });
 
+  // Get driver profile for current user (for driver login)
+  static getMyProfile = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user!.id;
+    const driver = await DriverService.getDriverByUserId(userId);
+    return ApiResponse.success(res, driver, 'Driver profile fetched successfully');
+  });
+
   // Get single driver
   static getDriverById = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;

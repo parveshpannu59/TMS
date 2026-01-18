@@ -530,14 +530,14 @@ const LoadsPage: React.FC = () => {
           />,
         ];
 
-        if (params.row.status === 'booked') {
+        // Show assign button for booked and rate_confirmed loads
+        if (params.row.status === 'booked' || params.row.status === 'rate_confirmed') {
           actions.push(
             <GridActionsCellItem
               key="assign"
               icon={<Assignment />}
-              label="Assign"
+              label="Assign Driver"
               onClick={() => handleOpenAssignDialog(params.row as Load)}
-              showInMenu
             />
           );
         }
@@ -1276,7 +1276,10 @@ const LoadsPage: React.FC = () => {
               <Box sx={{ mt: 4, display: 'flex', flexDirection: 'column', gap: 3 }}>
                 <Autocomplete
                   options={drivers}
-                  getOptionLabel={(option) => `${option.userId.name} - License: ${option.licenseNumber}`}
+                  getOptionLabel={(option) => {
+                    const driverName = option.name || option.userId?.name || 'Unknown Driver';
+                    return `${driverName} - License: ${option.licenseNumber}`;
+                  }}
                   value={selectedDriver}
                   onChange={(_, value) => setSelectedDriver(value)}
                   renderInput={(params) => (
@@ -1290,10 +1293,10 @@ const LoadsPage: React.FC = () => {
                     <li {...props}>
                       <Box>
                         <Typography variant="body2" fontWeight={600}>
-                          {option.userId.name}
+                          {option.name || option.userId?.name || 'Unknown Driver'}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          License: {option.licenseNumber} • {option.userId.phone}
+                          License: {option.licenseNumber} • {option.phone || option.userId?.phone || 'N/A'}
                         </Typography>
                       </Box>
                     </li>

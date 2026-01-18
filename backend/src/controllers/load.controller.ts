@@ -8,8 +8,34 @@ import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
 import { ApiError } from '../utils/ApiError';
 import { notifyLoadAssigned } from '../utils/notificationHelper';
+import AssignmentService from '../services/assignment.service';
 
 export class LoadController {
+  // Get loads assigned to current driver
+  static getMyAssignedLoads = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user!.id;
+    
+    // Find driver profile for this user
+    const driver = await Driver.findOne({ userId });
+    
+    if (!driver) {
+      throw ApiError.notFound('Driver profile not found');
+    }
+    
+    const driverId = driver._id.toString();
+    
+    // Get all loads assigned to this driver
+    const loads = await Load.find({ driverId })
+      .populate('driverId', 'name email phone')
+      .populate('truckId', 'unitNumber make model')
+      .populate('trailerId', 'unitNumber type')
+      .populate('createdBy', 'name email')
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    return ApiResponse.success(res, loads, 'Assigned loads fetched successfully');
+  });
+
   // Get all loads with filtering
   static getLoads = asyncHandler(async (req: Request, res: Response) => {
     const companyId = req.user?.companyId ?? req.user?.id;
@@ -212,7 +238,7 @@ export class LoadController {
 
   // Assign load to driver, truck, and trailer
   static assignLoad = asyncHandler(async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const loadId = String(req.params.id);
     const { driverId, truckId, trailerId } = req.body;
     const companyId = req.user?.companyId ?? req.user?.id;
     const userId = req.user!.id;
@@ -223,7 +249,7 @@ export class LoadController {
     }
     
     // Find the load
-    const load = await Load.findOne({ _id: id, companyId });
+    const load = await Load.findOne({ _id: loadId, companyId });
     if (!load) {
       throw ApiError.notFound('Load not found');
     }
@@ -284,19 +310,27 @@ export class LoadController {
       trailer.save(),
     ]);
     
-    // Send notification to driver
+    // Create Assignment record (tracks accept/reject workflow)
     try {
-      // Find user account linked to this driver (by email or phone)
-      let driverUserId: string | undefined = undefined;
+      await AssignmentService.createAssignment({
+        loadId,
+        driverId: driverId,
+        truckId: truckId,
+        trailerId: trailerId,
+        assignedBy: userId,
+        expiresIn: 24, // 24 hours to accept/reject
+      });
       
-      if (driver.email) {
+      // Get driver's user account
+      let driverUserId = driver.userId; // If driver has userId field from earlier fix
+      
+      if (!driverUserId && driver.email) {
         const driverUser = await User.findOne({ email: driver.email, role: 'driver' });
         if (driverUser) {
           driverUserId = driverUser._id.toString();
         }
       }
       
-      // If userId not found by email, try by phone
       if (!driverUserId && driver.phone) {
         const driverUser = await User.findOne({ phone: driver.phone, role: 'driver' });
         if (driverUser) {
@@ -304,8 +338,8 @@ export class LoadController {
         }
       }
       
-      // Send notification if user found, otherwise log warning
-      if (driverUserId && companyId) {
+      // Send notification to driver if user account found
+      if (driverUserId) {
         await notifyLoadAssigned(
           companyId as string,
           driverUserId,
@@ -313,16 +347,14 @@ export class LoadController {
           driver.name
         );
       } else {
-        if (!driverUserId) {
-          console.warn(`Driver ${driver.name} (${driver.email || driver.phone}) not linked to user account - notification not sent`);
-        }
+        console.warn(`Driver ${driver.name} not linked to user account - notification not sent`);
       }
-    } catch (notifError) {
+    } catch (assignError) {
       // Log error but don't fail the assignment
-      console.error('Failed to send notification to driver:', notifError);
+      console.error('Failed to create assignment or send notification:', assignError);
     }
     
-    return ApiResponse.success(res, load, 'Load assigned successfully. Driver has been notified.');
+    return ApiResponse.success(res, load, 'Load assigned successfully. Driver has been notified to accept or reject.');
   });
 
   // Update load status

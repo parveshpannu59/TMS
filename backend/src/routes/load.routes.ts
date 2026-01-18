@@ -8,6 +8,13 @@ const router = express.Router();
 // All load routes require authentication
 router.use(authenticate);
 
+// Get my assigned loads (Driver) - must come before /:id
+router.get(
+  '/me/assigned',
+  authorize(UserRole.DRIVER),
+  LoadController.getMyAssignedLoads
+);
+
 // Get all loads (all roles)
 router.get(
   '/',

@@ -20,9 +20,13 @@ export const loadApi = {
     return response.data.data as Load;
   },
 
-  getAllLoads: async (): Promise<Load[]> => {
-    const response = await apiClient.get<ApiResponse<Load[]>>('/loads');
-    return response.data.data as Load[];
+  // Fetch all loads; backend returns { loads, pagination }
+  getAllLoads: async (params?: Record<string, any>): Promise<Load[]> => {
+    const response = await apiClient.get<ApiResponse<{ loads: Load[]; pagination: any }>>('/loads', {
+      params,
+    });
+    const data = response.data.data as unknown as { loads: Load[]; pagination: any };
+    return Array.isArray((data as any).loads) ? (data as any).loads : [];
   },
 
   getLoadById: async (id: string): Promise<Load> => {
@@ -266,7 +270,38 @@ export const driverApi = {
     return response.data.data;
   },
 };
+// ASSIGNMENT API
+export const assignmentApi = {
+  getPendingAssignments: async (): Promise<any[]> => {
+    const response = await apiClient.get<ApiResponse<any[]>>('/assignments/me/pending');
+    return response.data.data as any[];
+  },
 
+  getMyAssignments: async (): Promise<any[]> => {
+    const response = await apiClient.get<ApiResponse<any[]>>('/assignments/me');
+    return response.data.data as any[];
+  },
+
+  getAssignment: async (id: string): Promise<any> => {
+    const response = await apiClient.get<ApiResponse<any>>(`/assignments/${id}`);
+    return response.data.data as any;
+  },
+
+  acceptAssignment: async (id: string): Promise<any> => {
+    const response = await apiClient.post<ApiResponse<any>>(`/assignments/${id}/accept`);
+    return response.data.data;
+  },
+
+  rejectAssignment: async (id: string, reason?: string): Promise<any> => {
+    const response = await apiClient.post<ApiResponse<any>>(`/assignments/${id}/reject`, { reason });
+    return response.data.data;
+  },
+
+  getAllAssignments: async (filters?: any): Promise<any> => {
+    const response = await apiClient.get<ApiResponse<any>>('/assignments', { params: filters });
+    return response.data.data;
+  },
+};
 // TRUCK API
 export const truckApi = {
   createTruck: async (data: CreateTruckData): Promise<Truck> => {

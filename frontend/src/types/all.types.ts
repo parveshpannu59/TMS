@@ -209,6 +209,7 @@ export enum LoadStatus {
   }
   
   export interface CreateDriverData {
+    userId?: string; // Link to user account for driver login
     name: string;
     email?: string;
     phone: string;

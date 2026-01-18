@@ -7,6 +7,7 @@ export enum DriverStatus {
 }
 
 export interface IDriver extends Document {
+  userId?: string; // Reference to User account for driver login
   name: string;
   email?: string;
   phone: string;
@@ -61,6 +62,11 @@ const DocumentsSchema = new Schema({
 
 const driverSchema = new Schema<IDriver>(
   {
+    userId: {
+      type: String,
+      ref: 'User',
+      index: true,
+    },
     name: {
       type: String,
       required: [true, 'Driver name is required'],
