@@ -16,6 +16,7 @@ export interface User {
   email: string;
   role: UserRole;
   status: 'active' | 'inactive';
+  profilePicture?: string;
 }
 
 export interface LoginResponse {

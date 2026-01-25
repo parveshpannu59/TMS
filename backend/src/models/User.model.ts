@@ -4,6 +4,10 @@ import { UserRole, IUser } from '../types/auth.types';
 
 interface IUserDocument extends Omit<IUser, '_id'>, Document {
   comparePassword(candidatePassword: string): Promise<boolean>;
+  profilePicture?: string;
+  twoFactorEnabled?: boolean;
+  twoFactorSecret?: string;
+  twoFactorBackupCodes?: string[];
 }
 
 const userSchema = new Schema<IUserDocument>(
@@ -47,6 +51,23 @@ const userSchema = new Schema<IUserDocument>(
       type: String,
       enum: ['active', 'inactive'],
       default: 'active',
+    },
+    profilePicture: {
+      type: String,
+      trim: true,
+    },
+    twoFactorEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    twoFactorSecret: {
+      type: String,
+      select: false,
+    },
+    twoFactorBackupCodes: {
+      type: [String],
+      select: false,
+      default: [],
     },
   },
   {
