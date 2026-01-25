@@ -40,6 +40,7 @@ export interface AuthResponse {
     role: UserRole;
     status: string;
     companyId?: string;
+    profilePicture?: string;
   };
   expiresAt: string;
 }

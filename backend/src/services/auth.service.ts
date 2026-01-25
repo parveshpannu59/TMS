@@ -50,6 +50,7 @@ export class AuthService {
         email: user.email,
         role: user.role,
         status: user.status,
+        profilePicture: (user as any).profilePicture || undefined,
       },
       expiresAt,
     };
@@ -72,6 +73,7 @@ export class AuthService {
       email: user.email,
       role: user.role,
       status: user.status,
+      profilePicture: (user as any).profilePicture || undefined,
     };
   }
 }

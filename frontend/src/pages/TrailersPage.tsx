@@ -112,7 +112,7 @@ const TrailersPage: React.FC = () => {
           trailer.vin?.toLowerCase().includes(lowerSearch) ||
           trailer.make?.toLowerCase().includes(lowerSearch) ||
           trailer.licensePlate?.toLowerCase().includes(lowerSearch) ||
-          trailerTypeLabels[trailer.type]?.toLowerCase().includes(lowerSearch)
+          trailerTypes[trailer.type]?.toLowerCase().includes(lowerSearch)
       );
     }
 

@@ -143,14 +143,21 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = React.memo(({ chi
               }}
             >
               <Avatar 
+                src={
+                  user?.profilePicture 
+                    ? (user.profilePicture.startsWith('http') 
+                        ? user.profilePicture 
+                        : `http://localhost:5000${user.profilePicture}`)
+                    : undefined
+                }
                 sx={{ 
-                  bgcolor: 'primary.main',
+                  bgcolor: user?.profilePicture ? 'transparent' : 'primary.main',
                   width: 40,
                   height: 40,
                   fontWeight: 600,
                 }}
               >
-                {user?.name?.charAt(0).toUpperCase() || <AccountCircle />}
+                {!user?.profilePicture && (user?.name?.charAt(0).toUpperCase() || <AccountCircle />)}
               </Avatar>
             </IconButton>
           </Box>

@@ -38,4 +38,20 @@ export const API_ENDPOINTS = {
     DELETE: (id: string) => `/trucks/${id}`,
     GET: (id: string) => `/trucks/${id}`,
   },
+
+  SETTINGS: {
+    GET: '/settings',
+    UPDATE: '/settings',
+    UPDATE_SECTION: (section: string) => `/settings/${section}`,
+    CHANGE_PASSWORD: '/settings/password',
+    PROFILE_PICTURE: '/settings/profile-picture',
+    TEST_NOTIFICATION: '/settings/test-notification',
+    TWO_FACTOR: {
+      ENABLE: '/settings/2fa/enable',
+      VERIFY: '/settings/2fa/verify',
+      DISABLE: '/settings/2fa/disable',
+      BACKUP_CODES: '/settings/2fa/backup-codes',
+      REGENERATE_CODES: '/settings/2fa/regenerate-codes',
+    },
+  },
 } as const;

@@ -1,5 +1,6 @@
 import express, { Application } from 'express';
 import cors from 'cors';
+import path from 'path';
 import { config } from './config/env';
 import routes from './routes';
 import { errorHandler, notFound } from './middleware/error.middleware';
@@ -19,6 +20,9 @@ app.use(
 // Body parsers
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Serve static files (uploads)
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Security headers
 app.use((_req, res, next) => {
