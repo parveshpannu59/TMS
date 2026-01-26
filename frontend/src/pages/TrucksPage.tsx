@@ -27,6 +27,7 @@ import { CheckCircle, Build, Warning } from '@mui/icons-material';
 import { useForm, Controller } from 'react-hook-form';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
+import { useTranslation } from 'react-i18next';
 
 const truckSchema = yup.object({
   unitNumber: yup.string().required('Unit number is required'),
@@ -36,6 +37,7 @@ const truckSchema = yup.object({
   vin: yup.string().required('VIN is required').length(17, 'VIN must be 17 characters'),
   licensePlate: yup.string().required('License plate is required'),
   status: yup.string().oneOf(['available', 'on_road', 'in_maintenance', 'out_of_service']),
+  notes: yup.string(),
 });
 
 const statusColors: Record<string, 'success' | 'warning' | 'error' | 'info'> = {
@@ -46,10 +48,14 @@ const statusColors: Record<string, 'success' | 'warning' | 'error' | 'info'> = {
 };
 
 const TrucksPage: React.FC = () => {
+  const { t } = useTranslation();
   const [trucks, setTrucks] = useState<Truck[]>([]);
   const [filteredTrucks, setFilteredTrucks] = useState<Truck[]>([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
+  const [openNotesDialog, setOpenNotesDialog] = useState(false);
+  const [selectedNotes, setSelectedNotes] = useState<string>('');
+  const [notesTitle, setNotesTitle] = useState<string>('Notes');
   const [editingTruck, setEditingTruck] = useState<Truck | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -74,6 +80,7 @@ const TrucksPage: React.FC = () => {
       vin: '',
       licensePlate: '',
       status: 'available',
+      notes: '',
     },
   });
 
@@ -130,6 +137,7 @@ const TrucksPage: React.FC = () => {
         vin: truck.vin,
         licensePlate: truck.licensePlate,
         status: truck.status,
+        notes: (truck as any).notes || '',
       });
     } else {
       setEditingTruck(null);
@@ -141,6 +149,7 @@ const TrucksPage: React.FC = () => {
         vin: '',
         licensePlate: '',
         status: 'available',
+        notes: '',
       });
     }
     setOpenDialog(true);
@@ -254,6 +263,55 @@ const TrucksPage: React.FC = () => {
         ),
     },
     {
+      field: 'notes',
+      headerName: 'Notes',
+      flex: 1.5,
+      minWidth: 150,
+      renderCell: (params) => {
+        if (!params || !params.row) {
+          return (
+            <Typography variant="body2" color="text.secondary" fontStyle="italic">
+              No notes
+            </Typography>
+          );
+        }
+        const notes = params.row.notes || '';
+        if (!notes) {
+          return (
+            <Typography variant="body2" color="text.secondary" fontStyle="italic">
+              No notes
+            </Typography>
+          );
+        }
+        const truncated = notes.length > 50 ? notes.substring(0, 50) + '...' : notes;
+        const hasMore = notes.length > 50;
+        return (
+          <Typography 
+            variant="body2" 
+            onClick={() => {
+              if (hasMore || notes) {
+                setSelectedNotes(notes);
+                setNotesTitle(`Notes - Truck #${params.row.unitNumber || 'N/A'}`);
+                setOpenNotesDialog(true);
+              }
+            }}
+            sx={{ 
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              cursor: notes ? 'pointer' : 'default',
+              '&:hover': notes ? {
+                color: 'primary.main',
+                textDecoration: 'underline',
+              } : {},
+            }}
+          >
+            {truncated}
+          </Typography>
+        );
+      },
+    },
+    {
       field: 'actions',
       type: 'actions',
       headerName: 'Actions',
@@ -281,7 +339,7 @@ const TrucksPage: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <LocalShipping sx={{ fontSize: 32, color: 'primary.main' }} />
             <Typography variant="h4" fontWeight={700}>
-              Trucks Management
+              {t('trucks.title')}
             </Typography>
           </Box>
           <Button
@@ -295,7 +353,7 @@ const TrucksPage: React.FC = () => {
               },
             }}
           >
-            Add Truck
+            {t('trucks.addTruck')}
           </Button>
         </Box>
 
@@ -314,7 +372,7 @@ const TrucksPage: React.FC = () => {
         {/* Search and Filters */}
         <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
           <TextField
-            placeholder="Search by unit#, VIN, make, model, plate..."
+            placeholder={t('trucks.searchPlaceholder', { defaultValue: 'Search by unit#, VIN, make, model, plate...' })}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             InputProps={{
@@ -330,17 +388,17 @@ const TrucksPage: React.FC = () => {
           
           <TextField
             select
-            label="Status"
+            label={t('common.status')}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             sx={{ minWidth: 150 }}
             size="small"
           >
-            <MenuItem value="all">All Status</MenuItem>
-            <MenuItem value="available">Available</MenuItem>
-            <MenuItem value="on_trip">On Trip</MenuItem>
-            <MenuItem value="maintenance">Maintenance</MenuItem>
-            <MenuItem value="out_of_service">Out of Service</MenuItem>
+            <MenuItem value="all">{t('common.allStatus')}</MenuItem>
+            <MenuItem value="available">{t('common.available')}</MenuItem>
+            <MenuItem value="on_trip">{t('trucks.onTrip', { defaultValue: 'On Trip' })}</MenuItem>
+            <MenuItem value="maintenance">{t('trucks.maintenance', { defaultValue: 'Maintenance' })}</MenuItem>
+            <MenuItem value="out_of_service">{t('trucks.outOfService', { defaultValue: 'Out of Service' })}</MenuItem>
           </TextField>
 
           {(searchTerm || statusFilter !== 'all') && (
@@ -353,7 +411,7 @@ const TrucksPage: React.FC = () => {
                 setStatusFilter('all');
               }}
             >
-              Clear
+              {t('common.clear')}
             </Button>
           )}
         </Box>
@@ -362,9 +420,9 @@ const TrucksPage: React.FC = () => {
           {!loading && filteredTrucks.length === 0 ? (
             <EmptyState
               icon={<LocalShipping />}
-              title={trucks.length === 0 ? "No Trucks Added" : "No Results Found"}
-              description={trucks.length === 0 ? "Start building your fleet by adding your first truck. Include unit number, make, model, and VIN to track your equipment." : "Try adjusting your search or filters"}
-              actionLabel={trucks.length === 0 ? "Add First Truck" : undefined}
+              title={trucks.length === 0 ? t('trucks.noTrucksAdded', { defaultValue: 'No Trucks Added' }) : t('common.noResultsFound')}
+              description={trucks.length === 0 ? t('trucks.noTrucksDescription', { defaultValue: 'Start building your fleet by adding your first truck. Include unit number, make, model, and VIN to track your equipment.' }) : t('common.tryAdjustingFilters')}
+              actionLabel={trucks.length === 0 ? t('trucks.addFirstTruck', { defaultValue: 'Add First Truck' }) : undefined}
               onAction={trucks.length === 0 ? () => handleOpenDialog() : undefined}
             />
           ) : (
@@ -515,6 +573,29 @@ const TrucksPage: React.FC = () => {
                       <MenuItem value="in_maintenance">In Maintenance</MenuItem>
                       <MenuItem value="out_of_service">Out of Service</MenuItem>
                     </TextField>
+                  )}
+                />
+
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                    Additional Notes
+                  </Typography>
+                </Box>
+
+                <Controller
+                  name="notes"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      label="Notes (Optional)"
+                      disabled={isSubmitting}
+                      fullWidth
+                      multiline
+                      rows={4}
+                      placeholder="Add any additional notes, maintenance reminders, special instructions, or important information about this truck..."
+                      helperText="Use this field to record maintenance history, special handling requirements, or any other relevant information"
+                    />
                   )}
                 />
               </Box>

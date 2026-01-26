@@ -30,6 +30,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '@hooks/useAuth';
 import { UserRole } from '../../types/user.types';
+import { useTranslation } from 'react-i18next';
 
 const DRAWER_WIDTH = 260;
 
@@ -40,81 +41,82 @@ interface MenuItem {
   roles: UserRole[];
 }
 
-const menuItems: MenuItem[] = [
+// Menu items will be created inside component to use translations
+const getMenuItems = (t: (key: string) => string): MenuItem[] => [
   {
-    text: 'Dashboard',
+    text: t('navigation.dashboard'),
     icon: <Dashboard />,
     path: '/dashboard',
     roles: [UserRole.OWNER, UserRole.DISPATCHER, UserRole.DRIVER, UserRole.ACCOUNTANT],
   },
   {
-    text: 'Pending Assignments',
+    text: 'Pending Assignments', // TODO: Add to translations
     icon: <Assignment />,
     path: '/assignments',
     roles: [UserRole.DRIVER],
   },
   {
-    text: 'Users',
+    text: t('navigation.users'),
     icon: <People />,
     path: '/users',
     roles: [UserRole.OWNER],
   },
   {
-    text: 'Loads',
+    text: t('navigation.loads'),
     icon: <Assignment />,
     path: '/loads',
     roles: [UserRole.OWNER, UserRole.DISPATCHER],
   },
   {
-    text: 'Drivers',
+    text: t('navigation.drivers'),
     icon: <LocalShipping />,
     path: '/drivers',
     roles: [UserRole.OWNER, UserRole.DISPATCHER],
   },
   {
-    text: 'Trip Management',
+    text: t('navigation.tripManagement'),
     icon: <Assignment />,
     path: '/trips',
     roles: [UserRole.OWNER, UserRole.DISPATCHER],
   },
   {
-    text: 'Trucks',
+    text: t('navigation.trucks'),
     icon: <DirectionsCar />,
     path: '/trucks',
     roles: [UserRole.OWNER, UserRole.DISPATCHER],
   },
   {
-    text: 'Trailers',
+    text: t('navigation.trailers'),
     icon: <RvHookup />,
     path: '/trailers',
     roles: [UserRole.OWNER, UserRole.DISPATCHER],
   },
   {
-    text: 'Accounting',
+    text: t('navigation.accounting'),
     icon: <AccountBalance />,
     path: '/accounting',
     roles: [UserRole.OWNER, UserRole.ACCOUNTANT],
   },
   {
-    text: 'Maintenance',
+    text: t('navigation.maintenance'),
     icon: <Build />,
     path: '/maintenance',
     roles: [UserRole.OWNER, UserRole.DISPATCHER],
   },
   {
-    text: 'Resources',
+    text: t('navigation.resources'),
     icon: <Assessment />,
     path: '/resources',
     roles: [UserRole.OWNER, UserRole.DISPATCHER],
   },
   {
-    text: 'Activity History',
+    text: t('navigation.activityHistory'),
     icon: <History />,
     path: '/history',
     roles: [UserRole.OWNER, UserRole.DISPATCHER],
   },
   {
-    text: 'Settings',
+    text: t('navigation.settings'),
     icon: <Settings />,
     path: '/settings',
     roles: [UserRole.OWNER, UserRole.DISPATCHER, UserRole.DRIVER, UserRole.ACCOUNTANT],
@@ -134,11 +136,12 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(
     const location = useLocation();
     const { user } = useAuth();
     const theme = useTheme();
+    const { t } = useTranslation();
 
     const filteredMenuItems = useMemo(() => {
       if (!user) return [];
-      return menuItems.filter((item) => item.roles.includes(user.role));
-    }, [user]);
+      return getMenuItems(t).filter((item) => item.roles.includes(user.role));
+    }, [user, t]);
 
     const handleNavigation = useCallback(
       (path: string) => {

@@ -25,26 +25,31 @@ import { userApi } from '@/api/user.api';
 import { useForm, Controller } from 'react-hook-form';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
+import { useTranslation } from 'react-i18next';
 
 const driverSchema = yup.object({
   licenseNumber: yup.string().required('License number is required'),
   licenseExpiry: yup.date().required('License expiry is required'),
-  status: yup.string().oneOf(['available', 'on_duty', 'off_duty', 'on_leave']),
+  status: yup.string().oneOf(['active', 'inactive', 'on_trip']).optional(),
+  notes: yup.string().optional(),
 });
 
 const statusColors: Record<string, 'success' | 'warning' | 'error' | 'info'> = {
-  available: 'success',
-  on_duty: 'info',
-  off_duty: 'warning',
-  on_leave: 'error',
+  active: 'success',
+  inactive: 'error',
+  on_trip: 'info',
 };
 
 const DriversPage: React.FC = () => {
+  const { t } = useTranslation();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [filteredDrivers, setFilteredDrivers] = useState<Driver[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
+  const [openNotesDialog, setOpenNotesDialog] = useState(false);
+  const [selectedNotes, setSelectedNotes] = useState<string>('');
+  const [notesTitle, setNotesTitle] = useState<string>('Notes');
   const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -64,7 +69,8 @@ const DriversPage: React.FC = () => {
     defaultValues: {
       licenseNumber: '',
       licenseExpiry: new Date(),
-      status: 'off_duty',
+      status: 'active',
+      notes: '',
     },
   });
   
@@ -144,6 +150,7 @@ const DriversPage: React.FC = () => {
         licenseNumber: driver.licenseNumber,
         licenseExpiry: new Date(driver.licenseExpiry),
         status: driver.status,
+        notes: (driver as any).notes || '',
       });
     } else {
       setEditingDriver(null);
@@ -151,7 +158,8 @@ const DriversPage: React.FC = () => {
       reset({
         licenseNumber: '',
         licenseExpiry: new Date(),
-        status: 'off_duty',
+        status: 'active',
+        notes: '',
       });
     }
     setOpenDialog(true);
@@ -182,8 +190,16 @@ const DriversPage: React.FC = () => {
           setError('Invalid driver ID for update');
           return;
         }
-        // For update, only send the form fields (licenseNumber, licenseExpiry, status)
-        await driverApi.updateDriver(driverId, data);
+        // For update, send all form fields including notes
+        console.log('Updating driver with data:', data);
+        const updateData = {
+          licenseNumber: data.licenseNumber,
+          licenseExpiry: data.licenseExpiry,
+          status: data.status,
+          notes: data.notes || '',
+        };
+        console.log('Sending update request:', updateData);
+        await driverApi.updateDriver(driverId, updateData);
         setSuccess('Driver updated successfully');
       } else {
         // For create, we need to send all required fields
@@ -225,8 +241,14 @@ const DriversPage: React.FC = () => {
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       // Extract error message from API response
+      console.error('Error saving driver:', err);
       const errorMessage = err.response?.data?.message || err.response?.data?.error || err.message || 'Failed to save driver';
       setError(errorMessage);
+      console.error('Error details:', {
+        message: errorMessage,
+        response: err.response?.data,
+        status: err.response?.status,
+      });
       setTimeout(() => setError(null), 5000);
     }
   };
@@ -347,6 +369,57 @@ const DriversPage: React.FC = () => {
         ),
     },
     {
+      field: 'notes',
+      headerName: 'Notes',
+      flex: 1.5,
+      minWidth: 150,
+      renderCell: (params) => {
+        if (!params || !params.row) {
+          return (
+            <Typography variant="body2" color="text.secondary" fontStyle="italic">
+              No notes
+            </Typography>
+          );
+        }
+        const row = params.row as any;
+        const driverName = row.name || row.userId?.name || 'Driver';
+        const notes = row.notes || '';
+        if (!notes) {
+          return (
+            <Typography variant="body2" color="text.secondary" fontStyle="italic">
+              No notes
+            </Typography>
+          );
+        }
+        const truncated = notes.length > 50 ? notes.substring(0, 50) + '...' : notes;
+        const hasMore = notes.length > 50;
+        return (
+          <Typography 
+            variant="body2" 
+            onClick={() => {
+              if (hasMore || notes) {
+                setSelectedNotes(notes);
+                setNotesTitle(`Notes - ${driverName}`);
+                setOpenNotesDialog(true);
+              }
+            }}
+            sx={{ 
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              cursor: notes ? 'pointer' : 'default',
+              '&:hover': notes ? {
+                color: 'primary.main',
+                textDecoration: 'underline',
+              } : {},
+            }}
+          >
+            {truncated}
+          </Typography>
+        );
+      },
+    },
+    {
       field: 'actions',
       type: 'actions',
       headerName: 'Actions',
@@ -355,13 +428,13 @@ const DriversPage: React.FC = () => {
         <GridActionsCellItem
           key="edit"
           icon={<Edit />}
-          label="Edit"
+          label={t('common.edit')}
           onClick={() => handleOpenDialog(params.row as Driver)}
         />,
         <GridActionsCellItem
           key="delete"
           icon={<Delete />}
-          label="Delete"
+          label={t('common.delete')}
           onClick={() => handleDelete(params.row.id || params.row._id)}
           showInMenu
         />,
@@ -376,7 +449,7 @@ const DriversPage: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <LocalShipping sx={{ fontSize: 32, color: 'primary.main' }} />
             <Typography variant="h4" fontWeight={700}>
-              Drivers Management
+              {t('drivers.title')}
             </Typography>
           </Box>
           <Button
@@ -390,7 +463,7 @@ const DriversPage: React.FC = () => {
               },
             }}
           >
-            Add Driver
+            {t('drivers.addDriver')}
           </Button>
         </Box>
 
@@ -409,7 +482,7 @@ const DriversPage: React.FC = () => {
         {/* Search and Filters */}
         <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
           <TextField
-            placeholder="Search by name, email, phone, or license#..."
+            placeholder={t('drivers.searchPlaceholder', { defaultValue: 'Search by name, email, phone, or license#...' })}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             InputProps={{
@@ -431,11 +504,10 @@ const DriversPage: React.FC = () => {
             sx={{ minWidth: 150 }}
             size="small"
           >
-            <MenuItem value="all">All Status</MenuItem>
-            <MenuItem value="available">Available</MenuItem>
-            <MenuItem value="on_duty">On Duty</MenuItem>
-            <MenuItem value="off_duty">Off Duty</MenuItem>
-            <MenuItem value="on_leave">On Leave</MenuItem>
+            <MenuItem value="all">{t('common.allStatus')}</MenuItem>
+            <MenuItem value="active">{t('common.active')}</MenuItem>
+            <MenuItem value="inactive">{t('common.inactive')}</MenuItem>
+            <MenuItem value="on_trip">{t('drivers.onTrip')}</MenuItem>
           </TextField>
 
           {(searchTerm || statusFilter !== 'all') && (
@@ -448,7 +520,7 @@ const DriversPage: React.FC = () => {
                 setStatusFilter('all');
               }}
             >
-              Clear
+              {t('common.clear')}
             </Button>
           )}
         </Box>
@@ -457,9 +529,9 @@ const DriversPage: React.FC = () => {
           {!loading && filteredDrivers.length === 0 ? (
             <EmptyState
               icon={<LocalShipping />}
-              title={drivers.length === 0 ? "No Drivers Added" : "No Results Found"}
-              description={drivers.length === 0 ? "Build your driver roster by linking user accounts with driver profiles. Add license information and track availability." : "Try adjusting your search or filters"}
-              actionLabel={drivers.length === 0 ? "Add First Driver" : undefined}
+              title={drivers.length === 0 ? t('drivers.noDriversAdded', { defaultValue: 'No Drivers Added' }) : t('common.noResultsFound', { defaultValue: 'No Results Found' })}
+              description={drivers.length === 0 ? t('drivers.noDriversDescription', { defaultValue: 'Build your driver roster by linking user accounts with driver profiles. Add license information and track availability.' }) : t('common.tryAdjustingFilters', { defaultValue: 'Try adjusting your search or filters' })}
+              actionLabel={drivers.length === 0 ? t('drivers.addFirstDriver', { defaultValue: 'Add First Driver' }) : undefined}
               onAction={drivers.length === 0 ? () => handleOpenDialog() : undefined}
             />
           ) : (
@@ -497,10 +569,20 @@ const DriversPage: React.FC = () => {
         {/* Add/Edit Dialog */}
         <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
           <DialogTitle>
-            {editingDriver ? 'Edit Driver' : 'Add New Driver'}
+            {editingDriver ? t('drivers.editDriver') : t('drivers.addNewDriver')}
           </DialogTitle>
-          <form onSubmit={handleSubmit(onSubmit)}>
+          <form onSubmit={handleSubmit(onSubmit)} noValidate>
             <DialogContent>
+              {error && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {error}
+                </Alert>
+              )}
+              {success && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  {success}
+                </Alert>
+              )}
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
                 <Autocomplete
                   options={users}
@@ -526,10 +608,10 @@ const DriversPage: React.FC = () => {
                   renderInput={(params) => (
                     <TextField
                       {...params}
-                      label="Select User *"
+                      label={t('drivers.selectUserRequired', { defaultValue: 'Select User *' })}
                       error={!!userError}
                       helperText={userError}
-                      placeholder="Search for a user..."
+                      placeholder={t('drivers.searchForUser', { defaultValue: 'Search for a user...' })}
                     />
                   )}
                 />
@@ -540,7 +622,7 @@ const DriversPage: React.FC = () => {
                   render={({ field }) => (
                     <TextField
                       {...field}
-                      label="License Number *"
+                      label={t('drivers.licenseNumberRequired', { defaultValue: 'License Number *' })}
                       error={!!errors.licenseNumber}
                       helperText={errors.licenseNumber?.message}
                       disabled={isSubmitting}
@@ -555,7 +637,7 @@ const DriversPage: React.FC = () => {
                   render={({ field }) => (
                     <TextField
                       {...field}
-                      label="License Expiry *"
+                      label={t('drivers.licenseExpiryRequired', { defaultValue: 'License Expiry *' })}
                       type="date"
                       error={!!errors.licenseExpiry}
                       helperText={errors.licenseExpiry?.message}
@@ -574,14 +656,13 @@ const DriversPage: React.FC = () => {
                     <TextField
                       {...field}
                       select
-                      label="Status"
+                      label={t('common.status')}
                       disabled={isSubmitting}
                       fullWidth
                     >
-                      <MenuItem value="available">Available</MenuItem>
-                      <MenuItem value="on_duty">On Duty</MenuItem>
-                      <MenuItem value="off_duty">Off Duty</MenuItem>
-                      <MenuItem value="on_leave">On Leave</MenuItem>
+                      <MenuItem value="active">{t('common.active')}</MenuItem>
+                      <MenuItem value="inactive">{t('common.inactive')}</MenuItem>
+                      <MenuItem value="on_trip">{t('drivers.onTrip')}</MenuItem>
                     </TextField>
                   )}
                 />
@@ -589,26 +670,26 @@ const DriversPage: React.FC = () => {
                 {!editingDriver && selectedUser && (
                   <>
                     <Typography variant="subtitle2" sx={{ mt: 2, mb: 1, fontWeight: 600 }}>
-                      Driver Details (from selected user)
+                      {t('drivers.driverDetailsFromUser', { defaultValue: 'Driver Details (from selected user)' })}
                     </Typography>
                     <TextField
-                      label="Name"
+                      label={t('common.name')}
                       value={selectedUser.name || ''}
                       disabled
                       fullWidth
                       size="small"
                     />
                     <TextField
-                      label="Phone"
-                      value={selectedUser.phone || 'Not set'}
+                      label={t('common.phone')}
+                      value={selectedUser.phone || t('common.notSet', { defaultValue: 'Not set' })}
                       disabled
                       fullWidth
                       size="small"
-                      helperText="Phone is required for driver. Please update user profile if missing."
+                      helperText={t('drivers.phoneRequiredHelper', { defaultValue: 'Phone is required for driver. Please update user profile if missing.' })}
                       error={!selectedUser.phone}
                     />
                     <TextField
-                      label="Email"
+                      label={t('common.email')}
                       value={selectedUser.email || ''}
                       disabled
                       fullWidth
@@ -616,16 +697,39 @@ const DriversPage: React.FC = () => {
                     />
                     {!selectedUser.phone && (
                       <Alert severity="warning" sx={{ mt: 1 }}>
-                        Phone number is required for driver. Please ensure the selected user has a phone number in their profile.
+                        {t('drivers.phoneRequiredAlert', { defaultValue: 'Phone number is required for driver. Please ensure the selected user has a phone number in their profile.' })}
                       </Alert>
                     )}
                   </>
                 )}
+
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                    {t('drivers.additionalNotes')}
+                  </Typography>
+                </Box>
+
+                <Controller
+                  name="notes"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      label={t('common.notes')}
+                      disabled={isSubmitting}
+                      fullWidth
+                      multiline
+                      rows={4}
+                      placeholder={t('drivers.notesPlaceholder')}
+                      helperText={t('drivers.notesHelper')}
+                    />
+                  )}
+                />
               </Box>
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2 }}>
               <Button onClick={handleCloseDialog} disabled={isSubmitting}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button
                 type="submit"
@@ -633,10 +737,36 @@ const DriversPage: React.FC = () => {
                 disabled={isSubmitting}
                 startIcon={isSubmitting && <CircularProgress size={16} />}
               >
-                {editingDriver ? 'Update' : 'Create'}
+                {editingDriver ? t('common.update') : t('common.create')}
               </Button>
             </DialogActions>
           </form>
+        </Dialog>
+
+        {/* Notes View Dialog */}
+        <Dialog open={openNotesDialog} onClose={() => setOpenNotesDialog(false)} maxWidth="sm" fullWidth>
+          <DialogTitle>{notesTitle}</DialogTitle>
+          <DialogContent>
+            <TextField
+              fullWidth
+              multiline
+              rows={10}
+              value={selectedNotes}
+              disabled
+              sx={{
+                mt: 1,
+                '& .MuiInputBase-input': {
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                },
+              }}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenNotesDialog(false)} variant="contained">
+              {t('common.close')}
+            </Button>
+          </DialogActions>
         </Dialog>
       </Box>
     </DashboardLayout>

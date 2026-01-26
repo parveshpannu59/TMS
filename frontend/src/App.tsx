@@ -8,6 +8,7 @@ import { ErrorBoundary } from '@components/common/ErrorBoundary';
 import { ThemeModeProvider } from '@/contexts/ThemeContext';
 import { AppRoutes } from './routes';
 import { queryClient } from '@/lib/queryClient';
+import '@/i18n/config';
 
 const App: React.FC = () => {
   return (

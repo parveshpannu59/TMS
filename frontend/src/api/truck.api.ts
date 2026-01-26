@@ -8,6 +8,7 @@ export interface TruckFormData {
   vin: string;
   licensePlate: string;
   status?: 'available' | 'on_road' | 'in_maintenance' | 'out_of_service';
+  notes?: string;
 }
 
 export interface Truck extends TruckFormData {

@@ -18,6 +18,7 @@ import { userApi } from '@api/user.api';
 import type { User } from '@types/user.types';
 import type { ApiError } from '@types/api.types';
 import { changePasswordSchema, type ChangePasswordFormData } from '@utils/userValidation';
+import { useTranslation } from 'react-i18next';
 
 interface ChangePasswordDialogProps {
   open: boolean;
@@ -28,6 +29,7 @@ interface ChangePasswordDialogProps {
 
 export const ChangePasswordDialog: React.FC<ChangePasswordDialogProps> = React.memo(
   ({ open, user, onClose, onSuccess }) => {
+    const { t } = useTranslation();
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
@@ -68,7 +70,7 @@ export const ChangePasswordDialog: React.FC<ChangePasswordDialogProps> = React.m
 
           await userApi.changePassword(user.id, data.newPassword);
 
-          setSuccess('Password changed successfully!');
+          setSuccess(t('users.passwordChangedSuccessfully', { defaultValue: 'Password changed successfully!' }));
 
           setTimeout(() => {
             handleClose();
@@ -78,7 +80,7 @@ export const ChangePasswordDialog: React.FC<ChangePasswordDialogProps> = React.m
           }, 1500);
         } catch (err) {
           const apiError = err as ApiError;
-          setError(apiError.message || 'Failed to change password. Please try again.');
+          setError(apiError.message || t('users.failedToChangePassword', { defaultValue: 'Failed to change password. Please try again.' }));
         } finally {
           setIsSubmitting(false);
         }
@@ -110,7 +112,7 @@ export const ChangePasswordDialog: React.FC<ChangePasswordDialogProps> = React.m
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <VpnKey color="primary" />
-            Change Password
+            {t('users.changePassword', { defaultValue: 'Change Password' })}
           </Box>
           <IconButton onClick={handleClose} size="small" disabled={isSubmitting}>
             <Close />
@@ -129,7 +131,7 @@ export const ChangePasswordDialog: React.FC<ChangePasswordDialogProps> = React.m
               {success && <Alert severity="success">{success}</Alert>}
 
               <Alert severity="info">
-                Changing password for: <strong>{user.name}</strong> ({user.email})
+                {t('users.changingPasswordFor', { defaultValue: 'Changing password for:' })} <strong>{user.name}</strong> ({user.email})
               </Alert>
 
               <Controller
@@ -138,7 +140,7 @@ export const ChangePasswordDialog: React.FC<ChangePasswordDialogProps> = React.m
                 render={({ field }) => (
                   <TextField
                     {...field}
-                    label="New Password"
+                    label={t('users.newPassword', { defaultValue: 'New Password' })}
                     type={showPassword ? 'text' : 'password'}
                     fullWidth
                     autoFocus
@@ -166,7 +168,7 @@ export const ChangePasswordDialog: React.FC<ChangePasswordDialogProps> = React.m
 
           <DialogActions sx={{ px: 3, py: 2 }}>
             <Button onClick={handleClose} disabled={isSubmitting}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               type="submit"
@@ -174,7 +176,7 @@ export const ChangePasswordDialog: React.FC<ChangePasswordDialogProps> = React.m
               disabled={isSubmitting}
               startIcon={<VpnKey />}
             >
-              {isSubmitting ? 'Changing...' : 'Change Password'}
+              {isSubmitting ? t('users.changing', { defaultValue: 'Changing...' }) : t('users.changePassword', { defaultValue: 'Change Password' })}
             </Button>
           </DialogActions>
         </Box>

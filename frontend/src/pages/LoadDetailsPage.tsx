@@ -31,8 +31,10 @@ import { format } from 'date-fns';
 import LoadMapView from '@components/loads/LoadMapView';
 import EditLoadDialog from '@components/dialogs/EditLoadDialog';
 import { useAuth } from '@hooks/useAuth';
+import { useTranslation } from 'react-i18next';
 
 const LoadDetailsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -56,7 +58,7 @@ const LoadDetailsPage: React.FC = () => {
       const loadData = await loadApi.getLoadById(id!);
       setLoad(loadData);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to fetch load details');
+      setError(err.response?.data?.message || t('loads.failedToFetchDetails', { defaultValue: 'Failed to fetch load details' }));
       console.error('Error fetching load:', err);
     } finally {
       setLoading(false);
@@ -64,14 +66,14 @@ const LoadDetailsPage: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    if (!load || !window.confirm(`Are you sure you want to delete load ${load.loadNumber}?`)) {
+    if (!load || !window.confirm(t('loads.confirmDelete', { loadNumber: load.loadNumber, defaultValue: `Are you sure you want to delete load ${load.loadNumber}?` }))) {
       return;
     }
     try {
       await loadApi.deleteLoad(load.id);
       navigate('/loads');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to delete load');
+      setError(err.response?.data?.message || t('loads.failedToDelete', { defaultValue: 'Failed to delete load' }));
     }
   };
 
@@ -113,7 +115,7 @@ const LoadDetailsPage: React.FC = () => {
           {error}
         </Alert>
         <Button startIcon={<ArrowBack />} onClick={() => navigate('/loads')}>
-          Back to Loads
+          {t('loads.backToLoads', { defaultValue: 'Back to Loads' })}
         </Button>
       </Box>
     );
@@ -122,9 +124,9 @@ const LoadDetailsPage: React.FC = () => {
   if (!load) {
     return (
       <Box sx={{ p: 3 }}>
-        <Alert severity="info">Load not found</Alert>
+        <Alert severity="info">{t('loads.loadNotFound', { defaultValue: 'Load not found' })}</Alert>
         <Button startIcon={<ArrowBack />} onClick={() => navigate('/loads')} sx={{ mt: 2 }}>
-          Back to Loads
+          {t('loads.backToLoads', { defaultValue: 'Back to Loads' })}
         </Button>
       </Box>
     );
@@ -151,10 +153,10 @@ const LoadDetailsPage: React.FC = () => {
             onClick={() => navigate('/loads')}
             size={isMobile ? 'small' : 'medium'}
           >
-            Back
+            {t('common.back', { defaultValue: 'Back' })}
           </Button>
           <Typography variant="h4" fontWeight="bold" sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}>
-            Load {load.loadNumber}
+            {t('loads.load')} {load.loadNumber}
           </Typography>
           <Chip
             label={getStatusLabel(load.status)}
@@ -171,7 +173,7 @@ const LoadDetailsPage: React.FC = () => {
               fullWidth={isMobile}
               size={isMobile ? 'small' : 'medium'}
             >
-              Edit
+              {t('common.edit')}
             </Button>
             {user?.role === 'owner' && (
               <Button
@@ -182,7 +184,7 @@ const LoadDetailsPage: React.FC = () => {
                 fullWidth={isMobile}
                 size={isMobile ? 'small' : 'medium'}
               >
-                Delete
+                {t('common.delete')}
               </Button>
             )}
           </Box>
@@ -202,12 +204,12 @@ const LoadDetailsPage: React.FC = () => {
           <Card sx={{ mb: 3 }}>
             <CardContent>
               <Typography variant="h6" fontWeight="bold" gutterBottom>
-                Customer Information
+                {t('loads.customerInformation')}
               </Typography>
               <Divider sx={{ mb: 2 }} />
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                 <Typography>
-                  <strong>Name:</strong> {load.customerName}
+                  <strong>{t('common.name')}:</strong> {load.customerName}
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Phone fontSize="small" color="action" />
@@ -227,14 +229,14 @@ const LoadDetailsPage: React.FC = () => {
           <Card sx={{ mb: 3 }}>
             <CardContent>
               <Typography variant="h6" fontWeight="bold" gutterBottom>
-                Locations
+                {t('loads.locations', { defaultValue: 'Locations' })}
               </Typography>
               <Divider sx={{ mb: 2 }} />
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
                   <Box>
                     <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                      Pickup Location
+                      {t('loads.pickupLocation')}
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'start', gap: 1 }}>
                       <LocationOn fontSize="small" color="primary" />
@@ -246,7 +248,7 @@ const LoadDetailsPage: React.FC = () => {
                           {load.pickupLocation.address}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" display="block">
-                          Pincode: {load.pickupLocation.pincode}
+                          {t('loads.pincode')}: {load.pickupLocation.pincode}
                         </Typography>
                       </Box>
                     </Box>
@@ -255,7 +257,7 @@ const LoadDetailsPage: React.FC = () => {
                 <Grid item xs={12} sm={6}>
                   <Box>
                     <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                      Delivery Location
+                      {t('loads.deliveryLocation')}
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'start', gap: 1 }}>
                       <LocationOn fontSize="small" color="error" />
@@ -267,7 +269,7 @@ const LoadDetailsPage: React.FC = () => {
                           {load.deliveryLocation.address}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" display="block">
-                          Pincode: {load.deliveryLocation.pincode}
+                          {t('loads.pincode')}: {load.deliveryLocation.pincode}
                         </Typography>
                       </Box>
                     </Box>
@@ -281,7 +283,7 @@ const LoadDetailsPage: React.FC = () => {
           <Card sx={{ mb: 3 }}>
             <CardContent>
               <Typography variant="h6" fontWeight="bold" gutterBottom>
-                Assignment
+                {t('loads.assignment', { defaultValue: 'Assignment' })}
               </Typography>
               <Divider sx={{ mb: 2 }} />
               <Grid container spacing={2}>
@@ -289,11 +291,11 @@ const LoadDetailsPage: React.FC = () => {
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                     <LocalShipping fontSize="small" color="action" />
                     <Typography variant="subtitle2" color="text.secondary">
-                      Driver
+                      {t('loads.driver')}
                     </Typography>
                   </Box>
                   <Typography variant="body1" fontWeight="medium">
-                    {load.driver?.name || 'Unassigned'}
+                    {load.driver?.name || t('loads.unassigned')}
                   </Typography>
                   {load.driver?.phone && (
                     <Typography variant="caption" color="text.secondary">
@@ -305,11 +307,11 @@ const LoadDetailsPage: React.FC = () => {
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                     <Assignment fontSize="small" color="action" />
                     <Typography variant="subtitle2" color="text.secondary">
-                      Truck
+                      {t('loads.truck')}
                     </Typography>
                   </Box>
                   <Typography variant="body1" fontWeight="medium">
-                    {load.truck?.truckNumber || 'Unassigned'}
+                    {load.truck?.truckNumber || t('loads.unassigned')}
                   </Typography>
                   {load.truck && (
                     <Typography variant="caption" color="text.secondary">
@@ -325,31 +327,31 @@ const LoadDetailsPage: React.FC = () => {
           <Card>
             <CardContent>
               <Typography variant="h6" fontWeight="bold" gutterBottom>
-                Cargo & Financial Details
+                {t('loads.cargoFinancialDetails', { defaultValue: 'Cargo & Financial Details' })}
               </Typography>
               <Divider sx={{ mb: 2 }} />
               <Grid container spacing={2}>
                 <Grid item xs={6}>
                   <Typography variant="subtitle2" color="text.secondary">
-                    Cargo Type
+                    {t('loads.cargoType')}
                   </Typography>
                   <Typography variant="body2">{load.cargoType}</Typography>
                 </Grid>
                 <Grid item xs={6}>
                   <Typography variant="subtitle2" color="text.secondary">
-                    Weight
+                    {t('loads.weight')}
                   </Typography>
                   <Typography variant="body2">{load.weight} kg</Typography>
                 </Grid>
                 <Grid item xs={6}>
                   <Typography variant="subtitle2" color="text.secondary">
-                    Distance
+                    {t('loads.distance', { defaultValue: 'Distance' })}
                   </Typography>
                   <Typography variant="body2">{load.distance} km</Typography>
                 </Grid>
                 <Grid item xs={6}>
                   <Typography variant="subtitle2" color="text.secondary">
-                    Load Type
+                    {t('loads.loadType')}
                   </Typography>
                   <Typography variant="body2">{load.loadType}</Typography>
                 </Grid>
@@ -358,7 +360,7 @@ const LoadDetailsPage: React.FC = () => {
                 </Grid>
                 <Grid item xs={6}>
                   <Typography variant="subtitle2" color="text.secondary">
-                    Rate
+                    {t('loads.rate')}
                   </Typography>
                   <Typography variant="body1" fontWeight="bold" color="primary">
                     ₹{load.rate.toLocaleString()}
@@ -366,13 +368,13 @@ const LoadDetailsPage: React.FC = () => {
                 </Grid>
                 <Grid item xs={6}>
                   <Typography variant="subtitle2" color="text.secondary">
-                    Advance Paid
+                    {t('loads.advancePaid', { defaultValue: 'Advance Paid' })}
                   </Typography>
                   <Typography variant="body1">₹{load.advancePaid.toLocaleString()}</Typography>
                 </Grid>
                 <Grid item xs={6}>
                   <Typography variant="subtitle2" color="text.secondary">
-                    Balance Due
+                    {t('loads.balanceDue')}
                   </Typography>
                   <Typography variant="body1" fontWeight="bold" color="error">
                     ₹{load.balance.toLocaleString()}
@@ -380,7 +382,7 @@ const LoadDetailsPage: React.FC = () => {
                 </Grid>
                 <Grid item xs={6}>
                   <Typography variant="subtitle2" color="text.secondary">
-                    Fuel Advance
+                    {t('loads.fuelAdvance', { defaultValue: 'Fuel Advance' })}
                   </Typography>
                   <Typography variant="body1">₹{load.fuelAdvance.toLocaleString()}</Typography>
                 </Grid>
@@ -389,7 +391,7 @@ const LoadDetailsPage: React.FC = () => {
                 <>
                   <Divider sx={{ my: 2 }} />
                   <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                    Special Instructions
+                    {t('loads.specialInstructions', { defaultValue: 'Special Instructions' })}
                   </Typography>
                   <Typography variant="body2">{load.specialInstructions}</Typography>
                 </>
@@ -404,7 +406,7 @@ const LoadDetailsPage: React.FC = () => {
           <Card sx={{ mb: 3 }}>
             <CardContent>
               <Typography variant="h6" fontWeight="bold" gutterBottom>
-                Location Tracking
+                {t('loads.locationTracking', { defaultValue: 'Location Tracking' })}
               </Typography>
               <Divider sx={{ mb: 2 }} />
               <LoadMapView load={load} />
@@ -415,13 +417,13 @@ const LoadDetailsPage: React.FC = () => {
           <Card>
             <CardContent>
               <Typography variant="h6" fontWeight="bold" gutterBottom>
-                Schedule
+                {t('loads.schedule', { defaultValue: 'Schedule' })}
               </Typography>
               <Divider sx={{ mb: 2 }} />
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <Box>
                   <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                    Pickup Date
+                    {t('loads.pickupDate')}
                   </Typography>
                   <Typography variant="body1">
                     {format(new Date(load.pickupDate), 'dd MMM yyyy, hh:mm a')}
@@ -429,7 +431,7 @@ const LoadDetailsPage: React.FC = () => {
                 </Box>
                 <Box>
                   <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                    Expected Delivery
+                    {t('loads.expectedDelivery', { defaultValue: 'Expected Delivery' })}
                   </Typography>
                   <Typography variant="body1">
                     {format(new Date(load.expectedDeliveryDate), 'dd MMM yyyy, hh:mm a')}
@@ -438,7 +440,7 @@ const LoadDetailsPage: React.FC = () => {
                 {load.actualDeliveryDate && (
                   <Box>
                     <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                      Actual Delivery
+                      {t('loads.actualDelivery', { defaultValue: 'Actual Delivery' })}
                     </Typography>
                     <Typography variant="body1" color="success.main">
                       {format(new Date(load.actualDeliveryDate), 'dd MMM yyyy, hh:mm a')}

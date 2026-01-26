@@ -22,6 +22,7 @@ import { userApi } from '@api/user.api';
 import type { User, UpdateUserData } from '@types/user.types';
 import { UserRole } from '@types/user.types';
 import type { ApiError } from '@types/api.types';
+import { useTranslation } from 'react-i18next';
 import { updateUserSchema, type UpdateUserFormData } from '@utils/userValidation';
 
 interface EditUserDialogProps {
@@ -33,6 +34,7 @@ interface EditUserDialogProps {
 
 export const EditUserDialog: React.FC<EditUserDialogProps> = React.memo(
   ({ open, user, onClose, onSuccess }) => {
+    const { t } = useTranslation();
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -130,7 +132,7 @@ export const EditUserDialog: React.FC<EditUserDialogProps> = React.memo(
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Save color="primary" />
-            Edit User
+            {t('users.editUser')}
           </Box>
           <IconButton onClick={handleClose} size="small" disabled={isSubmitting}>
             <Close />
@@ -154,7 +156,7 @@ export const EditUserDialog: React.FC<EditUserDialogProps> = React.memo(
                 render={({ field }) => (
                   <TextField
                     {...field}
-                    label="Full Name"
+                    label={t('users.fullName', { defaultValue: 'Full Name' })}
                     fullWidth
                     autoFocus
                     error={!!errors.name}
@@ -170,7 +172,7 @@ export const EditUserDialog: React.FC<EditUserDialogProps> = React.memo(
                 render={({ field }) => (
                   <TextField
                     {...field}
-                    label="Email Address"
+                    label={t('users.emailAddress', { defaultValue: 'Email Address' })}
                     type="email"
                     fullWidth
                     error={!!errors.email}
@@ -185,12 +187,12 @@ export const EditUserDialog: React.FC<EditUserDialogProps> = React.memo(
                 control={control}
                 render={({ field }) => (
                   <FormControl fullWidth error={!!errors.role}>
-                    <InputLabel>User Role</InputLabel>
-                    <Select {...field} label="User Role" disabled={isSubmitting}>
-                      <MenuItem value={UserRole.DISPATCHER}>Dispatcher</MenuItem>
-                      <MenuItem value={UserRole.DRIVER}>Driver</MenuItem>
-                      <MenuItem value={UserRole.ACCOUNTANT}>Accountant</MenuItem>
-                      <MenuItem value={UserRole.OWNER}>Owner</MenuItem>
+                    <InputLabel>{t('users.userRole', { defaultValue: 'User Role' })}</InputLabel>
+                    <Select {...field} label={t('users.userRole', { defaultValue: 'User Role' })} disabled={isSubmitting}>
+                      <MenuItem value={UserRole.DISPATCHER}>{t('users.dispatcher', { defaultValue: 'Dispatcher' })}</MenuItem>
+                      <MenuItem value={UserRole.DRIVER}>{t('users.driver', { defaultValue: 'Driver' })}</MenuItem>
+                      <MenuItem value={UserRole.ACCOUNTANT}>{t('users.accountant', { defaultValue: 'Accountant' })}</MenuItem>
+                      <MenuItem value={UserRole.OWNER}>{t('users.owner', { defaultValue: 'Owner' })}</MenuItem>
                     </Select>
                     {errors.role && <FormHelperText>{errors.role.message}</FormHelperText>}
                   </FormControl>
@@ -203,7 +205,7 @@ export const EditUserDialog: React.FC<EditUserDialogProps> = React.memo(
                 render={({ field }) => (
                   <TextField
                     {...field}
-                    label="Phone Number (Optional)"
+                    label={t('users.phoneNumberOptional', { defaultValue: 'Phone Number (Optional)' })}
                     fullWidth
                     placeholder="9876543210"
                     error={!!errors.phone}
@@ -218,10 +220,10 @@ export const EditUserDialog: React.FC<EditUserDialogProps> = React.memo(
                 control={control}
                 render={({ field }) => (
                   <FormControl fullWidth error={!!errors.status}>
-                    <InputLabel>Status</InputLabel>
-                    <Select {...field} label="Status" disabled={isSubmitting}>
-                      <MenuItem value="active">Active</MenuItem>
-                      <MenuItem value="inactive">Inactive</MenuItem>
+                    <InputLabel>{t('common.status')}</InputLabel>
+                    <Select {...field} label={t('common.status')} disabled={isSubmitting}>
+                      <MenuItem value="active">{t('users.active')}</MenuItem>
+                      <MenuItem value="inactive">{t('users.inactive')}</MenuItem>
                     </Select>
                     {errors.status && <FormHelperText>{errors.status.message}</FormHelperText>}
                   </FormControl>
@@ -232,7 +234,7 @@ export const EditUserDialog: React.FC<EditUserDialogProps> = React.memo(
 
           <DialogActions sx={{ px: 3, py: 2 }}>
             <Button onClick={handleClose} disabled={isSubmitting}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               type="submit"
@@ -240,7 +242,7 @@ export const EditUserDialog: React.FC<EditUserDialogProps> = React.memo(
               disabled={isSubmitting}
               startIcon={<Save />}
             >
-              {isSubmitting ? 'Saving...' : 'Save Changes'}
+              {isSubmitting ? t('users.saving', { defaultValue: 'Saving...' }) : t('users.saveChanges', { defaultValue: 'Save Changes' })}
             </Button>
           </DialogActions>
         </Box>

@@ -33,6 +33,7 @@ import { DashboardLayout } from '@layouts/DashboardLayout';
 import { dashboardApi, type AccountantDashboardData } from '@/api/dashboardApi';
 import { useAuth } from '@hooks/useAuth';
 import { useMediaQuery } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -60,6 +61,7 @@ interface AccountingSummary {
 }
 
 const AccountingPage: React.FC = () => {
+  const { t } = useTranslation();
   const [tabValue, setTabValue] = useState(0);
   const [dateFilter, setDateFilter] = useState('month');
   const [data, setData] = useState<AccountantDashboardData | null>(null);
@@ -76,7 +78,7 @@ const AccountingPage: React.FC = () => {
       setData(result);
       setError(null);
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch accounting data');
+      setError(err.message || t('accounting.failedToFetch', { defaultValue: 'Failed to fetch accounting data' }));
       console.error('Accounting dashboard error:', err);
     } finally {
       setLoading(false);
@@ -93,32 +95,32 @@ const AccountingPage: React.FC = () => {
     const pl = data.profitLoss;
     return [
       {
-        title: 'Total Revenue',
+        title: t('accounting.totalRevenue', { defaultValue: 'Total Revenue' }),
         value: `$${pl.revenue.toLocaleString()}`,
         icon: <MonetizationOn />,
         color: theme.palette.primary.main,
-        subtitle: `${data.payments.length} payments`,
+        subtitle: t('accounting.paymentsCount', { count: data.payments.length, defaultValue: `${data.payments.length} payments` }),
       },
       {
-        title: 'Total Expenses',
+        title: t('accounting.totalExpenses', { defaultValue: 'Total Expenses' }),
         value: `$${pl.expenses.toLocaleString()}`,
         icon: <Receipt />,
         color: theme.palette.error.main,
-        subtitle: `${data.expenses.count} expense entries`,
+        subtitle: t('accounting.expenseEntries', { count: data.expenses.count, defaultValue: `${data.expenses.count} expense entries` }),
       },
       {
-        title: 'Total Payments',
+        title: t('accounting.totalPayments', { defaultValue: 'Total Payments' }),
         value: `$${data.payments.reduce((sum, p) => sum + p.totalPayment, 0).toLocaleString()}`,
         icon: <AttachMoney />,
         color: theme.palette.warning.main,
-        subtitle: `${data.payments.length} driver payments`,
+        subtitle: t('accounting.driverPayments', { count: data.payments.length, defaultValue: `${data.payments.length} driver payments` }),
       },
       {
-        title: 'Net Profit',
+        title: t('accounting.netProfit', { defaultValue: 'Net Profit' }),
         value: `$${pl.profit.toLocaleString()}`,
         icon: <TrendingUp />,
         color: pl.profit >= 0 ? theme.palette.success.main : theme.palette.error.main,
-        subtitle: `${pl.margin}% margin`,
+        subtitle: t('accounting.margin', { margin: pl.margin, defaultValue: `${pl.margin}% margin` }),
       },
     ];
   }, [data, theme]);
@@ -130,16 +132,16 @@ const AccountingPage: React.FC = () => {
     const docs = data.documents;
     return [
       {
-        title: 'BOL Documents',
+        title: t('accounting.bolDocuments', { defaultValue: 'BOL Documents' }),
         value: docs.bolDocuments,
-        subtitle: `${docs.missingBol} missing`,
+        subtitle: t('accounting.missing', { count: docs.missingBol, defaultValue: `${docs.missingBol} missing` }),
         icon: <Description />,
         color: docs.missingBol === 0 ? theme.palette.success.main : theme.palette.warning.main,
       },
       {
-        title: 'POD Documents',
+        title: t('accounting.podDocuments', { defaultValue: 'POD Documents' }),
         value: docs.podDocuments,
-        subtitle: `${docs.missingPod} missing`,
+        subtitle: t('accounting.missing', { count: docs.missingPod, defaultValue: `${docs.missingPod} missing` }),
         icon: <CheckCircle />,
         color: docs.missingPod === 0 ? theme.palette.success.main : theme.palette.warning.main,
       },
@@ -149,7 +151,7 @@ const AccountingPage: React.FC = () => {
   const tripsColumns: GridColDef[] = [
     {
       field: 'loadNumber',
-      headerName: 'Trip ID',
+      headerName: t('accounting.tripId', { defaultValue: 'Trip ID' }),
       flex: 0.8,
       minWidth: 100,
       renderCell: (params) => (
@@ -160,34 +162,34 @@ const AccountingPage: React.FC = () => {
     },
     {
       field: 'driverId',
-      headerName: 'Driver',
+      headerName: t('loads.driver'),
       flex: 1.2,
       minWidth: 130,
-      renderCell: (params) => params.value?.name || 'Unassigned',
+      renderCell: (params) => params.value?.name || t('loads.unassigned'),
     },
     {
       field: 'broker',
-      headerName: 'Broker',
+      headerName: t('loads.broker'),
       flex: 1.2,
       minWidth: 130,
     },
     {
       field: 'origin',
-      headerName: 'Origin',
+      headerName: t('loads.origin'),
       flex: 1,
       minWidth: 120,
       renderCell: (params) => `${params.value.city}, ${params.value.state}`,
     },
     {
       field: 'destination',
-      headerName: 'Destination',
+      headerName: t('loads.destination'),
       flex: 1,
       minWidth: 120,
       renderCell: (params) => `${params.value.city}, ${params.value.state}`,
     },
     {
       field: 'rate',
-      headerName: 'Revenue',
+      headerName: t('accounting.revenue', { defaultValue: 'Revenue' }),
       flex: 0.9,
       minWidth: 100,
       renderCell: (params) => (
@@ -198,7 +200,7 @@ const AccountingPage: React.FC = () => {
     },
     {
       field: 'driverRate',
-      headerName: 'Driver Pay',
+      headerName: t('accounting.driverPay', { defaultValue: 'Driver Pay' }),
       flex: 0.9,
       minWidth: 100,
       renderCell: (params) => (
@@ -209,7 +211,7 @@ const AccountingPage: React.FC = () => {
     },
     {
       field: 'profit',
-      headerName: 'Profit',
+      headerName: t('accounting.profit', { defaultValue: 'Profit' }),
       flex: 0.9,
       minWidth: 100,
       renderCell: (params) => {
@@ -227,15 +229,15 @@ const AccountingPage: React.FC = () => {
     },
     {
       field: 'status',
-      headerName: 'Invoice Status',
+      headerName: t('accounting.invoiceStatus', { defaultValue: 'Invoice Status' }),
       flex: 1.1,
       minWidth: 120,
       renderCell: (params) => {
         const statusMap: Record<string, { label: string; color: 'success' | 'warning' | 'info' | 'default' }> = {
-          completed: { label: 'Paid', color: 'success' },
-          delivered: { label: 'Pending', color: 'warning' },
-          in_transit: { label: 'In Transit', color: 'info' },
-          booked: { label: 'Booked', color: 'default' },
+          completed: { label: t('accounting.paid', { defaultValue: 'Paid' }), color: 'success' },
+          delivered: { label: t('accounting.pending', { defaultValue: 'Pending' }), color: 'warning' },
+          in_transit: { label: t('loads.inTransit'), color: 'info' },
+          booked: { label: t('loads.booked'), color: 'default' },
         };
         const status = statusMap[params.value] || { label: params.value, color: 'default' };
         return <Chip label={status.label} color={status.color} size="small" />;
@@ -251,19 +253,19 @@ const AccountingPage: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <AccountBalance sx={{ fontSize: 32, color: 'primary.main' }} />
             <Typography variant="h4" fontWeight={700}>
-              Accounting Dashboard
+              {t('accounting.dashboard', { defaultValue: 'Accounting Dashboard' })}
             </Typography>
           </Box>
           <FormControl size="small" sx={{ minWidth: 200 }}>
-            <InputLabel>Period</InputLabel>
+            <InputLabel>{t('accounting.period', { defaultValue: 'Period' })}</InputLabel>
             <Select
               value={dateFilter}
-              label="Period"
+              label={t('accounting.period', { defaultValue: 'Period' })}
               onChange={(e) => setDateFilter(e.target.value)}
             >
-              <MenuItem value="today">Today</MenuItem>
-              <MenuItem value="week">This Week</MenuItem>
-              <MenuItem value="month">This Month</MenuItem>
+              <MenuItem value="today">{t('dashboard.today')}</MenuItem>
+              <MenuItem value="week">{t('dashboard.thisWeek')}</MenuItem>
+              <MenuItem value="month">{t('dashboard.thisMonth')}</MenuItem>
             </Select>
           </FormControl>
         </Box>
@@ -327,10 +329,10 @@ const AccountingPage: React.FC = () => {
         <Card>
           <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
             <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)}>
-              <Tab label="Trips & Invoices" />
-              <Tab label="Expenses" />
-              <Tab label="Driver Pay" />
-              <Tab label="Disputes" />
+              <Tab label={t('accounting.tripsInvoices', { defaultValue: 'Trips & Invoices' })} />
+              <Tab label={t('accounting.expenses', { defaultValue: 'Expenses' })} />
+              <Tab label={t('accounting.driverPay', { defaultValue: 'Driver Pay' })} />
+              <Tab label={t('accounting.disputes', { defaultValue: 'Disputes' })} />
             </Tabs>
           </Box>
 
@@ -348,19 +350,19 @@ const AccountingPage: React.FC = () => {
                   }))}
                   getRowId={(row) => row.id || String(row.loadNumber || idx)}
                   columns={[
-                    { field: 'loadNumber', headerName: 'Load #', flex: 1, minWidth: 100 },
-                    { field: 'driverName', headerName: 'Driver', flex: 1, minWidth: 120 },
-                    { field: 'truckNumber', headerName: 'Truck', flex: 1, minWidth: 100 },
+                    { field: 'loadNumber', headerName: t('loads.loadNumber'), flex: 1, minWidth: 100 },
+                    { field: 'driverName', headerName: t('loads.driver'), flex: 1, minWidth: 120 },
+                    { field: 'truckNumber', headerName: t('loads.truck'), flex: 1, minWidth: 100 },
                     {
                       field: 'rate',
-                      headerName: 'Rate',
+                      headerName: t('loads.rate'),
                       flex: 1,
                       minWidth: 100,
                       renderCell: (params) => `$${params.value.toLocaleString()}`,
                     },
                     {
                       field: 'status',
-                      headerName: 'Status',
+                      headerName: t('common.status'),
                       flex: 1,
                       minWidth: 100,
                       renderCell: (params) => <Chip label={params.value} size="small" />,
@@ -377,7 +379,7 @@ const AccountingPage: React.FC = () => {
                   }}
                 />
               ) : (
-                <Alert severity="info">No data available</Alert>
+                <Alert severity="info">{t('common.noData')}</Alert>
               )}
             </Box>
           </TabPanel>
@@ -386,10 +388,10 @@ const AccountingPage: React.FC = () => {
             {data?.expenses ? (
               <Box>
                 <Typography variant="h6" gutterBottom>
-                  Total Expenses: ${data.expenses.total.toLocaleString()}
+                  {t('accounting.totalExpenses')}: ${data.expenses.total.toLocaleString()}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  {data.expenses.count} expense entries
+                  {t('accounting.expenseEntries', { count: data.expenses.count })}
                 </Typography>
                 <Grid container spacing={2}>
                   {Object.entries(data.expenses.byCategory).map(([category, amount]) => (
@@ -407,7 +409,7 @@ const AccountingPage: React.FC = () => {
                 </Grid>
               </Box>
             ) : (
-              <Alert severity="info">No expense data available</Alert>
+              <Alert severity="info">{t('accounting.noExpenseData', { defaultValue: 'No expense data available' })}</Alert>
             )}
           </TabPanel>
 
@@ -418,25 +420,25 @@ const AccountingPage: React.FC = () => {
                   rows={data.payments.map((payment, idx) => ({ id: idx, ...payment }))}
                   getRowId={(row) => row.id || String(row.loadNumber || idx)}
                   columns={[
-                    { field: 'loadNumber', headerName: 'Load #', flex: 1, minWidth: 100 },
-                    { field: 'driverName', headerName: 'Driver', flex: 1, minWidth: 120 },
+                    { field: 'loadNumber', headerName: t('loads.loadNumber'), flex: 1, minWidth: 100 },
+                    { field: 'driverName', headerName: t('loads.driver'), flex: 1, minWidth: 120 },
                     {
                       field: 'totalPayment',
-                      headerName: 'Payment',
+                      headerName: t('accounting.payment', { defaultValue: 'Payment' }),
                       flex: 1,
                       minWidth: 120,
                       renderCell: (params) => `$${params.value.toLocaleString()}`,
                     },
                     {
                       field: 'totalMiles',
-                      headerName: 'Miles',
+                      headerName: t('accounting.miles', { defaultValue: 'Miles' }),
                       flex: 1,
                       minWidth: 100,
                       renderCell: (params) => params.value.toLocaleString(),
                     },
                     {
                       field: 'payPerMile',
-                      headerName: 'Rate/Mile',
+                      headerName: t('accounting.ratePerMile', { defaultValue: 'Rate/Mile' }),
                       flex: 1,
                       minWidth: 100,
                       renderCell: (params) => `$${params.value.toFixed(2)}`,
@@ -450,13 +452,13 @@ const AccountingPage: React.FC = () => {
                 />
               </Box>
             ) : (
-              <Alert severity="info">No payment data available</Alert>
+              <Alert severity="info">{t('accounting.noPaymentData', { defaultValue: 'No payment data available' })}</Alert>
             )}
           </TabPanel>
 
           <TabPanel value={tabValue} index={3}>
             <Typography variant="body2" color="text.secondary">
-              Documents Summary
+              {t('accounting.documentsSummary', { defaultValue: 'Documents Summary' })}
             </Typography>
             <Grid container spacing={2} sx={{ mt: 1 }}>
               {documentCards.map((card, idx) => (

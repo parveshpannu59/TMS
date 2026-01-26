@@ -19,6 +19,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { truckApi } from '@api/all.api';
 import type { Truck, CreateTruckData } from '../../types/all.types';
 import { TruckType } from '../../types/all.types';
+import { useTranslation } from 'react-i18next';
 
 interface EditTruckDialogProps {
   open: boolean;
@@ -28,10 +29,11 @@ interface EditTruckDialogProps {
 }
 
 const EditTruckDialog: React.FC<EditTruckDialogProps> = ({ open, truck, onClose, onSuccess }) => {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState<CreateTruckData>({
+  const [formData, setFormData] = useState<CreateTruckData & { notes?: string }>({
     truckNumber: '',
     make: '',
     model: '',
@@ -41,6 +43,7 @@ const EditTruckDialog: React.FC<EditTruckDialogProps> = ({ open, truck, onClose,
     registrationNumber: '',
     registrationExpiry: new Date().toISOString(),
     insuranceExpiry: '',
+    notes: '',
   });
 
   useEffect(() => {
@@ -55,11 +58,12 @@ const EditTruckDialog: React.FC<EditTruckDialogProps> = ({ open, truck, onClose,
         registrationNumber: truck.registrationNumber,
         registrationExpiry: truck.registrationExpiry,
         insuranceExpiry: truck.insuranceExpiry || '',
+        notes: (truck as any).notes || '',
       });
     }
   }, [open, truck]);
 
-  const handleChange = (field: keyof CreateTruckData, value: any) => {
+  const handleChange = (field: keyof (CreateTruckData & { notes?: string }), value: any) => {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
@@ -112,7 +116,7 @@ const EditTruckDialog: React.FC<EditTruckDialogProps> = ({ open, truck, onClose,
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-      <DialogTitle>Edit Truck - {truck.truckNumber}</DialogTitle>
+      <DialogTitle>{t('trucks.editTruck')} - {truck.truckNumber}</DialogTitle>
       <DialogContent>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -125,7 +129,7 @@ const EditTruckDialog: React.FC<EditTruckDialogProps> = ({ open, truck, onClose,
             {/* Basic Information */}
             <Grid item xs={12}>
               <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                Basic Information
+                {t('trucks.basicInformation', { defaultValue: 'Basic Information' })}
               </Typography>
               <Divider sx={{ mb: 2 }} />
             </Grid>
@@ -133,7 +137,7 @@ const EditTruckDialog: React.FC<EditTruckDialogProps> = ({ open, truck, onClose,
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Truck Number"
+                label={t('trucks.truckNumber', { defaultValue: 'Truck Number' })}
                 value={formData.truckNumber}
                 onChange={(e) => handleChange('truckNumber', e.target.value.toUpperCase())}
                 required
@@ -143,7 +147,7 @@ const EditTruckDialog: React.FC<EditTruckDialogProps> = ({ open, truck, onClose,
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Registration Number"
+                label={t('trucks.registrationNumber', { defaultValue: 'Registration Number' })}
                 value={formData.registrationNumber}
                 onChange={(e) => handleChange('registrationNumber', e.target.value.toUpperCase())}
                 required
@@ -153,7 +157,7 @@ const EditTruckDialog: React.FC<EditTruckDialogProps> = ({ open, truck, onClose,
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Make"
+                label={t('trucks.make')}
                 value={formData.make}
                 onChange={(e) => handleChange('make', e.target.value)}
                 required
@@ -163,7 +167,7 @@ const EditTruckDialog: React.FC<EditTruckDialogProps> = ({ open, truck, onClose,
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Model"
+                label={t('trucks.model')}
                 value={formData.model}
                 onChange={(e) => handleChange('model', e.target.value)}
                 required
@@ -173,7 +177,7 @@ const EditTruckDialog: React.FC<EditTruckDialogProps> = ({ open, truck, onClose,
             <Grid item xs={12} sm={4}>
               <TextField
                 fullWidth
-                label="Year"
+                label={t('trucks.year')}
                 type="number"
                 value={formData.year}
                 onChange={(e) => handleChange('year', parseInt(e.target.value) || new Date().getFullYear())}
@@ -186,24 +190,24 @@ const EditTruckDialog: React.FC<EditTruckDialogProps> = ({ open, truck, onClose,
               <TextField
                 fullWidth
                 select
-                label="Truck Type"
+                label={t('trucks.truckType', { defaultValue: 'Truck Type' })}
                 value={formData.truckType}
                 onChange={(e) => handleChange('truckType', e.target.value)}
                 required
               >
-                <MenuItem value={TruckType.OPEN_BODY}>Open Body</MenuItem>
-                <MenuItem value={TruckType.CLOSED_CONTAINER}>Closed Container</MenuItem>
-                <MenuItem value={TruckType.FLATBED}>Flatbed</MenuItem>
-                <MenuItem value={TruckType.TANKER}>Tanker</MenuItem>
-                <MenuItem value={TruckType.REFRIGERATED}>Refrigerated</MenuItem>
-                <MenuItem value={TruckType.TRAILER}>Trailer</MenuItem>
+                <MenuItem value={TruckType.OPEN_BODY}>{t('trucks.openBody', { defaultValue: 'Open Body' })}</MenuItem>
+                <MenuItem value={TruckType.CLOSED_CONTAINER}>{t('trucks.closedContainer', { defaultValue: 'Closed Container' })}</MenuItem>
+                <MenuItem value={TruckType.FLATBED}>{t('trucks.flatbed', { defaultValue: 'Flatbed' })}</MenuItem>
+                <MenuItem value={TruckType.TANKER}>{t('trucks.tanker', { defaultValue: 'Tanker' })}</MenuItem>
+                <MenuItem value={TruckType.REFRIGERATED}>{t('trucks.refrigerated', { defaultValue: 'Refrigerated' })}</MenuItem>
+                <MenuItem value={TruckType.TRAILER}>{t('trucks.trailer', { defaultValue: 'Trailer' })}</MenuItem>
               </TextField>
             </Grid>
 
             <Grid item xs={12} sm={4}>
               <TextField
                 fullWidth
-                label="Capacity (tons)"
+                label={t('trucks.capacityTons', { defaultValue: 'Capacity (tons)' })}
                 type="number"
                 value={formData.capacity}
                 onChange={(e) => handleChange('capacity', parseFloat(e.target.value) || 0)}
@@ -222,7 +226,7 @@ const EditTruckDialog: React.FC<EditTruckDialogProps> = ({ open, truck, onClose,
 
             <Grid item xs={12} sm={6}>
               <DatePicker
-                label="Registration Expiry Date"
+                label={t('trucks.registrationExpiryDate', { defaultValue: 'Registration Expiry Date' })}
                 value={new Date(formData.registrationExpiry)}
                 onChange={(date: Date | null) => handleChange('registrationExpiry', date?.toISOString() || '')}
                 slotProps={{ textField: { fullWidth: true, required: true } }}
@@ -231,10 +235,31 @@ const EditTruckDialog: React.FC<EditTruckDialogProps> = ({ open, truck, onClose,
 
             <Grid item xs={12} sm={6}>
               <DatePicker
-                label="Insurance Expiry Date (Optional)"
+                label={t('trucks.insuranceExpiryDateOptional', { defaultValue: 'Insurance Expiry Date (Optional)' })}
                 value={formData.insuranceExpiry ? new Date(formData.insuranceExpiry) : null}
                 onChange={(date: Date | null) => handleChange('insuranceExpiry', date?.toISOString() || '')}
                 slotProps={{ textField: { fullWidth: true } }}
+              />
+            </Grid>
+
+            {/* Notes */}
+            <Grid item xs={12}>
+              <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ mt: 2 }}>
+                {t('trucks.additionalNotes', { defaultValue: 'Additional Notes' })}
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label={t('common.notes')}
+                value={formData.notes || ''}
+                onChange={(e) => handleChange('notes', e.target.value)}
+                multiline
+                rows={4}
+                placeholder="Add any additional notes, maintenance reminders, special instructions, or important information about this truck..."
+                helperText="Use this field to record maintenance history, special handling requirements, or any other relevant information"
               />
             </Grid>
           </Grid>
@@ -243,10 +268,10 @@ const EditTruckDialog: React.FC<EditTruckDialogProps> = ({ open, truck, onClose,
 
       <DialogActions>
         <Button onClick={handleClose} disabled={loading}>
-          Cancel
+          {t('common.cancel')}
         </Button>
         <Button onClick={handleSubmit} variant="contained" disabled={loading}>
-          {loading ? <CircularProgress size={24} /> : 'Update Truck'}
+          {loading ? <CircularProgress size={24} /> : t('trucks.updateTruck', { defaultValue: 'Update Truck' })}
         </Button>
       </DialogActions>
     </Dialog>

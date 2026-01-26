@@ -23,6 +23,7 @@ import { trailerApi, Trailer, TrailerFormData } from '@/api/trailer.api';
 import { useForm, Controller } from 'react-hook-form';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
+import { useTranslation } from 'react-i18next';
 
 const trailerSchema = yup.object({
   unitNumber: yup.string().required('Unit number is required'),
@@ -32,6 +33,7 @@ const trailerSchema = yup.object({
   vin: yup.string().required('VIN is required').length(17, 'VIN must be 17 characters'),
   licensePlate: yup.string().required('License plate is required'),
   status: yup.string().oneOf(['available', 'on_road', 'in_maintenance', 'out_of_service']),
+  notes: yup.string(),
 });
 
 const statusColors: Record<string, 'success' | 'warning' | 'error' | 'info'> = {
@@ -51,10 +53,14 @@ const trailerTypes: Record<string, string> = {
 };
 
 const TrailersPage: React.FC = () => {
+  const { t } = useTranslation();
   const [trailers, setTrailers] = useState<Trailer[]>([]);
   const [filteredTrailers, setFilteredTrailers] = useState<Trailer[]>([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
+  const [openNotesDialog, setOpenNotesDialog] = useState(false);
+  const [selectedNotes, setSelectedNotes] = useState<string>('');
+  const [notesTitle, setNotesTitle] = useState<string>('Notes');
   const [editingTrailer, setEditingTrailer] = useState<Trailer | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -79,6 +85,7 @@ const TrailersPage: React.FC = () => {
       vin: '',
       licensePlate: '',
       status: 'available',
+      notes: '',
     },
   });
 
@@ -140,6 +147,7 @@ const TrailersPage: React.FC = () => {
         vin: trailer.vin,
         licensePlate: trailer.licensePlate,
         status: trailer.status,
+        notes: (trailer as any).notes || '',
       });
     } else {
       setEditingTrailer(null);
@@ -151,6 +159,7 @@ const TrailersPage: React.FC = () => {
         vin: '',
         licensePlate: '',
         status: 'available',
+        notes: '',
       });
     }
     setOpenDialog(true);
@@ -265,6 +274,55 @@ const TrailersPage: React.FC = () => {
         ),
     },
     {
+      field: 'notes',
+      headerName: 'Notes',
+      flex: 1.5,
+      minWidth: 150,
+      renderCell: (params) => {
+        if (!params || !params.row) {
+          return (
+            <Typography variant="body2" color="text.secondary" fontStyle="italic">
+              No notes
+            </Typography>
+          );
+        }
+        const notes = params.row.notes || '';
+        if (!notes) {
+          return (
+            <Typography variant="body2" color="text.secondary" fontStyle="italic">
+              No notes
+            </Typography>
+          );
+        }
+        const truncated = notes.length > 50 ? notes.substring(0, 50) + '...' : notes;
+        const hasMore = notes.length > 50;
+        return (
+          <Typography 
+            variant="body2" 
+            onClick={() => {
+              if (hasMore || notes) {
+                setSelectedNotes(notes);
+                setNotesTitle(`Notes - Trailer #${params.row.unitNumber || 'N/A'}`);
+                setOpenNotesDialog(true);
+              }
+            }}
+            sx={{ 
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              cursor: notes ? 'pointer' : 'default',
+              '&:hover': notes ? {
+                color: 'primary.main',
+                textDecoration: 'underline',
+              } : {},
+            }}
+          >
+            {truncated}
+          </Typography>
+        );
+      },
+    },
+    {
       field: 'actions',
       type: 'actions',
       headerName: 'Actions',
@@ -277,7 +335,7 @@ const TrailersPage: React.FC = () => {
         />,
         <GridActionsCellItem
           icon={<Delete />}
-          label="Delete"
+          label={t('common.delete')}
           onClick={() => handleDelete(params.row._id)}
           showInMenu
         />,
@@ -292,7 +350,7 @@ const TrailersPage: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <RvHookup sx={{ fontSize: 32, color: 'primary.main' }} />
             <Typography variant="h4" fontWeight={700}>
-              Trailers Management
+              {t('trailers.title')}
             </Typography>
           </Box>
           <Button
@@ -306,7 +364,7 @@ const TrailersPage: React.FC = () => {
               },
             }}
           >
-            Add Trailer
+            {t('trailers.addTrailer')}
           </Button>
         </Box>
 
@@ -325,7 +383,7 @@ const TrailersPage: React.FC = () => {
         {/* Search and Filters */}
         <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
           <TextField
-            placeholder="Search by unit#, VIN, make, type, plate..."
+            placeholder={t('trailers.searchPlaceholder', { defaultValue: 'Search by unit#, VIN, make, type, plate...' })}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             InputProps={{
@@ -341,34 +399,34 @@ const TrailersPage: React.FC = () => {
           
           <TextField
             select
-            label="Status"
+            label={t('common.status')}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             sx={{ minWidth: 150 }}
             size="small"
           >
-            <MenuItem value="all">All Status</MenuItem>
-            <MenuItem value="available">Available</MenuItem>
-            <MenuItem value="on_trip">On Trip</MenuItem>
-            <MenuItem value="maintenance">Maintenance</MenuItem>
-            <MenuItem value="out_of_service">Out of Service</MenuItem>
+            <MenuItem value="all">{t('common.allStatus')}</MenuItem>
+            <MenuItem value="available">{t('common.available')}</MenuItem>
+            <MenuItem value="on_trip">{t('trailers.onTrip', { defaultValue: 'On Trip' })}</MenuItem>
+            <MenuItem value="maintenance">{t('trailers.maintenance', { defaultValue: 'Maintenance' })}</MenuItem>
+            <MenuItem value="out_of_service">{t('trailers.outOfService', { defaultValue: 'Out of Service' })}</MenuItem>
           </TextField>
 
           <TextField
             select
-            label="Type"
+            label={t('trailers.type')}
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
             sx={{ minWidth: 150 }}
             size="small"
           >
-            <MenuItem value="all">All Types</MenuItem>
-            <MenuItem value="dry_van">Dry Van</MenuItem>
-            <MenuItem value="reefer">Reefer</MenuItem>
-            <MenuItem value="flatbed">Flatbed</MenuItem>
-            <MenuItem value="step_deck">Step Deck</MenuItem>
-            <MenuItem value="lowboy">Lowboy</MenuItem>
-            <MenuItem value="tanker">Tanker</MenuItem>
+            <MenuItem value="all">{t('trailers.allTypes', { defaultValue: 'All Types' })}</MenuItem>
+            <MenuItem value="dry_van">{t('trailers.dryVan', { defaultValue: 'Dry Van' })}</MenuItem>
+            <MenuItem value="reefer">{t('trailers.reefer', { defaultValue: 'Reefer' })}</MenuItem>
+            <MenuItem value="flatbed">{t('trailers.flatbed', { defaultValue: 'Flatbed' })}</MenuItem>
+            <MenuItem value="step_deck">{t('trailers.stepDeck', { defaultValue: 'Step Deck' })}</MenuItem>
+            <MenuItem value="lowboy">{t('trailers.lowboy', { defaultValue: 'Lowboy' })}</MenuItem>
+            <MenuItem value="tanker">{t('trailers.tanker', { defaultValue: 'Tanker' })}</MenuItem>
           </TextField>
 
           {(searchTerm || statusFilter !== 'all' || typeFilter !== 'all') && (
@@ -382,7 +440,7 @@ const TrailersPage: React.FC = () => {
                 setTypeFilter('all');
               }}
             >
-              Clear
+              {t('common.clear')}
             </Button>
           )}
         </Box>
@@ -391,9 +449,9 @@ const TrailersPage: React.FC = () => {
           {!loading && filteredTrailers.length === 0 ? (
             <EmptyState
               icon={<RvHookup />}
-              title={trailers.length === 0 ? "No Trailers Added" : "No Results Found"}
-              description={trailers.length === 0 ? "Build your trailer fleet by adding equipment. Choose from dry vans, reefers, flatbeds, and more to match your hauling needs." : "Try adjusting your search or filters"}
-              actionLabel={trailers.length === 0 ? "Add First Trailer" : undefined}
+              title={trailers.length === 0 ? t('trailers.noTrailersAdded', { defaultValue: 'No Trailers Added' }) : t('common.noResultsFound')}
+              description={trailers.length === 0 ? t('trailers.noTrailersDescription', { defaultValue: 'Build your trailer fleet by adding equipment. Choose from dry vans, reefers, flatbeds, and more to match your hauling needs.' }) : t('common.tryAdjustingFilters')}
+              actionLabel={trailers.length === 0 ? t('trailers.addFirstTrailer', { defaultValue: 'Add First Trailer' }) : undefined}
               onAction={trailers.length === 0 ? () => handleOpenDialog() : undefined}
             />
           ) : (
@@ -431,7 +489,7 @@ const TrailersPage: React.FC = () => {
         {/* Add/Edit Dialog */}
         <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
           <DialogTitle>
-            {editingTrailer ? 'Edit Trailer' : 'Add New Trailer'}
+            {editingTrailer ? t('trailers.editTrailer') : t('trailers.addNewTrailer', { defaultValue: 'Add New Trailer' })}
           </DialogTitle>
           <form onSubmit={handleSubmit(onSubmit)}>
             <DialogContent>
@@ -442,7 +500,7 @@ const TrailersPage: React.FC = () => {
                   render={({ field }) => (
                     <TextField
                       {...field}
-                      label="Unit Number *"
+                      label={t('trailers.unitNumberRequired', { defaultValue: 'Unit Number *' })}
                       error={!!errors.unitNumber}
                       helperText={errors.unitNumber?.message}
                       disabled={isSubmitting}
@@ -458,18 +516,18 @@ const TrailersPage: React.FC = () => {
                     <TextField
                       {...field}
                       select
-                      label="Trailer Type *"
+                      label={t('trailers.trailerTypeRequired', { defaultValue: 'Trailer Type *' })}
                       error={!!errors.type}
                       helperText={errors.type?.message}
                       disabled={isSubmitting}
                       fullWidth
                     >
-                      <MenuItem value="dry_van">Dry Van</MenuItem>
-                      <MenuItem value="reefer">Reefer</MenuItem>
-                      <MenuItem value="flatbed">Flatbed</MenuItem>
-                      <MenuItem value="step_deck">Step Deck</MenuItem>
-                      <MenuItem value="lowboy">Lowboy</MenuItem>
-                      <MenuItem value="tanker">Tanker</MenuItem>
+                      <MenuItem value="dry_van">{t('trailers.dryVan')}</MenuItem>
+                      <MenuItem value="reefer">{t('trailers.reefer')}</MenuItem>
+                      <MenuItem value="flatbed">{t('trailers.flatbed')}</MenuItem>
+                      <MenuItem value="step_deck">{t('trailers.stepDeck')}</MenuItem>
+                      <MenuItem value="lowboy">{t('trailers.lowboy')}</MenuItem>
+                      <MenuItem value="tanker">{t('trailers.tanker')}</MenuItem>
                     </TextField>
                   )}
                 />
@@ -481,7 +539,7 @@ const TrailersPage: React.FC = () => {
                     render={({ field }) => (
                       <TextField
                         {...field}
-                        label="Make"
+                        label={t('trailers.make', { defaultValue: 'Make' })}
                         error={!!errors.make}
                         helperText={errors.make?.message}
                         disabled={isSubmitting}
@@ -495,7 +553,7 @@ const TrailersPage: React.FC = () => {
                     render={({ field }) => (
                       <TextField
                         {...field}
-                        label="Year"
+                        label={t('trailers.year', { defaultValue: 'Year' })}
                         type="number"
                         error={!!errors.year}
                         helperText={errors.year?.message}
@@ -511,7 +569,7 @@ const TrailersPage: React.FC = () => {
                   render={({ field }) => (
                     <TextField
                       {...field}
-                      label="VIN *"
+                      label={t('trailers.vinRequired', { defaultValue: 'VIN *' })}
                       error={!!errors.vin}
                       helperText={errors.vin?.message}
                       disabled={isSubmitting}
@@ -527,7 +585,7 @@ const TrailersPage: React.FC = () => {
                   render={({ field }) => (
                     <TextField
                       {...field}
-                      label="License Plate *"
+                      label={t('trailers.licensePlateRequired', { defaultValue: 'License Plate *' })}
                       error={!!errors.licensePlate}
                       helperText={errors.licensePlate?.message}
                       disabled={isSubmitting}
@@ -543,22 +601,45 @@ const TrailersPage: React.FC = () => {
                     <TextField
                       {...field}
                       select
-                      label="Status"
+                      label={t('common.status')}
                       disabled={isSubmitting}
                       fullWidth
                     >
-                      <MenuItem value="available">Available</MenuItem>
-                      <MenuItem value="on_road">On Road</MenuItem>
-                      <MenuItem value="in_maintenance">In Maintenance</MenuItem>
-                      <MenuItem value="out_of_service">Out of Service</MenuItem>
+                      <MenuItem value="available">{t('common.available')}</MenuItem>
+                      <MenuItem value="on_road">{t('trailers.onRoad', { defaultValue: 'On Road' })}</MenuItem>
+                      <MenuItem value="in_maintenance">{t('trailers.inMaintenance', { defaultValue: 'In Maintenance' })}</MenuItem>
+                      <MenuItem value="out_of_service">{t('trailers.outOfService')}</MenuItem>
                     </TextField>
+                  )}
+                />
+
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                    {t('trailers.additionalNotes', { defaultValue: 'Additional Notes' })}
+                  </Typography>
+                </Box>
+
+                <Controller
+                  name="notes"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      label={t('common.notes')}
+                      disabled={isSubmitting}
+                      fullWidth
+                      multiline
+                      rows={4}
+                      placeholder={t('trailers.notesPlaceholder', { defaultValue: 'Add any additional notes, maintenance reminders, special instructions, or important information about this trailer...' })}
+                      helperText={t('trailers.notesHelper', { defaultValue: 'Use this field to record maintenance history, special handling requirements, or any other relevant information' })}
+                    />
                   )}
                 />
               </Box>
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2 }}>
               <Button onClick={handleCloseDialog} disabled={isSubmitting}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button
                 type="submit"
@@ -566,10 +647,36 @@ const TrailersPage: React.FC = () => {
                 disabled={isSubmitting}
                 startIcon={isSubmitting && <CircularProgress size={16} />}
               >
-                {editingTrailer ? 'Update' : 'Create'}
+                {editingTrailer ? t('common.update') : t('common.create')}
               </Button>
             </DialogActions>
           </form>
+        </Dialog>
+
+        {/* Notes View Dialog */}
+        <Dialog open={openNotesDialog} onClose={() => setOpenNotesDialog(false)} maxWidth="sm" fullWidth>
+          <DialogTitle>{notesTitle}</DialogTitle>
+          <DialogContent>
+            <TextField
+              fullWidth
+              multiline
+              rows={10}
+              value={selectedNotes}
+              disabled
+              sx={{
+                mt: 1,
+                '& .MuiInputBase-input': {
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                },
+              }}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenNotesDialog(false)} variant="contained">
+              {t('common.close')}
+            </Button>
+          </DialogActions>
         </Dialog>
       </Box>
     </DashboardLayout>

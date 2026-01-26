@@ -40,6 +40,7 @@ export interface IDriver extends Document {
     photo?: string;
     others: string[];
   };
+  notes?: string;
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
@@ -165,6 +166,9 @@ const driverSchema = new Schema<IDriver>(
     documents: {
       type: DocumentsSchema,
       default: () => ({ others: [] }),
+    },
+    notes: {
+      type: String,
     },
     createdBy: {
       type: String,

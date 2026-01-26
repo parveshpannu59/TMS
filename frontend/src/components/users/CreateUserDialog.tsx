@@ -23,6 +23,7 @@ import { userApi } from '@api/user.api';
 import { UserRole } from '@types/user.types';
 import { createUserSchema, CreateUserFormData } from '@utils/userValidation';
 import type { ApiError } from '@types/api.types';
+import { useTranslation } from 'react-i18next';
 
 interface CreateUserDialogProps {
   open: boolean;
@@ -32,6 +33,7 @@ interface CreateUserDialogProps {
 
 export const CreateUserDialog: React.FC<CreateUserDialogProps> = React.memo(
   ({ open, onClose, onSuccess }) => {
+    const { t } = useTranslation();
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
@@ -119,7 +121,7 @@ export const CreateUserDialog: React.FC<CreateUserDialogProps> = React.memo(
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <PersonAdd color="primary" />
-            Create New User
+            {t('users.createNewUser', { defaultValue: 'Create New User' })}
           </Box>
           <IconButton onClick={handleClose} size="small" disabled={isSubmitting}>
             <Close />
@@ -143,7 +145,7 @@ export const CreateUserDialog: React.FC<CreateUserDialogProps> = React.memo(
                 render={({ field }) => (
                   <TextField
                     {...field}
-                    label="Full Name"
+                    label={t('users.fullName', { defaultValue: 'Full Name' })}
                     fullWidth
                     autoFocus
                     error={!!errors.name}
@@ -159,7 +161,7 @@ export const CreateUserDialog: React.FC<CreateUserDialogProps> = React.memo(
                 render={({ field }) => (
                   <TextField
                     {...field}
-                    label="Email Address"
+                    label={t('users.emailAddress', { defaultValue: 'Email Address' })}
                     type="email"
                     fullWidth
                     error={!!errors.email}
@@ -175,7 +177,7 @@ export const CreateUserDialog: React.FC<CreateUserDialogProps> = React.memo(
                 render={({ field }) => (
                   <TextField
                     {...field}
-                    label="Password"
+                    label={t('users.password', { defaultValue: 'Password' })}
                     type={showPassword ? 'text' : 'password'}
                     fullWidth
                     error={!!errors.password}
@@ -203,12 +205,12 @@ export const CreateUserDialog: React.FC<CreateUserDialogProps> = React.memo(
                 control={control}
                 render={({ field }) => (
                   <FormControl fullWidth error={!!errors.role}>
-                    <InputLabel>User Role</InputLabel>
-                    <Select {...field} label="User Role" disabled={isSubmitting}>
-                      <MenuItem value={UserRole.DISPATCHER}>Dispatcher</MenuItem>
-                      <MenuItem value={UserRole.DRIVER}>Driver</MenuItem>
-                      <MenuItem value={UserRole.ACCOUNTANT}>Accountant</MenuItem>
-                      <MenuItem value={UserRole.OWNER}>Owner</MenuItem>
+                    <InputLabel>{t('users.userRole', { defaultValue: 'User Role' })}</InputLabel>
+                    <Select {...field} label={t('users.userRole', { defaultValue: 'User Role' })} disabled={isSubmitting}>
+                      <MenuItem value={UserRole.DISPATCHER}>{t('users.dispatcher', { defaultValue: 'Dispatcher' })}</MenuItem>
+                      <MenuItem value={UserRole.DRIVER}>{t('users.driver', { defaultValue: 'Driver' })}</MenuItem>
+                      <MenuItem value={UserRole.ACCOUNTANT}>{t('users.accountant', { defaultValue: 'Accountant' })}</MenuItem>
+                      <MenuItem value={UserRole.OWNER}>{t('users.owner', { defaultValue: 'Owner' })}</MenuItem>
                     </Select>
                     {errors.role && <FormHelperText>{errors.role.message}</FormHelperText>}
                   </FormControl>
@@ -221,7 +223,7 @@ export const CreateUserDialog: React.FC<CreateUserDialogProps> = React.memo(
                 render={({ field }) => (
                   <TextField
                     {...field}
-                    label="Phone Number (Optional)"
+                    label={t('users.phoneNumberOptional', { defaultValue: 'Phone Number (Optional)' })}
                     fullWidth
                     placeholder="9876543210"
                     error={!!errors.phone}
@@ -235,7 +237,7 @@ export const CreateUserDialog: React.FC<CreateUserDialogProps> = React.memo(
 
           <DialogActions sx={{ px: 3, py: 2 }}>
             <Button onClick={handleClose} disabled={isSubmitting}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               type="submit"
@@ -243,7 +245,7 @@ export const CreateUserDialog: React.FC<CreateUserDialogProps> = React.memo(
               disabled={isSubmitting}
               startIcon={<PersonAdd />}
             >
-              {isSubmitting ? 'Creating...' : 'Create User'}
+              {isSubmitting ? t('users.creating', { defaultValue: 'Creating...' }) : t('users.createUser', { defaultValue: 'Create User' })}
             </Button>
           </DialogActions>
         </Box>

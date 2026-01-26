@@ -39,8 +39,10 @@ import { DashboardLayout } from '@layouts/DashboardLayout';
 import { format } from 'date-fns';
 import { activityLogApi } from '@api/activityLog.api';
 import { ActivityLog, ActivityAction, ActivityEntity } from '@/types/activityLog.types';
+import { useTranslation } from 'react-i18next';
 
 const ActivityHistoryPage: React.FC = () => {
+  const { t } = useTranslation();
   const [activities, setActivities] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +68,7 @@ const ActivityHistoryPage: React.FC = () => {
       setTotalPages(response.pagination.totalPages);
     } catch (err: any) {
       console.error('Failed to fetch activity logs:', err);
-      setError(err.response?.data?.message || 'Failed to load activity logs');
+      setError(err.response?.data?.message || t('activity.failedToLoad', { defaultValue: 'Failed to load activity logs' }));
     } finally {
       setLoading(false);
     }
@@ -158,10 +160,10 @@ const ActivityHistoryPage: React.FC = () => {
           <History sx={{ fontSize: 32, color: 'primary.main' }} />
           <Box>
             <Typography variant="h4" fontWeight={700}>
-              Activity History
+              {t('activity.title', { defaultValue: 'Activity History' })}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Track all changes and actions in your TMS
+              {t('activity.subtitle', { defaultValue: 'Track all changes and actions in your TMS' })}
             </Typography>
           </Box>
         </Box>
@@ -170,7 +172,7 @@ const ActivityHistoryPage: React.FC = () => {
         <Card sx={{ p: 3, mb: 3 }}>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
             <TextField
-              placeholder="Search activities..."
+              placeholder={t('activity.searchPlaceholder', { defaultValue: 'Search activities...' })}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputProps={{
@@ -186,7 +188,7 @@ const ActivityHistoryPage: React.FC = () => {
             
             <TextField
               select
-              label="Entity"
+              label={t('activity.entity', { defaultValue: 'Entity' })}
               value={filterEntity}
               onChange={(e) => {
                 setFilterEntity(e.target.value);
@@ -195,18 +197,18 @@ const ActivityHistoryPage: React.FC = () => {
               sx={{ minWidth: 150 }}
               size="small"
             >
-              <MenuItem value="all">All Entities</MenuItem>
-              <MenuItem value="load">Loads</MenuItem>
-              <MenuItem value="driver">Drivers</MenuItem>
-              <MenuItem value="truck">Trucks</MenuItem>
-              <MenuItem value="trailer">Trailers</MenuItem>
-              <MenuItem value="user">Users</MenuItem>
-              <MenuItem value="company">Company</MenuItem>
+              <MenuItem value="all">{t('activity.allEntities', { defaultValue: 'All Entities' })}</MenuItem>
+              <MenuItem value="load">{t('navigation.loads')}</MenuItem>
+              <MenuItem value="driver">{t('navigation.drivers')}</MenuItem>
+              <MenuItem value="truck">{t('navigation.trucks')}</MenuItem>
+              <MenuItem value="trailer">{t('navigation.trailers')}</MenuItem>
+              <MenuItem value="user">{t('navigation.users')}</MenuItem>
+              <MenuItem value="company">{t('activity.company', { defaultValue: 'Company' })}</MenuItem>
             </TextField>
             
             <TextField
               select
-              label="Action"
+              label={t('activity.action', { defaultValue: 'Action' })}
               value={filterAction}
               onChange={(e) => {
                 setFilterAction(e.target.value);
@@ -215,15 +217,15 @@ const ActivityHistoryPage: React.FC = () => {
               sx={{ minWidth: 150 }}
               size="small"
             >
-              <MenuItem value="all">All Actions</MenuItem>
-              <MenuItem value="create">Create</MenuItem>
-              <MenuItem value="update">Update</MenuItem>
-              <MenuItem value="delete">Delete</MenuItem>
-              <MenuItem value="assign">Assign</MenuItem>
-              <MenuItem value="complete">Complete</MenuItem>
-              <MenuItem value="cancel">Cancel</MenuItem>
-              <MenuItem value="start">Start</MenuItem>
-              <MenuItem value="pause">Pause</MenuItem>
+              <MenuItem value="all">{t('activity.allActions', { defaultValue: 'All Actions' })}</MenuItem>
+              <MenuItem value="create">{t('common.create')}</MenuItem>
+              <MenuItem value="update">{t('common.update')}</MenuItem>
+              <MenuItem value="delete">{t('common.delete')}</MenuItem>
+              <MenuItem value="assign">{t('activity.assign', { defaultValue: 'Assign' })}</MenuItem>
+              <MenuItem value="complete">{t('activity.complete', { defaultValue: 'Complete' })}</MenuItem>
+              <MenuItem value="cancel">{t('common.cancel')}</MenuItem>
+              <MenuItem value="start">{t('activity.start', { defaultValue: 'Start' })}</MenuItem>
+              <MenuItem value="pause">{t('activity.pause', { defaultValue: 'Pause' })}</MenuItem>
             </TextField>
           </Box>
         </Card>
@@ -249,10 +251,10 @@ const ActivityHistoryPage: React.FC = () => {
             >
               <History sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
               <Typography variant="h6" color="text.secondary">
-                No activities found
+                {t('activity.noActivitiesFound', { defaultValue: 'No activities found' })}
               </Typography>
               <Typography variant="body2" color="text.disabled">
-                Try adjusting your filters or search term
+                {t('common.tryAdjustingFilters')}
               </Typography>
             </Box>
           ) : (
@@ -310,7 +312,7 @@ const ActivityHistoryPage: React.FC = () => {
                       {activity.changes && activity.changes.length > 0 && (
                         <Box sx={{ mt: 1, p: 1, bgcolor: 'grey.100', borderRadius: 1 }}>
                           <Typography variant="caption" fontWeight={600} display="block" gutterBottom>
-                            Changes:
+                            {t('activity.changes', { defaultValue: 'Changes' })}:
                           </Typography>
                           {activity.changes.map((change, idx) => (
                             <Typography key={idx} variant="caption" display="block">
