@@ -11,6 +11,7 @@ export interface ITrailer {
   status: 'available' | 'on_road' | 'in_maintenance' | 'out_of_service';
   currentLoadId?: string;
   currentTruckId?: string;
+  notes?: string;
 }
 
 export interface ITrailerDocument extends Omit<Document, 'type'>, ITrailer {}
@@ -34,6 +35,7 @@ const TrailerSchema = new Schema({
   },
   currentLoadId: { type: Schema.Types.ObjectId, ref: 'Load' },
   currentTruckId: { type: Schema.Types.ObjectId, ref: 'Truck' },
+  notes: { type: String },
 }, { timestamps: true });
 
 // Indexes for optimized queries

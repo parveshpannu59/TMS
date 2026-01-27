@@ -4,7 +4,8 @@ export interface DriverFormData {
   userId: string;
   licenseNumber: string;
   licenseExpiry: Date | string;
-  status?: 'available' | 'on_duty' | 'off_duty' | 'on_leave';
+  status?: 'active' | 'inactive' | 'on_trip';
+  notes?: string;
 }
 
 export interface Driver {
@@ -22,7 +23,7 @@ export interface Driver {
   };
   licenseNumber: string;
   licenseExpiry: Date | string;
-  status: 'available' | 'on_duty' | 'off_duty' | 'on_leave';
+  status: 'active' | 'inactive' | 'on_trip';
   currentLoadId?: any;
   createdAt: string;
   updatedAt: string;

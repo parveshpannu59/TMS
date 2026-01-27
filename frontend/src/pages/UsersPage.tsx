@@ -38,8 +38,10 @@ import { EditUserDialog } from '@components/users/EditUserDialog';
 import { ChangePasswordDialog } from '@components/users/ChangePasswordDialog';
 import { DashboardLayout } from '@layouts/DashboardLayout';
 import { format } from 'date-fns';
+import { useTranslation } from 'react-i18next';
 
 export const UsersPage: React.FC = () => {
+  const { t } = useTranslation();
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<UserStats | null>(null);
@@ -139,19 +141,19 @@ export const UsersPage: React.FC = () => {
     () => [
       {
         field: 'name',
-        headerName: 'Name',
+        headerName: t('common.name'),
         flex: 1,
         minWidth: 140,
       },
       {
         field: 'email',
-        headerName: 'Email',
+        headerName: t('common.email'),
         flex: 1.2,
         minWidth: 180,
       },
       {
         field: 'role',
-        headerName: 'Role',
+        headerName: t('users.role'),
         width: 110,
         renderCell: (params: GridRenderCellParams) => (
           <Chip
@@ -169,7 +171,7 @@ export const UsersPage: React.FC = () => {
       },
       {
         field: 'phone',
-        headerName: 'Phone',
+        headerName: t('common.phone'),
         width: 120,
         renderCell: (params: GridRenderCellParams) => (
           <Typography variant="body2" sx={{ fontSize: '0.8125rem' }}>
@@ -179,7 +181,7 @@ export const UsersPage: React.FC = () => {
       },
       {
         field: 'status',
-        headerName: 'Status',
+        headerName: t('common.status'),
         width: 100,
         renderCell: (params: GridRenderCellParams) => (
           <Chip
@@ -198,7 +200,7 @@ export const UsersPage: React.FC = () => {
       },
       {
         field: 'createdAt',
-        headerName: 'Created',
+        headerName: t('users.created'),
         width: 110,
         renderCell: (params: GridRenderCellParams) => (
           <Typography variant="body2" sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
@@ -208,7 +210,7 @@ export const UsersPage: React.FC = () => {
       },
       {
         field: 'actions',
-        headerName: 'Actions',
+        headerName: t('common.actions'),
         width: 140,
         sortable: false,
         renderCell: (params: GridRenderCellParams) => (
@@ -273,10 +275,10 @@ export const UsersPage: React.FC = () => {
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Box>
             <Typography variant="h5" component="h1" fontWeight={700} sx={{ mb: 0.5 }}>
-          User Management
+          {t('users.title')}
         </Typography>
             <Typography variant="body2" color="text.secondary">
-              Manage system users and permissions
+              {t('users.subtitle')}
             </Typography>
           </Box>
         <Button
@@ -285,7 +287,7 @@ export const UsersPage: React.FC = () => {
           onClick={() => setCreateDialogOpen(true)}
             sx={{ minWidth: 140 }}
         >
-            Add User
+            {t('users.addUser')}
         </Button>
       </Box>
 
@@ -301,7 +303,7 @@ export const UsersPage: React.FC = () => {
                         {stats.totalUsers}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                  Total Users
+                  {t('users.totalUsers')}
                 </Typography>
                     </Box>
                     <People sx={{ fontSize: 32, color: 'primary.main', opacity: 0.2 }} />
@@ -318,7 +320,7 @@ export const UsersPage: React.FC = () => {
                         {stats.activeUsers}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                  Active Users
+                  {t('users.activeUsers')}
                 </Typography>
                     </Box>
                     <CheckCircle sx={{ fontSize: 32, color: 'success.main', opacity: 0.2 }} />
@@ -335,7 +337,7 @@ export const UsersPage: React.FC = () => {
                         {stats.inactiveUsers}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                  Inactive Users
+                  {t('users.inactiveUsers')}
                 </Typography>
                     </Box>
                     <Cancel sx={{ fontSize: 32, color: 'error.main', opacity: 0.2 }} />
@@ -352,7 +354,7 @@ export const UsersPage: React.FC = () => {
                         {stats.roleStats?.owner || 0}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                  Owners
+                  {t('users.owners')}
                 </Typography>
                     </Box>
                     <People sx={{ fontSize: 32, color: 'secondary.main', opacity: 0.2 }} />
@@ -377,7 +379,7 @@ export const UsersPage: React.FC = () => {
         {/* Search and Filters */}
         <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
           <TextField
-            placeholder="Search users by name, email, or phone..."
+            placeholder={t('users.searchPlaceholder')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             InputProps={{
@@ -399,7 +401,7 @@ export const UsersPage: React.FC = () => {
             sx={{ minWidth: 150 }}
             size="small"
           >
-            <MenuItem value="all">All Status</MenuItem>
+            <MenuItem value="all">{t('users.allStatus')}</MenuItem>
             <MenuItem value="active">Active</MenuItem>
             <MenuItem value="inactive">Inactive</MenuItem>
           </TextField>
@@ -412,7 +414,7 @@ export const UsersPage: React.FC = () => {
             sx={{ minWidth: 150 }}
             size="small"
           >
-            <MenuItem value="all">All Roles</MenuItem>
+            <MenuItem value="all">{t('users.allRoles')}</MenuItem>
             <MenuItem value="owner">Owner</MenuItem>
             <MenuItem value="dispatcher">Dispatcher</MenuItem>
             <MenuItem value="accountant">Accountant</MenuItem>

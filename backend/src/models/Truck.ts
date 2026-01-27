@@ -11,6 +11,7 @@ export interface ITruck {
   status: 'available' | 'on_road' | 'in_maintenance' | 'out_of_service';
   currentLoadId?: string;
   currentDriverId?: string;
+  notes?: string;
 }
 
 export interface ITruckDocument extends Omit<Document, 'model'>, ITruck {}
@@ -30,6 +31,7 @@ const TruckSchema = new Schema({
   },
   currentLoadId: { type: Schema.Types.ObjectId, ref: 'Load' },
   currentDriverId: { type: Schema.Types.ObjectId, ref: 'User' },
+  notes: { type: String },
 }, { timestamps: true });
 
 // Indexes for optimized queries

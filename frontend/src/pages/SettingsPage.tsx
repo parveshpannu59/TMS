@@ -475,10 +475,12 @@ import { useThemeMode } from '@/contexts/ThemeContext';
 import { useAuth } from '@/hooks/useAuth';
 import { settingsApi } from '@/api/settings.api';
 import type { UserSettings, PasswordChange } from '@/api/settings.api';
+import { useTranslation } from 'react-i18next';
 
 const SettingsPage: React.FC = () => {
   const { mode, toggleTheme } = useThemeMode();
   const { user, checkAuth } = useAuth();
+  const { t, i18n } = useTranslation();
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -499,6 +501,12 @@ const SettingsPage: React.FC = () => {
 
   // Profile picture upload
   const [uploadingPicture, setUploadingPicture] = useState(false);
+
+  // Custom values for session timeout and password expiry
+  const [sessionTimeoutCustom, setSessionTimeoutCustom] = useState<number>(30);
+  const [passwordExpiryCustom, setPasswordExpiryCustom] = useState<number>(30);
+  const [isSessionTimeoutCustom, setIsSessionTimeoutCustom] = useState<boolean>(false);
+  const [isPasswordExpiryCustom, setIsPasswordExpiryCustom] = useState<boolean>(false);
 
   const [settings, setSettings] = useState<UserSettings>({
     userId: user?.id || '',
@@ -554,6 +562,13 @@ const SettingsPage: React.FC = () => {
     setHasChanges(changed);
   }, [settings, originalSettings]);
 
+  // Sync i18n language with settings
+  useEffect(() => {
+    if (settings.language && i18n.language !== settings.language) {
+      i18n.changeLanguage(settings.language);
+    }
+  }, [settings.language, i18n]);
+
   const loadSettings = async () => {
     try {
       setLoading(true);
@@ -566,6 +581,29 @@ const SettingsPage: React.FC = () => {
       };
       setSettings(settingsWithIds);
       setOriginalSettings(settingsWithIds);
+      
+      // Sync i18n language with loaded settings
+      if (settingsWithIds.language) {
+        i18n.changeLanguage(settingsWithIds.language);
+      }
+      
+      // Check if session timeout is custom (not 15 or 30)
+      const sessionTimeout = settingsWithIds.sessionTimeout || 30;
+      if (sessionTimeout !== 15 && sessionTimeout !== 30) {
+        setIsSessionTimeoutCustom(true);
+        setSessionTimeoutCustom(sessionTimeout);
+      } else {
+        setIsSessionTimeoutCustom(false);
+      }
+      
+      // Check if password expiry is custom (not 30)
+      const passwordExpiry = settingsWithIds.passwordExpiry || 30;
+      if (passwordExpiry !== 30) {
+        setIsPasswordExpiryCustom(true);
+        setPasswordExpiryCustom(passwordExpiry);
+      } else {
+        setIsPasswordExpiryCustom(false);
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to load settings');
     } finally {
@@ -620,6 +658,14 @@ const SettingsPage: React.FC = () => {
             defaultCurrency: settings.defaultCurrency,
             timezone: settings.timezone,
             measurementUnit: settings.measurementUnit,
+          };
+          break;
+        case 'account':
+        case 'security':
+          sectionData = {
+            twoFactorEnabled: settings.twoFactorEnabled,
+            sessionTimeout: settings.sessionTimeout,
+            passwordExpiry: settings.passwordExpiry,
           };
           break;
       }
@@ -731,12 +777,12 @@ const SettingsPage: React.FC = () => {
   };
 
   const sections = [
-    { id: 'appearance', label: 'Appearance', icon: <Palette /> },
-    { id: 'notifications', label: 'Notifications', icon: <Notifications /> },
-    { id: 'company', label: 'Company Profile', icon: <Business /> },
-    { id: 'account', label: 'Account & Security', icon: <Person /> },
-    { id: 'system', label: 'System Preferences', icon: <Settings /> },
-    { id: 'integrations', label: 'Integrations', icon: <IntegrationInstructions /> },
+    { id: 'appearance', label: t('settings.appearance'), icon: <Palette /> },
+    { id: 'notifications', label: t('settings.notifications'), icon: <Notifications /> },
+    { id: 'company', label: t('settings.companyProfile'), icon: <Business /> },
+    { id: 'account', label: t('settings.accountSecurity'), icon: <Person /> },
+    { id: 'system', label: t('settings.systemPreferences'), icon: <Settings /> },
+    { id: 'integrations', label: t('settings.integrations'), icon: <IntegrationInstructions /> },
   ];
 
   // Get timezones - use fallback list
@@ -776,10 +822,10 @@ const SettingsPage: React.FC = () => {
             <Settings sx={{ fontSize: 32, color: 'primary.main' }} />
             <Box>
               <Typography variant="h4" fontWeight={700}>
-                Settings
+                {t('settings.title')}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Manage your TMS preferences and configurations
+                {t('settings.subtitle')}
               </Typography>
             </Box>
           </Box>
@@ -857,7 +903,7 @@ const SettingsPage: React.FC = () => {
                   <Box>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                       <Typography variant="h6">
-                        Appearance Settings
+                        {t('settings.appearance')} {t('settings.title')}
                       </Typography>
                     </Box>
                     <Divider sx={{ my: 2 }} />
@@ -865,8 +911,8 @@ const SettingsPage: React.FC = () => {
                     <List>
                       <ListItem>
                         <ListItemText
-                          primary="Theme"
-                          secondary="Choose between light and dark theme"
+                          primary={t('settings.theme')}
+                          secondary={i18n.language === 'es' ? 'Elija entre tema claro y oscuro' : 'Choose between light and dark theme'}
                         />
                         <ListItemSecondaryAction>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -886,22 +932,26 @@ const SettingsPage: React.FC = () => {
                       
                       <ListItem>
                         <ListItemText 
-                          primary="Language" 
-                          secondary="Set your preferred language"
+                          primary={t('settings.language')} 
+                          secondary={t('settings.languageDescription')}
                         />
                         <ListItemSecondaryAction>
                           <TextField
                             select
                             size="small"
                             value={settings.language}
-                            onChange={(e) => setSettings({ ...settings, language: e.target.value })}
+                            onChange={async (e) => {
+                              const newLanguage = e.target.value;
+                              setSettings({ ...settings, language: newLanguage });
+                              // Change i18n language immediately
+                              await i18n.changeLanguage(newLanguage);
+                              // Save to localStorage
+                              localStorage.setItem('i18nextLng', newLanguage);
+                            }}
                             sx={{ minWidth: 150 }}
                           >
                             <MenuItem value="en">English</MenuItem>
-                            <MenuItem value="es">Spanish</MenuItem>
-                            <MenuItem value="fr">French</MenuItem>
-                            <MenuItem value="de">German</MenuItem>
-                            <MenuItem value="zh">Chinese</MenuItem>
+                            <MenuItem value="es">Español</MenuItem>
                           </TextField>
                         </ListItemSecondaryAction>
                       </ListItem>
@@ -910,8 +960,8 @@ const SettingsPage: React.FC = () => {
                       
                       <ListItem>
                         <ListItemText 
-                          primary="Date Format" 
-                          secondary="Choose how dates are displayed"
+                          primary={t('settings.dateFormat')} 
+                          secondary={t('settings.dateFormatDescription')}
                         />
                         <ListItemSecondaryAction>
                           <TextField
@@ -933,8 +983,8 @@ const SettingsPage: React.FC = () => {
                       
                       <ListItem>
                         <ListItemText 
-                          primary="Time Format" 
-                          secondary="Choose 12-hour or 24-hour format"
+                          primary={t('settings.timeFormat')} 
+                          secondary={t('settings.timeFormatDescription')}
                         />
                         <ListItemSecondaryAction>
                           <TextField
@@ -958,7 +1008,7 @@ const SettingsPage: React.FC = () => {
                         onClick={() => handleSaveSection('appearance')}
                         disabled={saving}
                       >
-                        Save Appearance Settings
+                        {t('settings.saveAppearanceSettings')}
                       </Button>
                     </Box>
                   </Box>
@@ -1134,7 +1184,7 @@ const SettingsPage: React.FC = () => {
                         onClick={() => handleSaveSection('notifications')}
                         disabled={saving}
                       >
-                        Save Notification Settings
+                        {t('settings.saveNotificationSettings')}
                       </Button>
                     </Box>
                   </Box>
@@ -1500,19 +1550,54 @@ const SettingsPage: React.FC = () => {
                           secondary="Auto-logout after inactivity"
                         />
                         <ListItemSecondaryAction>
-                          <TextField
-                            select
-                            size="small"
-                            value={settings.sessionTimeout}
-                            onChange={(e) => setSettings({ ...settings, sessionTimeout: Number(e.target.value) })}
-                            sx={{ minWidth: 120 }}
-                          >
-                            <MenuItem value={15}>15 minutes</MenuItem>
-                            <MenuItem value={30}>30 minutes</MenuItem>
-                            <MenuItem value={60}>1 hour</MenuItem>
-                            <MenuItem value={120}>2 hours</MenuItem>
-                            <MenuItem value={240}>4 hours</MenuItem>
-                          </TextField>
+                          {isSessionTimeoutCustom ? (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
+                              <TextField
+                                type="number"
+                                size="small"
+                                value={sessionTimeoutCustom}
+                                onChange={(e) => {
+                                  const value = Number(e.target.value);
+                                  setSessionTimeoutCustom(value);
+                                  if (value > 0) {
+                                    setSettings({ ...settings, sessionTimeout: value });
+                                  }
+                                }}
+                                inputProps={{ min: 1, step: 1 }}
+                                sx={{ minWidth: 120 }}
+                                placeholder="Minutes"
+                              />
+                              <Button
+                                size="small"
+                                variant="text"
+                                onClick={() => {
+                                  setIsSessionTimeoutCustom(false);
+                                  setSettings({ ...settings, sessionTimeout: 30 });
+                                }}
+                                sx={{ fontSize: '0.75rem', minHeight: 'auto', py: 0.5 }}
+                              >
+                                Use preset
+                              </Button>
+                            </Box>
+                          ) : (
+                            <TextField
+                              select
+                              size="small"
+                              value={settings.sessionTimeout}
+                              onChange={(e) => {
+                                if (e.target.value === 'custom') {
+                                  setIsSessionTimeoutCustom(true);
+                                } else {
+                                  setSettings({ ...settings, sessionTimeout: Number(e.target.value) });
+                                }
+                              }}
+                              sx={{ minWidth: 120 }}
+                            >
+                              <MenuItem value={15}>15 minutes</MenuItem>
+                              <MenuItem value={30}>30 minutes</MenuItem>
+                              <MenuItem value="custom">Custom</MenuItem>
+                            </TextField>
+                          )}
                         </ListItemSecondaryAction>
                       </ListItem>
                       
@@ -1524,22 +1609,67 @@ const SettingsPage: React.FC = () => {
                           secondary="Force password change after"
                         />
                         <ListItemSecondaryAction>
-                          <TextField
-                            select
-                            size="small"
-                            value={settings.passwordExpiry}
-                            onChange={(e) => setSettings({ ...settings, passwordExpiry: Number(e.target.value) })}
-                            sx={{ minWidth: 120 }}
-                          >
-                            <MenuItem value={30}>30 days</MenuItem>
-                            <MenuItem value={60}>60 days</MenuItem>
-                            <MenuItem value={90}>90 days</MenuItem>
-                            <MenuItem value={180}>180 days</MenuItem>
-                            <MenuItem value={0}>Never</MenuItem>
-                          </TextField>
+                          {isPasswordExpiryCustom ? (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
+                              <TextField
+                                type="number"
+                                size="small"
+                                value={passwordExpiryCustom}
+                                onChange={(e) => {
+                                  const value = Number(e.target.value);
+                                  setPasswordExpiryCustom(value);
+                                  if (value > 0) {
+                                    setSettings({ ...settings, passwordExpiry: value });
+                                  }
+                                }}
+                                inputProps={{ min: 1, step: 1 }}
+                                sx={{ minWidth: 120 }}
+                                placeholder="Days"
+                              />
+                              <Button
+                                size="small"
+                                variant="text"
+                                onClick={() => {
+                                  setIsPasswordExpiryCustom(false);
+                                  setSettings({ ...settings, passwordExpiry: 30 });
+                                }}
+                                sx={{ fontSize: '0.75rem', minHeight: 'auto', py: 0.5 }}
+                              >
+                                Use preset
+                              </Button>
+                            </Box>
+                          ) : (
+                            <TextField
+                              select
+                              size="small"
+                              value={settings.passwordExpiry}
+                              onChange={(e) => {
+                                if (e.target.value === 'custom') {
+                                  setIsPasswordExpiryCustom(true);
+                                } else {
+                                  setSettings({ ...settings, passwordExpiry: Number(e.target.value) });
+                                }
+                              }}
+                              sx={{ minWidth: 120 }}
+                            >
+                              <MenuItem value={30}>30 days</MenuItem>
+                              <MenuItem value="custom">Custom</MenuItem>
+                            </TextField>
+                          )}
                         </ListItemSecondaryAction>
                       </ListItem>
                     </List>
+                    
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
+                      <Button
+                        variant="contained"
+                        startIcon={saving ? <CircularProgress size={20} /> : <Save />}
+                        onClick={() => handleSaveSection('security')}
+                        disabled={saving}
+                      >
+                        {t('settings.saveSecuritySettings')}
+                      </Button>
+                    </Box>
                   </Box>
                 )}
 

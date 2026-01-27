@@ -17,6 +17,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { driverApi } from '@api/all.api';
 import type { Driver, CreateDriverData } from '../../types/all.types';
+import { useTranslation } from 'react-i18next';
 
 interface EditDriverDialogProps {
   open: boolean;
@@ -26,10 +27,11 @@ interface EditDriverDialogProps {
 }
 
 const EditDriverDialog: React.FC<EditDriverDialogProps> = ({ open, driver, onClose, onSuccess }) => {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState<CreateDriverData>({
+  const [formData, setFormData] = useState<CreateDriverData & { notes?: string }>({
     name: '',
     email: '',
     phone: '',
@@ -42,6 +44,7 @@ const EditDriverDialog: React.FC<EditDriverDialogProps> = ({ open, driver, onClo
     emergencyContact: '',
     emergencyContactName: '',
     salary: 0,
+    notes: '',
   });
 
   useEffect(() => {
@@ -59,6 +62,7 @@ const EditDriverDialog: React.FC<EditDriverDialogProps> = ({ open, driver, onClo
         emergencyContact: driver.emergencyContact,
         emergencyContactName: driver.emergencyContactName,
         salary: driver.salary || 0,
+        notes: (driver as any).notes || '',
       });
     }
   }, [open, driver]);
@@ -116,7 +120,7 @@ const EditDriverDialog: React.FC<EditDriverDialogProps> = ({ open, driver, onClo
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-      <DialogTitle>Edit Driver - {driver.name}</DialogTitle>
+      <DialogTitle>{t('drivers.editDriver')} - {driver.name}</DialogTitle>
       <DialogContent>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -129,7 +133,7 @@ const EditDriverDialog: React.FC<EditDriverDialogProps> = ({ open, driver, onClo
             {/* Personal Information */}
             <Grid item xs={12}>
               <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                Personal Information
+                {t('drivers.personalInformation', { defaultValue: 'Personal Information' })}
               </Typography>
               <Divider sx={{ mb: 2 }} />
             </Grid>
@@ -137,7 +141,7 @@ const EditDriverDialog: React.FC<EditDriverDialogProps> = ({ open, driver, onClo
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Full Name"
+                label={t('users.fullName', { defaultValue: 'Full Name' })}
                 value={formData.name}
                 onChange={(e) => handleChange('name', e.target.value)}
                 required
@@ -147,7 +151,7 @@ const EditDriverDialog: React.FC<EditDriverDialogProps> = ({ open, driver, onClo
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Email (Optional)"
+                label={t('drivers.emailOptional', { defaultValue: 'Email (Optional)' })}
                 type="email"
                 value={formData.email}
                 onChange={(e) => handleChange('email', e.target.value)}
@@ -157,19 +161,19 @@ const EditDriverDialog: React.FC<EditDriverDialogProps> = ({ open, driver, onClo
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Phone Number"
+                label={t('common.phone')}
                 value={formData.phone}
                 onChange={(e) => handleChange('phone', e.target.value)}
                 required
                 inputProps={{ maxLength: 10 }}
-                helperText="10 digits"
+                helperText={t('drivers.tenDigits', { defaultValue: '10 digits' })}
               />
             </Grid>
 
             {/* License Information */}
             <Grid item xs={12}>
               <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ mt: 2 }}>
-                License Information
+                {t('drivers.licenseInformation', { defaultValue: 'License Information' })}
               </Typography>
               <Divider sx={{ mb: 2 }} />
             </Grid>
@@ -177,7 +181,7 @@ const EditDriverDialog: React.FC<EditDriverDialogProps> = ({ open, driver, onClo
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="License Number"
+                label={t('drivers.licenseNumber')}
                 value={formData.licenseNumber}
                 onChange={(e) => handleChange('licenseNumber', e.target.value.toUpperCase())}
                 required
@@ -186,7 +190,7 @@ const EditDriverDialog: React.FC<EditDriverDialogProps> = ({ open, driver, onClo
 
             <Grid item xs={12} sm={6}>
               <DatePicker
-                label="License Expiry Date"
+                label={t('drivers.licenseExpiry')}
                 value={new Date(formData.licenseExpiry)}
                 onChange={(date: Date | null) => handleChange('licenseExpiry', date?.toISOString() || '')}
                 slotProps={{ textField: { fullWidth: true, required: true } }}
@@ -196,7 +200,7 @@ const EditDriverDialog: React.FC<EditDriverDialogProps> = ({ open, driver, onClo
             {/* Address Information */}
             <Grid item xs={12}>
               <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ mt: 2 }}>
-                Address
+                {t('common.address')}
               </Typography>
               <Divider sx={{ mb: 2 }} />
             </Grid>
@@ -204,7 +208,7 @@ const EditDriverDialog: React.FC<EditDriverDialogProps> = ({ open, driver, onClo
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Address"
+                label={t('common.address')}
                 value={formData.address}
                 onChange={(e) => handleChange('address', e.target.value)}
                 required
@@ -216,7 +220,7 @@ const EditDriverDialog: React.FC<EditDriverDialogProps> = ({ open, driver, onClo
             <Grid item xs={12} sm={4}>
               <TextField
                 fullWidth
-                label="City"
+                label={t('common.city')}
                 value={formData.city}
                 onChange={(e) => handleChange('city', e.target.value)}
                 required
@@ -226,7 +230,7 @@ const EditDriverDialog: React.FC<EditDriverDialogProps> = ({ open, driver, onClo
             <Grid item xs={12} sm={4}>
               <TextField
                 fullWidth
-                label="State"
+                label={t('common.state')}
                 value={formData.state}
                 onChange={(e) => handleChange('state', e.target.value)}
                 required
@@ -236,19 +240,19 @@ const EditDriverDialog: React.FC<EditDriverDialogProps> = ({ open, driver, onClo
             <Grid item xs={12} sm={4}>
               <TextField
                 fullWidth
-                label="Pincode"
+                label={t('drivers.pincode', { defaultValue: 'Pincode' })}
                 value={formData.pincode}
                 onChange={(e) => handleChange('pincode', e.target.value)}
                 required
                 inputProps={{ maxLength: 6 }}
-                helperText="6 digits"
+                helperText={t('drivers.sixDigits', { defaultValue: '6 digits' })}
               />
             </Grid>
 
             {/* Emergency Contact */}
             <Grid item xs={12}>
               <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ mt: 2 }}>
-                Emergency Contact
+                {t('drivers.emergencyContact', { defaultValue: 'Emergency Contact' })}
               </Typography>
               <Divider sx={{ mb: 2 }} />
             </Grid>
@@ -256,7 +260,7 @@ const EditDriverDialog: React.FC<EditDriverDialogProps> = ({ open, driver, onClo
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Emergency Contact Name"
+                label={t('drivers.emergencyContactName', { defaultValue: 'Emergency Contact Name' })}
                 value={formData.emergencyContactName}
                 onChange={(e) => handleChange('emergencyContactName', e.target.value)}
                 required
@@ -266,19 +270,19 @@ const EditDriverDialog: React.FC<EditDriverDialogProps> = ({ open, driver, onClo
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Emergency Contact Phone"
+                label={t('drivers.emergencyContactPhone', { defaultValue: 'Emergency Contact Phone' })}
                 value={formData.emergencyContact}
                 onChange={(e) => handleChange('emergencyContact', e.target.value)}
                 required
                 inputProps={{ maxLength: 10 }}
-                helperText="10 digits"
+                helperText={t('drivers.tenDigits', { defaultValue: '10 digits' })}
               />
             </Grid>
 
             {/* Salary (Optional) */}
             <Grid item xs={12}>
               <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ mt: 2 }}>
-                Compensation
+                {t('drivers.compensation', { defaultValue: 'Compensation' })}
               </Typography>
               <Divider sx={{ mb: 2 }} />
             </Grid>
@@ -286,10 +290,31 @@ const EditDriverDialog: React.FC<EditDriverDialogProps> = ({ open, driver, onClo
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Monthly Salary (₹) - Optional"
+                label={t('drivers.monthlySalaryOptional', { defaultValue: 'Monthly Salary (₹) - Optional' })}
                 type="number"
                 value={formData.salary}
                 onChange={(e) => handleChange('salary', parseFloat(e.target.value) || 0)}
+              />
+            </Grid>
+
+            {/* Notes */}
+            <Grid item xs={12}>
+              <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ mt: 2 }}>
+                {t('drivers.additionalNotes', { defaultValue: 'Additional Notes' })}
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label={t('common.notes')}
+                value={formData.notes || ''}
+                onChange={(e) => handleChange('notes', e.target.value)}
+                multiline
+                rows={4}
+                placeholder={t('drivers.notesPlaceholder', { defaultValue: 'Add any additional notes, performance records, training information, or important information about this driver...' })}
+                helperText={t('drivers.notesHelper', { defaultValue: 'Use this field to record performance notes, training history, certifications, or any other relevant information' })}
               />
             </Grid>
           </Grid>
@@ -298,10 +323,10 @@ const EditDriverDialog: React.FC<EditDriverDialogProps> = ({ open, driver, onClo
 
       <DialogActions>
         <Button onClick={handleClose} disabled={loading}>
-          Cancel
+          {t('common.cancel')}
         </Button>
         <Button onClick={handleSubmit} variant="contained" disabled={loading}>
-          {loading ? <CircularProgress size={24} /> : 'Update Driver'}
+          {loading ? <CircularProgress size={24} /> : t('drivers.updateDriver', { defaultValue: 'Update Driver' })}
         </Button>
       </DialogActions>
     </Dialog>

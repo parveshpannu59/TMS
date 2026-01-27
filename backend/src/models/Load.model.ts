@@ -154,6 +154,7 @@ export interface ILoad extends Document {
   documents: IDocuments;
   status: LoadStatus;
   specialInstructions?: string;
+  notes?: string;
   currentLocation?: IGPSLocation;
   locationHistory: IGPSLocation[];
   statusHistory: IStatusHistory[];
@@ -406,6 +407,9 @@ const loadSchema = new Schema<ILoad>(
       default: LoadStatus.BOOKED,
     },
     specialInstructions: {
+      type: String,
+    },
+    notes: {
       type: String,
     },
     currentLocation: {

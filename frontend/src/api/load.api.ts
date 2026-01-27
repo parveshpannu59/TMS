@@ -39,6 +39,7 @@ export interface LoadFormData {
   driverRate?: number;
   specialInstructions?: string;
   internalNotes?: string;
+  notes?: string;
   priority?: 'low' | 'normal' | 'high' | 'urgent';
 }
 

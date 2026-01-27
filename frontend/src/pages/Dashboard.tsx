@@ -338,6 +338,7 @@ import { RecentActivity } from '../components/dashboard/RecentActivity';
 import { CriticalTrips } from '../components/dashboard/CriticalTrips';
 import { useAuth } from '../hooks/useAuth';
 import { DashboardLayout } from '@layouts/DashboardLayout';
+import { useTranslation } from 'react-i18next';
 
 const Dashboard = () => {
   const theme = useTheme();
@@ -347,6 +348,7 @@ const Dashboard = () => {
   const { data, loading, error, refetch } = useDashboard(dateRange);
   const { resetLayout, loading: layoutLoading } = useDashboardLayout();
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const handleRefresh = useCallback(() => {
@@ -411,25 +413,25 @@ const Dashboard = () => {
     return [
       {
         id: 'revenue',
-        title: 'Total Revenue',
+        title: t('dashboard.totalRevenue'),
         value: `$${fm.totalRevenue.toLocaleString()}`,
-        subtitle: 'Completed loads',
+        subtitle: t('dashboard.completedLoads'),
         icon: <AttachMoneyIcon />,
         color: 'success.main',
         trend: undefined
       },
       {
         id: 'profit',
-        title: 'Total Profit',
+        title: t('dashboard.totalProfit'),
         value: `$${fm.totalProfit.toLocaleString()}`,
-        subtitle: `${fm.profitMargin.toFixed(2)}% margin`,
+        subtitle: `${fm.profitMargin.toFixed(2)}% ${t('dashboard.margin')}`,
         icon: <AccountBalanceIcon />,
         color: fm.totalProfit >= 0 ? 'success.main' : 'error.main',
         trend: undefined
       },
       {
         id: 'distance',
-        title: 'Distance Traveled',
+        title: t('dashboard.distanceTraveled'),
         value: `${fm.totalDistanceMiles.toFixed(0)} mi`,
         subtitle: `${fm.totalDistanceKm.toFixed(2)} km`,
         icon: <RouteIcon />,
@@ -525,10 +527,15 @@ const Dashboard = () => {
           fontWeight={700}
           sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}
         >
-          Welcome back, {user?.name}! 👋
+          {t('dashboard.welcomeBack', { name: user?.name })} 👋
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Here's your fleet overview for {dateRange === 'today' ? 'today' : dateRange === 'week' ? 'this week' : 'this month'}
+          {t('dashboard.fleetOverview', { 
+            period: dateRange === 'today' ? t('dashboard.today') : 
+                    dateRange === 'week' ? t('dashboard.thisWeek') : 
+                    dateRange === 'month' ? t('dashboard.thisMonth') : 
+                    t('dashboard.today')
+          })}
         </Typography>
       </Box>
 
@@ -540,9 +547,9 @@ const Dashboard = () => {
           size="small"
           sx={{ minWidth: 120 }}
         >
-          <MenuItem value="today">Today</MenuItem>
-          <MenuItem value="week">This Week</MenuItem>
-          <MenuItem value="month">This Month</MenuItem>
+          <MenuItem value="today">{t('dashboard.today')}</MenuItem>
+          <MenuItem value="week">{t('dashboard.thisWeek')}</MenuItem>
+          <MenuItem value="month">{t('dashboard.thisMonth')}</MenuItem>
         </Select>
         
         <Box flexGrow={1} />
@@ -587,7 +594,7 @@ const Dashboard = () => {
         <Grid container spacing={{ xs: 2, sm: 3 }} mb={3}>
           <Grid item xs={12}>
             <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
-              Financial Overview
+              {t('dashboard.financialOverview')}
             </Typography>
           </Grid>
           {financialWidgets.map((widget) => (
@@ -605,7 +612,7 @@ const Dashboard = () => {
         <Grid container spacing={{ xs: 2, sm: 3 }} mb={3}>
           <Grid item xs={12}>
             <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
-              Invoices Summary
+              {t('dashboard.invoicesSummary')}
             </Typography>
           </Grid>
           {invoiceWidgets.map((widget) => (

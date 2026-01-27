@@ -16,12 +16,14 @@ import { AccountCircle, Logout, Menu as MenuIcon } from '@mui/icons-material';
 import { useAuth } from '@hooks/useAuth';
 import { Sidebar, SIDEBAR_WIDTH } from '@components/common/Sidebar';
 import { NotificationMenu } from '@components/common/NotificationMenu';
+import { useTranslation } from 'react-i18next';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
 }
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = React.memo(({ children }) => {
+  const { t } = useTranslation();
   const { user, logout } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -100,7 +102,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = React.memo(({ chi
               fontSize: '1.125rem',
             }}
           >
-            Transportation Management System
+{t('common.appTitle', { defaultValue: 'Transportation Management System' })}
           </Typography>
 
           <Typography 

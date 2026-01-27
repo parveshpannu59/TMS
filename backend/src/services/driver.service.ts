@@ -17,6 +17,7 @@ interface CreateDriverData {
   emergencyContact: string;
   emergencyContactName: string;
   salary?: number;
+  notes?: string;
   bankAccount?: {
     accountNumber: string;
     ifscCode: string;
@@ -169,6 +170,7 @@ export class DriverService {
       currentLoadId: driver.currentLoadId,
       joiningDate: driver.joiningDate,
       salary: driver.salary,
+      notes: driver.notes,
       bankAccount: driver.bankAccount,
       documents: driver.documents,
       createdAt: driver.createdAt,

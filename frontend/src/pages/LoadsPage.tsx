@@ -45,6 +45,7 @@ import { driverApi, Driver } from '@/api/driver.api';
 import { useForm, Controller } from 'react-hook-form';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
+import { useTranslation } from 'react-i18next';
 
 const loadSchema = yup.object({
   origin: yup.object({
@@ -68,6 +69,7 @@ const loadSchema = yup.object({
   broker: yup.string().required('Broker is required'),
   weight: yup.number().optional(),
   commodity: yup.string().optional(),
+  notes: yup.string().optional(),
 });
 
 const statusColors: Record<string, 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'> = {
@@ -83,6 +85,7 @@ const statusColors: Record<string, 'default' | 'primary' | 'secondary' | 'error'
 };
 
 const LoadsPage: React.FC = () => {
+  const { t } = useTranslation();
   const [loads, setLoads] = useState<Load[]>([]);
   const [filteredLoads, setFilteredLoads] = useState<Load[]>([]);
   const [trucks, setTrucks] = useState<Truck[]>([]);
@@ -91,6 +94,9 @@ const LoadsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
   const [openAssignDialog, setOpenAssignDialog] = useState(false);
+  const [openNotesDialog, setOpenNotesDialog] = useState(false);
+  const [selectedNotes, setSelectedNotes] = useState<string>('');
+  const [notesTitle, setNotesTitle] = useState<string>('Notes');
   const [editingLoad, setEditingLoad] = useState<Load | null>(null);
   const [assigningLoad, setAssigningLoad] = useState<Load | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -103,6 +109,7 @@ const LoadsPage: React.FC = () => {
   const [cargoType, setCargoType] = useState('');
   const [cargoDescription, setCargoDescription] = useState('');
   const [loadType, setLoadType] = useState<'FTL' | 'LTL'>('FTL');
+  const [notes, setNotes] = useState('');
   
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -219,6 +226,7 @@ const LoadsPage: React.FC = () => {
       setCargoType(load.cargoType || '');
       setCargoDescription(load.cargoDescription || '');
       setLoadType(load.loadType as 'FTL' | 'LTL' || 'FTL');
+      setNotes((load as any).notes || load.internalNotes || '');
       reset({
         origin: {
           name: load.pickupLocation?.address || '',
@@ -249,6 +257,7 @@ const LoadsPage: React.FC = () => {
       setCargoType('');
       setCargoDescription('');
       setLoadType('FTL');
+      setNotes('');
       reset({
         origin: {
           name: '',
@@ -284,6 +293,7 @@ const LoadsPage: React.FC = () => {
     setCargoType('');
     setCargoDescription('');
     setLoadType('FTL');
+    setNotes('');
     reset();
   };
 
@@ -343,6 +353,7 @@ const LoadsPage: React.FC = () => {
         advancePaid: 0,
         fuelAdvance: 0,
         specialInstructions: '',
+        notes: notes || '',
       };
 
       if (editingLoad) {
@@ -430,10 +441,10 @@ const LoadsPage: React.FC = () => {
     }
   };
 
-  const columns: GridColDef[] = [
+  const columns: GridColDef[] = useMemo(() => [
     {
       field: 'loadNumber',
-      headerName: 'Load #',
+      headerName: t('loads.loadNumber'),
       flex: 0.8,
       minWidth: 100,
       renderCell: (params) => (
@@ -444,7 +455,7 @@ const LoadsPage: React.FC = () => {
     },
     {
       field: 'pickupLocation',
-      headerName: 'Origin',
+      headerName: t('loads.origin', { defaultValue: 'Origin' }),
       flex: 1.2,
       minWidth: 130,
       valueGetter: (params) => {
@@ -462,7 +473,7 @@ const LoadsPage: React.FC = () => {
     },
     {
       field: 'deliveryLocation',
-      headerName: 'Destination',
+      headerName: t('loads.destination', { defaultValue: 'Destination' }),
       flex: 1.2,
       minWidth: 130,
       valueGetter: (params) => {
@@ -480,21 +491,21 @@ const LoadsPage: React.FC = () => {
     },
     {
       field: 'pickupDate',
-      headerName: 'Pickup',
+      headerName: t('loads.pickupDate'),
       flex: 0.8,
       minWidth: 100,
       renderCell: (params) => new Date(params.value).toLocaleDateString(),
     },
     {
       field: 'deliveryDate',
-      headerName: 'Delivery',
+      headerName: t('loads.deliveryDate'),
       flex: 0.8,
       minWidth: 100,
       renderCell: (params) => new Date(params.value).toLocaleDateString(),
     },
     {
       field: 'status',
-      headerName: 'Status',
+      headerName: t('common.status'),
       flex: 1,
       minWidth: 120,
       renderCell: (params) => (
@@ -507,7 +518,7 @@ const LoadsPage: React.FC = () => {
     },
     {
       field: 'driverId',
-      headerName: 'Driver',
+      headerName: t('loads.driver', { defaultValue: 'Driver' }),
       flex: 1,
       minWidth: 120,
       renderCell: (params) =>
@@ -515,34 +526,83 @@ const LoadsPage: React.FC = () => {
           <Typography variant="body2">{params.value.name}</Typography>
         ) : (
           <Typography variant="body2" color="text.secondary">
-            Unassigned
+            {t('loads.unassigned', { defaultValue: 'Unassigned' })}
           </Typography>
         ),
     },
     {
       field: 'rate',
-      headerName: 'Rate',
+      headerName: t('loads.rate'),
       flex: 0.7,
       minWidth: 90,
       renderCell: (params) => `$${params.value.toLocaleString()}`,
     },
     {
       field: 'broker',
-      headerName: 'Broker',
+      headerName: t('loads.broker', { defaultValue: 'Broker' }),
       flex: 1,
       minWidth: 110,
     },
     {
+      field: 'notes',
+      headerName: t('common.notes'),
+      flex: 1.5,
+      minWidth: 150,
+      renderCell: (params) => {
+        if (!params || !params.row) {
+          return (
+            <Typography variant="body2" color="text.secondary" fontStyle="italic">
+              {t('common.noNotes')}
+            </Typography>
+          );
+        }
+        const notes = params.row.notes || params.row.internalNotes || (params.row as any).specialInstructions || '';
+        if (!notes) {
+          return (
+            <Typography variant="body2" color="text.secondary" fontStyle="italic">
+              {t('common.noNotes')}
+            </Typography>
+          );
+        }
+        const truncated = notes.length > 50 ? notes.substring(0, 50) + '...' : notes;
+        const hasMore = notes.length > 50;
+        return (
+          <Typography 
+            variant="body2" 
+            onClick={() => {
+              if (hasMore || notes) {
+                setSelectedNotes(notes);
+                setNotesTitle(`Notes - Load #${params.row.loadNumber || 'N/A'}`);
+                setOpenNotesDialog(true);
+              }
+            }}
+            sx={{ 
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              cursor: notes ? 'pointer' : 'default',
+              '&:hover': notes ? {
+                color: 'primary.main',
+                textDecoration: 'underline',
+              } : {},
+            }}
+          >
+            {truncated}
+          </Typography>
+        );
+      },
+    },
+    {
       field: 'actions',
       type: 'actions',
-      headerName: 'Actions',
+      headerName: t('common.actions'),
       width: 120,
       getActions: (params) => {
         const actions = [
           <GridActionsCellItem
             key="view"
             icon={<Visibility />}
-            label="View"
+            label={t('common.view')}
             onClick={() => handleOpenDialog(params.row as Load)}
           />,
         ];
@@ -553,7 +613,7 @@ const LoadsPage: React.FC = () => {
             <GridActionsCellItem
               key="assign"
               icon={<Assignment />}
-              label="Assign Driver"
+              label={t('loads.assignDriver')}
               onClick={() => handleOpenAssignDialog(params.row as Load)}
             />
           );
@@ -565,7 +625,7 @@ const LoadsPage: React.FC = () => {
             <GridActionsCellItem
               key="unassign"
               icon={<PendingActions />}
-              label="Unassign / Reassign"
+              label={t('loads.unassignReassign')}
               onClick={() => handleUnassignLoad(params.row as Load)}
               showInMenu
             />
@@ -576,14 +636,14 @@ const LoadsPage: React.FC = () => {
           <GridActionsCellItem
             key="edit"
             icon={<Edit />}
-            label="Edit"
+            label={t('common.edit')}
             onClick={() => handleOpenDialog(params.row as Load)}
             showInMenu
           />,
           <GridActionsCellItem
             key="delete"
             icon={<Delete />}
-            label="Delete"
+            label={t('common.delete')}
             onClick={() => handleDelete(params.row._id)}
             showInMenu
           />
@@ -592,7 +652,7 @@ const LoadsPage: React.FC = () => {
         return actions;
       },
     },
-  ];
+  ], [t]);
 
   return (
     <DashboardLayout>
@@ -622,11 +682,11 @@ const LoadsPage: React.FC = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 0.5 }}>
                 <LocalShipping sx={{ fontSize: { xs: 28, sm: 32 }, color: 'primary.main' }} />
                 <Typography variant="h4" fontWeight={700} sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}>
-                  Loads Management
+                  {t('loads.title')}
                 </Typography>
               </Box>
               <Typography variant="body2" color="text.secondary" sx={{ ml: { xs: 0, sm: '44px' } }}>
-                Manage your freight operations and track deliveries
+                {t('loads.subtitle', { defaultValue: 'Manage your freight operations and track deliveries' })}
               </Typography>
             </Box>
             <Button
@@ -645,7 +705,7 @@ const LoadsPage: React.FC = () => {
                 },
               }}
             >
-              Create Load
+              {t('loads.addLoad')}
             </Button>
           </Box>
         </Box>
@@ -689,7 +749,7 @@ const LoadsPage: React.FC = () => {
             <Grid container spacing={2} sx={{ mb: 3 }}>
             <Grid item xs={6} sm={6} md={3}>
               <StatsCard
-                title="Total Loads"
+                title={t('loads.totalLoads', { defaultValue: 'Total Loads' })}
                 value={stats.total}
                 icon={<Assignment />}
                 color={theme.palette.primary.main}
@@ -697,29 +757,29 @@ const LoadsPage: React.FC = () => {
             </Grid>
             <Grid item xs={6} sm={6} md={3}>
               <StatsCard
-                title="Booked"
+                title={t('loads.booked', { defaultValue: 'Booked' })}
                 value={stats.booked}
                 icon={<PendingActions />}
                 color={theme.palette.warning.main}
-                subtitle="Awaiting assignment"
+                subtitle={t('loads.awaitingAssignment', { defaultValue: 'Awaiting assignment' })}
               />
             </Grid>
             <Grid item xs={6} sm={6} md={3}>
               <StatsCard
-                title="In Transit"
+                title={t('loads.inTransit', { defaultValue: 'In Transit' })}
                 value={stats.inTransit}
                 icon={<LocalShipping />}
                 color={theme.palette.info.main}
-                subtitle="On the road"
+                subtitle={t('loads.onTheRoad', { defaultValue: 'On the road' })}
               />
             </Grid>
             <Grid item xs={6} sm={6} md={3}>
               <StatsCard
-                title="Completed"
+                title={t('loads.completed', { defaultValue: 'Completed' })}
                 value={stats.completed}
                 icon={<CheckCircle />}
                 color={theme.palette.success.main}
-                subtitle={`$${stats.totalRevenue.toLocaleString()} revenue`}
+                subtitle={`$${stats.totalRevenue.toLocaleString()} ${t('loads.revenue', { defaultValue: 'revenue' })}`}
               />
             </Grid>
           </Grid>
@@ -728,7 +788,7 @@ const LoadsPage: React.FC = () => {
           {/* Search and Filters */}
           <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
             <TextField
-              placeholder="Search by load#, origin, destination, broker..."
+              placeholder={t('loads.searchPlaceholder', { defaultValue: 'Search by load#, origin, destination, broker...' })}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputProps={{
@@ -744,29 +804,29 @@ const LoadsPage: React.FC = () => {
             
             <TextField
               select
-              label="Status"
+              label={t('common.status')}
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               sx={{ minWidth: 150 }}
               size="small"
             >
-              <MenuItem value="all">All Status</MenuItem>
+              <MenuItem value="all">{t('loads.allStatus', { defaultValue: 'All Status' })}</MenuItem>
               <MenuItem value="booked">Booked</MenuItem>
               <MenuItem value="assigned">Assigned</MenuItem>
-              <MenuItem value="in_transit">In Transit</MenuItem>
+              <MenuItem value="in_transit">{t('loads.inTransit', { defaultValue: 'In Transit' })}</MenuItem>
               <MenuItem value="arrived_shipper">Arrived Shipper</MenuItem>
               <MenuItem value="loading">Loading</MenuItem>
               <MenuItem value="departed_shipper">Departed Shipper</MenuItem>
               <MenuItem value="arrived_receiver">Arrived Receiver</MenuItem>
               <MenuItem value="unloading">Unloading</MenuItem>
               <MenuItem value="delivered">Delivered</MenuItem>
-              <MenuItem value="completed">Completed</MenuItem>
+              <MenuItem value="completed">{t('loads.completed', { defaultValue: 'Completed' })}</MenuItem>
               <MenuItem value="cancelled">Cancelled</MenuItem>
             </TextField>
 
             <TextField
               select
-              label="Priority"
+              label={t('loads.priority', { defaultValue: 'Priority' })}
               value={priorityFilter}
               onChange={(e) => setPriorityFilter(e.target.value)}
               sx={{ minWidth: 150 }}
@@ -815,7 +875,7 @@ const LoadsPage: React.FC = () => {
             <EmptyState
               icon={<Assignment />}
               title={loads.length === 0 ? "No Loads Yet" : "No Results Found"}
-              description={loads.length === 0 ? "Get started by creating your first load. Add origin, destination, and trip details to begin managing your freight." : "Try adjusting your search or filters"}
+              description={loads.length === 0 ? t('loads.noLoadsDescription', { defaultValue: 'Get started by creating your first load. Add origin, destination, and trip details to begin managing your freight.' }) : t('common.tryAdjustingFilters')}
               actionLabel={loads.length === 0 ? "Create First Load" : undefined}
               onAction={loads.length === 0 ? () => handleOpenDialog() : undefined}
             />
@@ -1259,6 +1319,25 @@ const LoadsPage: React.FC = () => {
                     </Grid>
                   </Grid>
                 </Box>
+
+                {/* Notes Section */}
+                <Box>
+                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                    Additional Notes
+                  </Typography>
+                  <Divider sx={{ mb: 2 }} />
+                  <TextField
+                    label="Notes (Optional)"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    multiline
+                    rows={4}
+                    disabled={isSubmitting}
+                    fullWidth
+                    placeholder="Add any additional notes, customer preferences, delivery requirements, or important information about this load..."
+                    helperText="Use this field to record customer communication, special delivery requirements, or any other relevant information"
+                  />
+                </Box>
               </Box>
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -1414,6 +1493,32 @@ const LoadsPage: React.FC = () => {
               startIcon={<Assignment />}
             >
               Assign Load
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Notes View Dialog */}
+        <Dialog open={openNotesDialog} onClose={() => setOpenNotesDialog(false)} maxWidth="sm" fullWidth>
+          <DialogTitle>{notesTitle}</DialogTitle>
+          <DialogContent>
+            <TextField
+              fullWidth
+              multiline
+              rows={10}
+              value={selectedNotes}
+              disabled
+              sx={{
+                mt: 1,
+                '& .MuiInputBase-input': {
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                },
+              }}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenNotesDialog(false)} variant="contained">
+              Close
             </Button>
           </DialogActions>
         </Dialog>
