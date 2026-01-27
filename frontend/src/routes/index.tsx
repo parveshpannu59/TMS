@@ -57,6 +57,29 @@ const SettingsPage = lazy(() => import('@pages/SettingsPage'));
 const ActivityHistoryPage = lazy(() => import('@pages/ActivityHistoryPage'));
 const DriverDashboard = lazy(() => import('@pages/DriverDashboard'));
 const PendingAssignmentsPage = lazy(() => import('@pages/driver/PendingAssignmentsPage'));
+import DriverMobileShell from '../layouts/mobile/DriverMobileShell';
+import DriverDashboardMobile from '../pages/driver/DriverDashboardMobile';
+import DriverLoginMobile from '../pages/driver/DriverLoginMobile';
+import DriverSettingsMobile from '../pages/driver/DriverSettingsMobile';
+import { isDriverAuthenticated } from '../utils/mobileAuth';
+
+function roleIsDriver() {
+  try {
+    const raw = localStorage.getItem('driver_mobile_auth_v1');
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    const role = data?.role || data?.user?.role || data?.user?.userType;
+    return role === 'driver';
+  } catch {
+    return false;
+  }
+}
+
+function DriverMobileGuard({ children }: { children: JSX.Element }) {
+  const ok = isDriverAuthenticated();
+  if (!ok) return <Navigate to="/driver/login" replace />;
+  return children;
+}
 
 export const AppRoutes = () => {
   return (
@@ -66,9 +89,13 @@ export const AppRoutes = () => {
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
+            roleIsDriver() ? (
+              <Navigate to="/driver/mobile/dashboard" replace />
+            ) : (
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            )
           }
         />
         <Route
@@ -159,7 +186,24 @@ export const AppRoutes = () => {
             </ProtectedRoute>
           }
         />
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
+        {/* Mobile-only driver routes */}
+        <Route path="/driver/login" element={<DriverLoginMobile />} />
+        <Route
+          path="/driver/mobile"
+          element={
+            <DriverMobileGuard>
+              <DriverMobileShell />
+            </DriverMobileGuard>
+          }
+        >
+          <Route index element={<Navigate to="/driver/mobile/dashboard" replace />} />
+          <Route path="dashboard" element={<DriverDashboardMobile />} />
+          <Route path="trips" element={<div className="dm-content">Trips (mobile)</div>} />
+          <Route path="messages" element={<div className="dm-content">Messages (mobile)</div>} />
+          <Route path="settings" element={<DriverSettingsMobile />} />
+        </Route>
+        <Route path="/" element={roleIsDriver() ? <Navigate to="/driver/mobile/dashboard" replace /> : <Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Suspense>

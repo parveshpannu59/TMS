@@ -25,6 +25,14 @@ export default defineConfig({
       '@theme': path.resolve(__dirname, './src/theme'),
     },
   },
+  optimizeDeps: {
+    include: [
+      'react', 'react-dom', 'react-router-dom',
+      '@mui/material', '@mui/icons-material', '@mui/lab',
+      '@emotion/react', '@emotion/styled'
+    ],
+    force: true,
+  },
   server: {
     port: 3000,
     open: true,
@@ -43,6 +51,7 @@ export default defineConfig({
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
           mui: ['@mui/material', '@mui/icons-material'],
+          muiLab: ['@mui/lab'],
         },
       },
     },
