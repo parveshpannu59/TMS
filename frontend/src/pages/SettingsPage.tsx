@@ -445,10 +445,6 @@ import {
   MenuItem,
   Alert,
   CircularProgress,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Chip,
   Tooltip,
   InputAdornment,
@@ -462,8 +458,6 @@ import {
   IntegrationInstructions,
   Save,
   PhotoCamera,
-  Visibility,
-  VisibilityOff,
   CheckCircle,
   Error as ErrorIcon,
   Send,
@@ -477,6 +471,7 @@ import { getApiOrigin } from '@/api/client';
 import { settingsApi } from '@/api/settings.api';
 import type { UserSettings, PasswordChange } from '@/api/settings.api';
 import { useTranslation } from 'react-i18next';
+import { SettingsAppearanceSection, SettingsPasswordDialog } from '@/components/settings';
 
 const SettingsPage: React.FC = () => {
   const { mode, toggleTheme } = useThemeMode();
@@ -552,8 +547,10 @@ const SettingsPage: React.FC = () => {
 
   const [originalSettings, setOriginalSettings] = useState<UserSettings>(settings);
 
-  // Load settings on mount
+  const settingsMountedRef = React.useRef(false);
   useEffect(() => {
+    if (settingsMountedRef.current) return;
+    settingsMountedRef.current = true;
     loadSettings();
   }, []);
 
@@ -899,120 +896,18 @@ const SettingsPage: React.FC = () => {
           <Grid item xs={12} md={9}>
             <Card>
               <CardContent sx={{ p: 3 }}>
-                {/* Appearance Settings */}
                 {activeSection === 'appearance' && (
-                  <Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                      <Typography variant="h6">
-                        {t('settings.appearance')} {t('settings.title')}
-                      </Typography>
-                    </Box>
-                    <Divider sx={{ my: 2 }} />
-                    
-                    <List>
-                      <ListItem>
-                        <ListItemText
-                          primary={t('settings.theme')}
-                          secondary={i18n.language === 'es' ? 'Elija entre tema claro y oscuro' : 'Choose between light and dark theme'}
-                        />
-                        <ListItemSecondaryAction>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography variant="body2" color="text.secondary">
-                              {settings.theme === 'dark' ? 'Dark' : 'Light'}
-                            </Typography>
-                            <Switch
-                              checked={settings.theme === 'dark'}
-                              onChange={(e) => setSettings({ ...settings, theme: e.target.checked ? 'dark' : 'light' })}
-                              color="primary"
-                            />
-                          </Box>
-                        </ListItemSecondaryAction>
-                      </ListItem>
-                      
-                      <Divider component="li" />
-                      
-                      <ListItem>
-                        <ListItemText 
-                          primary={t('settings.language')} 
-                          secondary={t('settings.languageDescription')}
-                        />
-                        <ListItemSecondaryAction>
-                          <TextField
-                            select
-                            size="small"
-                            value={settings.language}
-                            onChange={async (e) => {
-                              const newLanguage = e.target.value;
-                              setSettings({ ...settings, language: newLanguage });
-                              // Change i18n language immediately
-                              await i18n.changeLanguage(newLanguage);
-                              // Save to localStorage
-                              localStorage.setItem('i18nextLng', newLanguage);
-                            }}
-                            sx={{ minWidth: 150 }}
-                          >
-                            <MenuItem value="en">English</MenuItem>
-                            <MenuItem value="es">Español</MenuItem>
-                          </TextField>
-                        </ListItemSecondaryAction>
-                      </ListItem>
-                      
-                      <Divider component="li" />
-                      
-                      <ListItem>
-                        <ListItemText 
-                          primary={t('settings.dateFormat')} 
-                          secondary={t('settings.dateFormatDescription')}
-                        />
-                        <ListItemSecondaryAction>
-                          <TextField
-                            select
-                            size="small"
-                            value={settings.dateFormat}
-                            onChange={(e) => setSettings({ ...settings, dateFormat: e.target.value })}
-                            sx={{ minWidth: 150 }}
-                          >
-                            <MenuItem value="MM/DD/YYYY">MM/DD/YYYY</MenuItem>
-                            <MenuItem value="DD/MM/YYYY">DD/MM/YYYY</MenuItem>
-                            <MenuItem value="YYYY-MM-DD">YYYY-MM-DD</MenuItem>
-                            <MenuItem value="DD-MMM-YYYY">DD-MMM-YYYY</MenuItem>
-                          </TextField>
-                        </ListItemSecondaryAction>
-                      </ListItem>
-                      
-                      <Divider component="li" />
-                      
-                      <ListItem>
-                        <ListItemText 
-                          primary={t('settings.timeFormat')} 
-                          secondary={t('settings.timeFormatDescription')}
-                        />
-                        <ListItemSecondaryAction>
-                          <TextField
-                            select
-                            size="small"
-                            value={settings.timeFormat}
-                            onChange={(e) => setSettings({ ...settings, timeFormat: e.target.value as '12h' | '24h' })}
-                            sx={{ minWidth: 150 }}
-                          >
-                            <MenuItem value="12h">12 Hour (AM/PM)</MenuItem>
-                            <MenuItem value="24h">24 Hour</MenuItem>
-                          </TextField>
-                        </ListItemSecondaryAction>
-                      </ListItem>
-                    </List>
-                    
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
-                      <Button
-                        variant="contained"
-                        startIcon={saving ? <CircularProgress size={20} /> : <Save />}
-                        onClick={() => handleSaveSection('appearance')}
-                        disabled={saving}
-                      >
-                        {t('settings.saveAppearanceSettings')}
-                      </Button>
-                    </Box>
-                  </Box>
+                  <SettingsAppearanceSection
+                    settings={settings}
+                    onSettingsChange={(s) => setSettings({ ...settings, ...s })}
+                    saving={saving}
+                    onSave={() => handleSaveSection('appearance')}
+                    i18nLanguage={i18n.language}
+                    onLanguageChange={async (lang) => {
+                      await i18n.changeLanguage(lang);
+                      localStorage.setItem('i18nextLng', lang);
+                    }}
+                  />
                 )}
 
                 {/* Notification Settings */}
@@ -1757,63 +1652,17 @@ const SettingsPage: React.FC = () => {
           </Grid>
         </Grid>
 
-        {/* Password Change Dialog */}
-        <Dialog open={passwordDialog} onClose={() => setPasswordDialog(false)} maxWidth="sm" fullWidth>
-          <DialogTitle>Change Password</DialogTitle>
-          <DialogContent>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-              <TextField
-                label="Current Password"
-                type={showPassword ? 'text' : 'password'}
-                value={passwordData.currentPassword}
-                onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                error={!!passwordErrors.currentPassword}
-                helperText={passwordErrors.currentPassword}
-                fullWidth
-                InputProps={{
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
-                        {showPassword ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
-              />
-              
-              <TextField
-                label="New Password"
-                type={showPassword ? 'text' : 'password'}
-                value={passwordData.newPassword}
-                onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                error={!!passwordErrors.newPassword}
-                helperText={passwordErrors.newPassword || "Must be 8+ characters with uppercase, lowercase, and number"}
-                fullWidth
-              />
-              
-              <TextField
-                label="Confirm New Password"
-                type={showPassword ? 'text' : 'password'}
-                value={passwordData.confirmPassword}
-                onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                error={!!passwordErrors.confirmPassword}
-                helperText={passwordErrors.confirmPassword}
-                fullWidth
-              />
-            </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setPasswordDialog(false)}>Cancel</Button>
-            <Button
-              variant="contained"
-              onClick={handlePasswordChange}
-              disabled={saving}
-              startIcon={saving ? <CircularProgress size={20} /> : <Lock />}
-            >
-              Change Password
-            </Button>
-          </DialogActions>
-        </Dialog>
+        <SettingsPasswordDialog
+          open={passwordDialog}
+          onClose={() => setPasswordDialog(false)}
+          passwordData={passwordData}
+          onPasswordDataChange={(d) => setPasswordData({ ...passwordData, ...d })}
+          passwordErrors={passwordErrors}
+          saving={saving}
+          onSubmit={handlePasswordChange}
+          showPassword={showPassword}
+          onShowPasswordToggle={() => setShowPassword(!showPassword)}
+        />
       </Box>
     </DashboardLayout>
   );

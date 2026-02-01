@@ -117,7 +117,6 @@ const CreateLoadDialog: React.FC<CreateLoadDialogProps> = ({ open, onClose, onSu
       setLoading(true);
       setError(null);
 
-      console.log('Submitting load data:', formData);
 
       // Validation
       if (!formData.customerName.trim()) {
@@ -164,9 +163,7 @@ const CreateLoadDialog: React.FC<CreateLoadDialogProps> = ({ open, onClose, onSu
         },
       };
 
-      console.log('Submitting with data:', submitData);
       await loadApi.createLoad(submitData);
-      console.log('Load created successfully');
       onSuccess();
       handleClose();
     } catch (err: any) {

@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { loadApi } from '@/api/all.api';
 import { StartTripDialog } from '@/components/driver/StartTripDialog';
+import { DriverFormDialog } from '@/components/driver/DriverFormDialog';
 import { ShipperCheckInDialog } from '@/components/driver/ShipperCheckInDialog';
 import { LoadOutDialog } from '@/components/driver/LoadOutDialog';
 import { ReceiverOffloadDialog } from '@/components/driver/ReceiverOffloadDialog';
 import { EndTripDialog } from '@/components/driver/EndTripDialog';
+import { LogExpenseDialog } from '@/components/driver/LogExpenseDialog';
+import { ReportDelayDialog } from '@/components/driver/ReportDelayDialog';
 import { SOSButton } from '@/components/driver/SOSButton';
+import { useNavigate } from 'react-router-dom';
 import type { Load } from '@/types/all.types';
 import '../../layouts/mobile/mobile.css';
 
@@ -26,12 +30,14 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function DriverDashboardMobile() {
+  const navigate = useNavigate();
   const [online, setOnline] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
   const [loads, setLoads] = useState<Load[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [startTripDialogOpen, setStartTripDialogOpen] = useState(false);
+  const [driverFormDialogOpen, setDriverFormDialogOpen] = useState(false);
   const [shipperCheckInDialogOpen, setShipperCheckInDialogOpen] = useState(false);
   const [loadOutDialogOpen, setLoadOutDialogOpen] = useState(false);
   const [receiverOffloadDialogOpen, setReceiverOffloadDialogOpen] = useState(false);
@@ -40,8 +46,15 @@ export default function DriverDashboardMobile() {
   const lastLocationSentRef = useRef<number>(0);
   const [scanPodPhoto, setScanPodPhoto] = useState<File | null>(null);
   const scanPodInputRef = useRef<HTMLInputElement>(null);
+  const [logExpenseOpen, setLogExpenseOpen] = useState(false);
+  const [logExpenseCategory, setLogExpenseCategory] = useState('fuel');
+  const [reportDelayOpen, setReportDelayOpen] = useState(false);
+  const [tripExpenses, setTripExpenses] = useState<{ expenses: any[]; summary: { total: number; fuel: number; tolls: number; other: number } } | null>(null);
 
+  const fetchingLoadsRef = useRef(false);
   const fetchLoads = useCallback(async () => {
+    if (fetchingLoadsRef.current) return;
+    fetchingLoadsRef.current = true;
     try {
       setLoading(true);
       const assigned = await loadApi.getMyAssignedLoads();
@@ -52,6 +65,7 @@ export default function DriverDashboardMobile() {
       setLoads([]);
     } finally {
       setLoading(false);
+      fetchingLoadsRef.current = false;
     }
   }, []);
 
@@ -107,6 +121,20 @@ export default function DriverDashboardMobile() {
     return () => clearTimeout(t);
   }, [toast]);
 
+  const fetchTripExpenses = useCallback(async () => {
+    if (!activeLoad?.id) return;
+    try {
+      const data = await loadApi.getLoadExpenses(activeLoad.id || (activeLoad as any)._id);
+      setTripExpenses(data);
+    } catch {
+      setTripExpenses(null);
+    }
+  }, [activeLoad?.id]);
+
+  useEffect(() => {
+    if (activeLoad?.id) fetchTripExpenses();
+  }, [activeLoad?.id, fetchTripExpenses]);
+
   const handleLoadIn = useCallback(async () => {
     if (!activeLoad || activeLoad.status !== 'shipper_check_in') return;
     try {
@@ -118,6 +146,12 @@ export default function DriverDashboardMobile() {
       setToast(err?.message || 'Failed to confirm load in');
     }
   }, [activeLoad, fetchLoads]);
+
+  const handleOpenEndTrip = useCallback(() => {
+    vibrate(30);
+    fetchTripExpenses();
+    setEndTripDialogOpen(true);
+  }, [fetchTripExpenses]);
 
   const handleReceiverCheckIn = useCallback(async () => {
     if (!activeLoad) return;
@@ -134,8 +168,12 @@ export default function DriverDashboardMobile() {
   const nextAction = useMemo(() => {
     if (!displayLoad) return null;
     const s = displayLoad.status;
-    if (['assigned', 'trip_accepted'].includes(s))
+    const hasForm = !!(displayLoad as any).driverFormDetails;
+    if (['assigned', 'trip_accepted'].includes(s)) {
+      if (!hasForm)
+        return { label: 'Fill Trip Form', fn: () => { vibrate(30); setDriverFormDialogOpen(true); } };
       return { label: 'Start Trip', fn: () => { vibrate(30); setStartTripDialogOpen(true); } };
+    }
     if (s === 'trip_started')
       return { label: 'Shipper Check-in', fn: () => { vibrate(30); setShipperCheckInDialogOpen(true); } };
     if (s === 'shipper_check_in')
@@ -147,9 +185,9 @@ export default function DriverDashboardMobile() {
     if (s === 'receiver_check_in')
       return { label: 'Offload (POD)', fn: () => { vibrate(30); setReceiverOffloadDialogOpen(true); } };
     if (s === 'receiver_offload')
-      return { label: 'End Trip', fn: () => { vibrate(30); setEndTripDialogOpen(true); } };
+      return { label: 'End Trip', fn: handleOpenEndTrip };
     return null;
-  }, [displayLoad, handleLoadIn, handleReceiverCheckIn]);
+  }, [displayLoad, handleLoadIn, handleReceiverCheckIn, handleOpenEndTrip]);
 
   const primaryAction = useMemo(() => {
     if (nextAction) return { label: nextAction.label, onClick: nextAction.fn };
@@ -176,6 +214,15 @@ export default function DriverDashboardMobile() {
         <div className="dm-card" style={{ display: 'grid', gap: 12, border: '2px solid rgba(52,211,153,0.4)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--dm-muted)' }}>ACCEPTED TRIP</span>
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); navigate(`/driver/mobile/load/${acceptedLoad.id || (acceptedLoad as any)._id}`); }}
+              onKeyDown={(e) => e.key === 'Enter' && navigate(`/driver/mobile/load/${acceptedLoad.id || (acceptedLoad as any)._id}`)}
+              style={{ fontSize: 12, color: 'var(--dm-accent)', cursor: 'pointer' }}
+            >
+              View details →
+            </span>
             <span className="dm-chip" style={{ background: 'rgba(52,211,153,0.2)', color: '#34d399' }}>Ready to Start</span>
           </div>
           <div>
@@ -199,10 +246,17 @@ export default function DriverDashboardMobile() {
             </div>
             <button
               className="dm-btn"
-              onClick={() => { vibrate(30); setStartTripDialogOpen(true); }}
+              onClick={() => {
+                vibrate(30);
+                if ((acceptedLoad as any).driverFormDetails) {
+                  setStartTripDialogOpen(true);
+                } else {
+                  setDriverFormDialogOpen(true);
+                }
+              }}
               style={{ background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' }}
             >
-              Start Trip
+              {(acceptedLoad as any).driverFormDetails ? 'Start Trip' : 'Fill Trip Form'}
             </button>
           </div>
         </div>
@@ -212,6 +266,15 @@ export default function DriverDashboardMobile() {
         <div className="dm-card" style={{ display: 'grid', gap: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ fontWeight: 700 }}>Active Trip</div>
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); navigate(`/driver/mobile/load/${activeLoad.id || (activeLoad as any)._id}`); }}
+              onKeyDown={(e) => e.key === 'Enter' && navigate(`/driver/mobile/load/${activeLoad.id || (activeLoad as any)._id}`)}
+              style={{ fontSize: 12, color: 'var(--dm-accent)', cursor: 'pointer' }}
+            >
+              View details →
+            </span>
             <span className="dm-chip">{STATUS_LABELS[activeLoad.status] || activeLoad.status}</span>
           </div>
           <div>
@@ -327,13 +390,66 @@ export default function DriverDashboardMobile() {
         </div>
       )}
 
+      {activeLoad && (
+        <div className="dm-card" style={{ display: 'grid', gap: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontWeight: 700 }}>Trip Expenses</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--dm-accent)' }}>
+              ₹{tripExpenses?.summary?.total?.toLocaleString() || '0'}
+            </div>
+          </div>
+          {(tripExpenses?.expenses?.length ?? 0) > 0 ? (
+            <div style={{ display: 'grid', gap: 6 }}>
+              {tripExpenses?.expenses?.slice(0, 5).map((e: any) => (
+                <div key={e._id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ textTransform: 'capitalize' }}>{e.category}</span>
+                  <span>₹{e.amount?.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: 'var(--dm-muted)' }}>Log fuel, toll, etc. as you go</div>
+          )}
+          <div className="dm-row">
+            <button className="dm-chip" onClick={() => { setLogExpenseCategory('fuel'); setLogExpenseOpen(true); vibrate(20); }}>Log Fuel</button>
+            <button className="dm-chip" onClick={() => { setLogExpenseCategory('toll'); setLogExpenseOpen(true); vibrate(20); }}>Log Toll</button>
+            <button className="dm-chip" onClick={() => { setLogExpenseCategory('other'); setLogExpenseOpen(true); vibrate(20); }}>Other</button>
+          </div>
+        </div>
+      )}
+
       <div className="dm-card" style={{ display: 'grid', gap: 10 }}>
         <div style={{ fontWeight: 700 }}>Shortcuts</div>
         <div className="dm-row">
           <button className="dm-chip" onClick={() => setToast('Calling dispatch…')}>Call Dispatch</button>
-          <button className="dm-chip" onClick={() => setToast('Delay reported')}>Report Delay</button>
+          <button
+            className="dm-chip"
+            onClick={() => {
+              vibrate(20);
+              if (displayLoad) {
+                setReportDelayOpen(true);
+              } else {
+                setToast('No active load');
+              }
+            }}
+          >
+            Report Delay
+          </button>
         </div>
       </div>
+
+      {displayLoad && (
+        <ReportDelayDialog
+          open={reportDelayOpen}
+          onClose={() => setReportDelayOpen(false)}
+          load={ensureLoadId(displayLoad)}
+          onSuccess={() => {
+            setReportDelayOpen(false);
+            fetchLoads();
+            setToast('Delay reported');
+          }}
+        />
+      )}
 
       {displayLoad && (
         <SOSButton
@@ -358,12 +474,24 @@ export default function DriverDashboardMobile() {
       )}
 
       {acceptedLoad && (
+        <>
+          <DriverFormDialog
+            open={driverFormDialogOpen}
+            onClose={() => setDriverFormDialogOpen(false)}
+            load={ensureLoadId(acceptedLoad)}
+            onSuccess={() => {
+              setDriverFormDialogOpen(false);
+              fetchLoads();
+              setToast('Trip form submitted!');
+            }}
+          />
         <StartTripDialog
           open={startTripDialogOpen}
           onClose={() => setStartTripDialogOpen(false)}
           load={ensureLoadId(acceptedLoad)}
           onSuccess={() => { setStartTripDialogOpen(false); fetchLoads(); setToast('Trip started!'); }}
         />
+        </>
       )}
 
       {activeLoad && (
@@ -387,11 +515,19 @@ export default function DriverDashboardMobile() {
             onSuccess={() => { setReceiverOffloadDialogOpen(false); setScanPodPhoto(null); fetchLoads(); setToast('Offload complete!'); }}
             initialPodPhoto={scanPodPhoto}
           />
+          <LogExpenseDialog
+            open={logExpenseOpen}
+            onClose={() => setLogExpenseOpen(false)}
+            load={ensureLoadId(activeLoad)}
+            onSuccess={() => { setLogExpenseOpen(false); fetchTripExpenses(); fetchLoads(); setToast('Expense logged!'); }}
+            defaultCategory={logExpenseCategory}
+          />
           <EndTripDialog
             open={endTripDialogOpen}
             onClose={() => setEndTripDialogOpen(false)}
             load={ensureLoadId(activeLoad)}
             onSuccess={() => { setEndTripDialogOpen(false); fetchLoads(); setToast('Trip ended!'); }}
+            loadExpenses={tripExpenses}
           />
         </>
       )}

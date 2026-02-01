@@ -1,14 +1,11 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { DashboardWidget } from '@/types/dashboard.types';
 import { dashboardApi } from '@/api/dashboardApi';
 
 export const useDashboardLayout = () => {
   const [layout, setLayout] = useState<DashboardWidget[]>([]);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadLayout();
-  }, []);
+  const mountedRef = useRef(false);
 
   const loadLayout = async () => {
     try {
@@ -16,11 +13,17 @@ export const useDashboardLayout = () => {
       const widgets = await dashboardApi.getUserWidgets();
       setLayout(widgets);
     } catch (error) {
-      console.error('Failed to load layout:', error);
+      // Load layout error
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (mountedRef.current) return;
+    mountedRef.current = true;
+    loadLayout();
+  }, []);
 
   const updateLayout = useCallback(async (newLayout: DashboardWidget[]) => {
     try {

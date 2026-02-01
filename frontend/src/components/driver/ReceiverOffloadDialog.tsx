@@ -174,6 +174,7 @@ export const ReceiverOffloadDialog: React.FC<ReceiverOffloadDialogProps> = ({
           <FormControlLabel
             control={
               <Checkbox
+                id="receiver-offload-bol-acknowledged"
                 checked={bolAcknowledged}
                 onChange={(e) => setBolAcknowledged(e.target.checked)}
                 required

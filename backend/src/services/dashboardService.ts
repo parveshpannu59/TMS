@@ -474,10 +474,23 @@ export class DashboardService {
       companyId,
       completedAt: { $gte: startDate, $lte: endDate },
       status: 'completed',
-    }).lean();
+    })
+      .select('loadNumber documents shipperLoadOutDetails receiverOffloadDetails')
+      .lean();
 
     const bolCount = loads.filter((load: any) => load.documents?.bol || load.shipperLoadOutDetails?.bolDocument).length;
     const podCount = loads.filter((load: any) => load.documents?.pod || load.receiverOffloadDetails?.podDocument || load.receiverOffloadDetails?.podPhoto).length;
+
+    const documentList = loads.map((load: any) => {
+      const bolUrl = load.documents?.bol || load.shipperLoadOutDetails?.bolDocument || null;
+      const podUrl = load.documents?.pod || load.receiverOffloadDetails?.podDocument || load.receiverOffloadDetails?.podPhoto || null;
+      return {
+        loadNumber: load.loadNumber,
+        loadId: (load as any)._id?.toString(),
+        bolUrl,
+        podUrl,
+      };
+    }).filter((d: { bolUrl: string | null; podUrl: string | null }) => d.bolUrl || d.podUrl);
 
     return {
       totalLoads: loads.length,
@@ -485,6 +498,7 @@ export class DashboardService {
       podDocuments: podCount,
       missingBol: loads.length - bolCount,
       missingPod: loads.length - podCount,
+      documentList,
     };
   }
 

@@ -22,6 +22,12 @@ router.get(
   LoadController.getLoads
 );
 
+// Get load expenses (Driver, Owner, Dispatcher)
+router.get(
+  '/:id/expenses',
+  LoadController.getLoadExpenses
+);
+
 // Get single load (all roles)
 router.get(
   '/:id',
@@ -148,6 +154,26 @@ router.post(
   '/:id/update-location',
   authorize(UserRole.DRIVER),
   LoadController.updateLocation
+);
+
+// Report delay (Driver)
+router.post(
+  '/:id/report-delay',
+  authorize(UserRole.DRIVER),
+  LoadController.reportDelay
+);
+
+// Log expense during trip (Driver)
+router.post(
+  '/:id/expenses',
+  authorize(UserRole.DRIVER),
+  LoadController.addExpense
+);
+
+// Get load expenses
+router.get(
+  '/:id/expenses',
+  LoadController.getLoadExpenses
 );
 
 // SOS/Emergency notification (Driver)

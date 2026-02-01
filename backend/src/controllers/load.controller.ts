@@ -11,6 +11,7 @@ import { ApiError } from '../utils/ApiError';
 import { notifyLoadAssigned } from '../utils/notificationHelper';
 import Notification from '../models/Notification';
 import AssignmentService from '../services/assignment.service';
+import Expense from '../models/Expense';
 
 export class LoadController {
   // Get loads assigned to current driver
@@ -851,9 +852,10 @@ export class LoadController {
     const userId = req.user!.id;
 
     let query: any = { _id: id };
+    let driverProfile: { _id: { toString: () => string } } | null = null;
     if (req.user?.role === 'driver') {
-      const driver = await Driver.findOne({ userId }).select('_id').lean();
-      if (driver) query.driverId = driver._id.toString();
+      driverProfile = await Driver.findOne({ userId }).select('_id').lean();
+      if (driverProfile) query.driverId = driverProfile._id.toString();
       else throw ApiError.notFound('Driver profile not found');
     } else {
       query.companyId = req.user?.companyId ?? req.user?.id;
@@ -868,8 +870,10 @@ export class LoadController {
     if (load.status !== LoadStatus.TRIP_STARTED && load.status !== LoadStatus.SHIPPER_CHECK_IN) {
       throw ApiError.badRequest('Can only check in at shipper after trip is started');
     }
-    
-    if (load.driverId !== userId && load.driverId?.toString() !== userId) {
+    if (req.user?.role !== 'driver') {
+      throw ApiError.forbidden('Only the assigned driver can perform this action');
+    }
+    if (!driverProfile || load.driverId?.toString() !== driverProfile._id.toString()) {
       throw ApiError.forbidden('Only the assigned driver can perform this action');
     }
     
@@ -903,9 +907,10 @@ export class LoadController {
     const userId = req.user!.id;
 
     let query: any = { _id: id };
+    let driverProfile: { _id: { toString: () => string } } | null = null;
     if (req.user?.role === 'driver') {
-      const driver = await Driver.findOne({ userId }).select('_id').lean();
-      if (driver) query.driverId = driver._id.toString();
+      driverProfile = await Driver.findOne({ userId }).select('_id').lean();
+      if (driverProfile) query.driverId = driverProfile._id.toString();
       else throw ApiError.notFound('Driver profile not found');
     } else {
       query.companyId = req.user?.companyId ?? req.user?.id;
@@ -920,8 +925,10 @@ export class LoadController {
     if (load.status !== LoadStatus.SHIPPER_CHECK_IN) {
       throw ApiError.badRequest('Can only mark load in after check-in');
     }
-    
-    if (load.driverId !== userId && load.driverId?.toString() !== userId) {
+    if (req.user?.role !== 'driver') {
+      throw ApiError.forbidden('Only the assigned driver can perform this action');
+    }
+    if (!driverProfile || load.driverId?.toString() !== driverProfile._id.toString()) {
       throw ApiError.forbidden('Only the assigned driver can perform this action');
     }
     
@@ -949,9 +956,10 @@ export class LoadController {
     const userId = req.user!.id;
 
     let query: any = { _id: id };
+    let driverProfile: { _id: { toString: () => string } } | null = null;
     if (req.user?.role === 'driver') {
-      const driver = await Driver.findOne({ userId }).select('_id').lean();
-      if (driver) query.driverId = driver._id.toString();
+      driverProfile = await Driver.findOne({ userId }).select('_id').lean();
+      if (driverProfile) query.driverId = driverProfile._id.toString();
       else throw ApiError.notFound('Driver profile not found');
     } else {
       query.companyId = req.user?.companyId ?? req.user?.id;
@@ -966,8 +974,10 @@ export class LoadController {
     if (load.status !== LoadStatus.SHIPPER_LOAD_IN) {
       throw ApiError.badRequest('Can only mark load out after load in');
     }
-    
-    if (load.driverId !== userId && load.driverId?.toString() !== userId) {
+    if (req.user?.role !== 'driver') {
+      throw ApiError.forbidden('Only the assigned driver can perform this action');
+    }
+    if (!driverProfile || load.driverId?.toString() !== driverProfile._id.toString()) {
       throw ApiError.forbidden('Only the assigned driver can perform this action');
     }
     
@@ -1000,9 +1010,10 @@ export class LoadController {
     const userId = req.user!.id;
 
     let query: any = { _id: id };
+    let driverProfile: { _id: { toString: () => string } } | null = null;
     if (req.user?.role === 'driver') {
-      const driver = await Driver.findOne({ userId }).select('_id').lean();
-      if (driver) query.driverId = driver._id.toString();
+      driverProfile = await Driver.findOne({ userId }).select('_id').lean();
+      if (driverProfile) query.driverId = driverProfile._id.toString();
       else throw ApiError.notFound('Driver profile not found');
     } else {
       query.companyId = req.user?.companyId ?? req.user?.id;
@@ -1023,10 +1034,8 @@ export class LoadController {
     if (!validStatuses.includes(load.status)) {
       throw ApiError.badRequest('Can only check in at receiver after load out');
     }
-    
-    // Driver or authorized user can update
-    if (load.driverId !== userId && load.driverId?.toString() !== userId) {
-      // Allow if user has permission (receiver role check can be added here)
+    if (req.user?.role === 'driver' && (!driverProfile || load.driverId?.toString() !== driverProfile._id.toString())) {
+      throw ApiError.forbidden('Only the assigned driver can perform this action');
     }
     
     load.status = LoadStatus.RECEIVER_CHECK_IN;
@@ -1268,6 +1277,119 @@ export class LoadController {
     await load.save();
 
     return ApiResponse.success(res, { updated: true }, 'Location updated');
+  });
+
+  // Driver reports delay
+  static reportDelay = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { reason, notes } = req.body;
+    const userId = req.user!.id;
+
+    if (!reason || !reason.trim()) {
+      throw ApiError.badRequest('Delay reason is required');
+    }
+
+    let query: any = { _id: id };
+    if (req.user?.role === 'driver') {
+      const driver = await Driver.findOne({ userId }).select('_id').lean();
+      if (driver) query.driverId = driver._id.toString();
+      else throw ApiError.notFound('Driver profile not found');
+    } else {
+      query.companyId = req.user?.companyId ?? req.user?.id;
+    }
+
+    const load = await Load.findOne(query);
+    if (!load) throw ApiError.notFound('Load not found');
+
+    const delayNote = `DELAY REPORTED: ${reason.trim()}${notes ? ` - ${notes}` : ''}`;
+    load.statusHistory.push({
+      status: load.status,
+      timestamp: new Date(),
+      notes: delayNote,
+      updatedBy: userId,
+    } as any);
+    await load.save();
+
+    return ApiResponse.success(res, { reported: true }, 'Delay reported successfully');
+  });
+
+  // Driver logs expense (fuel, toll, etc.) during trip
+  static addExpense = asyncHandler(async (req: Request, res: Response) => {
+    const id = typeof req.params.id === 'string' ? req.params.id : req.params.id?.[0] || '';
+    const { category, type, amount, date, location, description, receiptUrl } = req.body;
+    const userId = req.user!.id;
+
+    if (!category || amount == null) {
+      throw ApiError.badRequest('Category and amount are required');
+    }
+
+    const validCategories = ['fuel', 'toll', 'scale', 'parking', 'lumper', 'late_fee', 'dock_fee', 'repair', 'other'];
+    if (!validCategories.includes(category)) {
+      throw ApiError.badRequest('Invalid expense category');
+    }
+
+    let query: any = { _id: id };
+    if (req.user?.role === 'driver') {
+      const driver = await Driver.findOne({ userId }).select('_id').lean();
+      if (driver) query.driverId = driver._id.toString();
+      else throw ApiError.notFound('Driver profile not found');
+    } else {
+      query.companyId = req.user?.companyId ?? req.user?.id;
+    }
+
+    const load = await Load.findOne(query).lean();
+    if (!load) throw ApiError.notFound('Load not found');
+
+    const companyId = (load as any).companyId?.toString();
+    if (!companyId) throw ApiError.badRequest('Load has no company');
+
+    const expense = await Expense.create({
+      loadId: String(id),
+      driverId: userId,
+      companyId,
+      category,
+      type: type || 'on_the_way',
+      amount: Number(amount),
+      date: date ? new Date(date) : new Date(),
+      location: location || undefined,
+      description: description || undefined,
+      receiptUrl: receiptUrl || undefined,
+      status: 'pending',
+    });
+
+    return ApiResponse.success(res, expense, 'Expense logged successfully', 201);
+  });
+
+  // Get expenses for a load
+  static getLoadExpenses = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const userId = req.user!.id;
+
+    let query: any = { _id: id };
+    if (req.user?.role === 'driver') {
+      const driver = await Driver.findOne({ userId }).select('_id').lean();
+      if (driver) query.driverId = driver._id.toString();
+      else throw ApiError.notFound('Driver profile not found');
+    } else {
+      query.companyId = req.user?.companyId ?? req.user?.id;
+    }
+
+    const load = await Load.findOne(query);
+    if (!load) throw ApiError.notFound('Load not found');
+
+    const expenses = await Expense.find({ loadId: id }).sort({ date: -1 }).lean();
+    const summary = expenses.reduce(
+      (acc, e: any) => {
+        acc.total += e.amount || 0;
+        if (e.category === 'fuel') acc.fuel += e.amount || 0;
+        else if (e.category === 'toll') acc.tolls += e.amount || 0;
+        else acc.other += e.amount || 0;
+        return acc;
+      },
+      { total: 0, fuel: 0, tolls: 0, other: 0 }
+    );
+
+    return ApiResponse.success(res, { expenses, summary }, 'Expenses retrieved');
   });
 
   // SOS/Emergency notification

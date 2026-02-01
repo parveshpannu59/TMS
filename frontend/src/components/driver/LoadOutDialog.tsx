@@ -47,7 +47,7 @@ export const LoadOutDialog: React.FC<LoadOutDialogProps> = ({
         return;
       }
       if (file.size > 25 * 1024 * 1024) { // 25MB limit
-        setError('PDF size is too large (max 25MB). Please compress it first.');
+        setError('PDF_TOO_LARGE');
         return;
       }
       setBolFile(file);
@@ -105,7 +105,23 @@ export const LoadOutDialog: React.FC<LoadOutDialogProps> = ({
       <DialogContent>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-            {error}
+            {error === 'PDF_TOO_LARGE' ? (
+              <Box>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  PDF size is too large (max 25MB). Compress it first:
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  <Link href="https://smallpdf.com/compress-pdf" target="_blank" rel="noopener noreferrer" sx={{ mr: 1 }}>
+                    SmallPDF
+                  </Link>
+                  <Link href="https://www.ilovepdf.com/compress_pdf" target="_blank" rel="noopener noreferrer">
+                    iLovePDF
+                  </Link>
+                </Box>
+              </Box>
+            ) : (
+              error
+            )}
           </Alert>
         )}
 

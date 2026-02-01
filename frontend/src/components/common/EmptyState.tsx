@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Box, Typography, Button } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 
@@ -8,15 +8,15 @@ interface EmptyStateProps {
   description: string;
   actionLabel?: string;
   onAction?: () => void;
-}
+};
 
-export const EmptyState: React.FC<EmptyStateProps> = ({
+export const EmptyState = memo<EmptyStateProps>(function EmptyState({
   icon,
   title,
   description,
   actionLabel,
   onAction,
-}) => {
+}) {
   const theme = useTheme();
 
   return (
@@ -78,4 +78,4 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       )}
     </Box>
   );
-};
+});

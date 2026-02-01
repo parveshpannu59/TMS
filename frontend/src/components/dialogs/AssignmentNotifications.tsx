@@ -56,7 +56,6 @@ export const AssignmentNotifications: React.FC = () => {
       setLoading(true);
       setError(null);
       const data = await assignmentApi.getPendingAssignments();
-      console.log('Pending assignments loaded:', data);
       setAssignments(data);
     } catch (err: any) {
       setError(err.message || 'Failed to load assignments');
@@ -67,7 +66,6 @@ export const AssignmentNotifications: React.FC = () => {
   };
 
   const handleViewDetails = (assignment: Assignment) => {
-    console.log('Opening details for assignment:', assignment);
     setSelectedAssignment(assignment);
     setShowDetailsDialog(true);
   };

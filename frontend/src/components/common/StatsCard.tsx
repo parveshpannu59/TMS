@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Card, CardContent, Box, Typography, alpha, useTheme } from '@mui/material';
 
 interface StatsCardProps {
@@ -7,15 +7,15 @@ interface StatsCardProps {
   icon: React.ReactNode;
   color?: string;
   subtitle?: string;
-}
+};
 
-export const StatsCard: React.FC<StatsCardProps> = ({
+export const StatsCard = memo<StatsCardProps>(function StatsCard({
   title,
   value,
   icon,
   color,
   subtitle,
-}) => {
+}) {
   const theme = useTheme();
   const cardColor = color || theme.palette.primary.main;
 
@@ -73,4 +73,4 @@ export const StatsCard: React.FC<StatsCardProps> = ({
       </CardContent>
     </Card>
   );
-};
+});

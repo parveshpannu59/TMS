@@ -232,6 +232,28 @@ export default function DriverSettingsMobile() {
         <button className="dm-chip" style={{ alignSelf: 'start' }}>Enable</button>
       </div>
 
+      {/* Push Notifications */}
+      <div className="dm-card" style={{ display: 'grid', gap: 8 }}>
+        <div style={{ fontWeight: 700 }}>{t('driverSettings.pushNotifications')}</div>
+        <div style={{ color: 'var(--dm-muted)', fontSize: 13 }}>{t('driverSettings.pushNotificationsDesc')}</div>
+        <button
+          className="dm-chip"
+          style={{ alignSelf: 'start' }}
+          onClick={async () => {
+            if (typeof Notification !== 'undefined') {
+              const p = await Notification.requestPermission();
+              setToast(p === 'granted' ? t('driverSettings.pushEnabled') : t('driverSettings.pushDenied'));
+            } else {
+              setToast(t('driverSettings.pushNotSupported'));
+            }
+          }}
+        >
+          {typeof Notification !== 'undefined' && Notification.permission === 'granted'
+            ? t('driverSettings.pushEnabled')
+            : t('driverSettings.enablePush')}
+        </button>
+      </div>
+
       {/* About */}
       <div className="dm-card" style={{ display: 'grid', gap: 8 }}>
         <div style={{ fontWeight: 700 }}>{t('driverSettings.about')}</div>
