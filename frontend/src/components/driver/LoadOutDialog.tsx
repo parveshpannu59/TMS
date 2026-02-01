@@ -46,8 +46,8 @@ export const LoadOutDialog: React.FC<LoadOutDialogProps> = ({
         setError('Please upload a PDF file');
         return;
       }
-      if (file.size > 200 * 1024 * 1024) { // 200MB limit
-        setError('PDF size is too large. Please compress it first.');
+      if (file.size > 25 * 1024 * 1024) { // 25MB limit
+        setError('PDF size is too large (max 25MB). Please compress it first.');
         return;
       }
       setBolFile(file);
@@ -65,9 +65,7 @@ export const LoadOutDialog: React.FC<LoadOutDialogProps> = ({
       setLoading(true);
       setError(null);
 
-      // TODO: Upload PDF to server and get URL
-      // For large files, compress first using an online service
-      const bolUrl = ''; // Placeholder - will be replaced with actual upload URL
+      const bolUrl = await loadApi.uploadLoadDocument(load.id, bolFile);
 
       await loadApi.shipperLoadOut(load.id, {
         bolDocument: bolUrl,
@@ -164,14 +162,14 @@ export const LoadOutDialog: React.FC<LoadOutDialogProps> = ({
                     Click to upload BOL PDF
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Max size: 200MB (compress if larger)
+                    Max size: 25MB (compress if larger)
                   </Typography>
                 </Box>
               )}
             </Box>
           </Box>
 
-          {bolFile && bolFile.size > 150 * 1024 * 1024 && (
+          {bolFile && bolFile.size > 20 * 1024 * 1024 && (
             <Alert severity="warning">
               <Typography variant="body2" sx={{ mb: 1 }}>
                 Large file detected ({((bolFile.size / 1024 / 1024).toFixed(2))} MB). 

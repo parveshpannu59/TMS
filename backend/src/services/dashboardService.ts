@@ -138,7 +138,7 @@ export class DashboardService {
   }
 
   private async getLoadStatus(companyId: string) {
-    const [pending, inTransit, delayed] = await Promise.all([
+    const [pending, inTransit, delayed, statusBreakdown] = await Promise.all([
       Load.countDocuments({ companyId, status: 'booked' }),
       Load.countDocuments({ companyId, status: 'in_transit' }),
       Load.countDocuments({
@@ -146,9 +146,35 @@ export class DashboardService {
         status: 'in_transit',
         expectedDeliveryDate: { $lt: new Date() },
       }),
+      Load.aggregate([
+        { $match: { companyId, status: { $nin: ['cancelled'] } } },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
     ]);
 
-    return { pending, inTransit, delayed };
+    const byStatus = (statusBreakdown || []).reduce((acc: Record<string, number>, r: any) => {
+      acc[r._id] = r.count;
+      return acc;
+    }, {});
+
+    return {
+      pending,
+      inTransit,
+      delayed,
+      byStatus: {
+        booked: byStatus.booked || 0,
+        assigned: byStatus.assigned || 0,
+        tripAccepted: byStatus.trip_accepted || 0,
+        tripStarted: byStatus.trip_started || 0,
+        shipperCheckIn: byStatus.shipper_check_in || 0,
+        shipperLoadIn: byStatus.shipper_load_in || 0,
+        shipperLoadOut: byStatus.shipper_load_out || 0,
+        inTransit: byStatus.in_transit || 0,
+        receiverCheckIn: byStatus.receiver_check_in || 0,
+        receiverOffload: byStatus.receiver_offload || 0,
+        completed: byStatus.completed || 0,
+      },
+    };
   }
 
   private async getRecentActivity(companyId: string, limit: number) {

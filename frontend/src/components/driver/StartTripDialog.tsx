@@ -66,9 +66,7 @@ export const StartTripDialog: React.FC<StartTripDialogProps> = ({
       setLoading(true);
       setError(null);
 
-      // TODO: Upload photo to server and get URL
-      // For now, using a placeholder
-      const photoUrl = photoPreview || '';
+      const photoUrl = await loadApi.uploadLoadDocument(load.id, photo);
 
       await loadApi.startTrip(load.id, {
         startingMileage: parseInt(startingMileage),
@@ -165,7 +163,7 @@ export const StartTripDialog: React.FC<StartTripDialogProps> = ({
                     }}
                   />
                   <Typography variant="caption" color="text.secondary">
-                    {photo?.name} ({(photo?.size || 0) / 1024 / 1024).toFixed(2)} MB)
+                    {photo?.name} ({((photo?.size || 0) / 1024 / 1024).toFixed(2)} MB)
                   </Typography>
                   <Button
                     size="small"

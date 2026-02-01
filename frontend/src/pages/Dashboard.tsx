@@ -353,15 +353,15 @@ const Dashboard = () => {
 
   const handleRefresh = useCallback(() => {
     refetch();
-    setSuccessMessage('Dashboard refreshed!');
+    setSuccessMessage(t('dashboard.dashboardRefreshed'));
     setTimeout(() => setSuccessMessage(null), 3000);
-  }, [refetch]);
+  }, [refetch, t]);
 
   const handleResetLayout = useCallback(async () => {
     await resetLayout();
-    setSuccessMessage('Dashboard layout reset to default!');
+    setSuccessMessage(t('dashboard.layoutReset'));
     setTimeout(() => setSuccessMessage(null), 3000);
-  }, [resetLayout]);
+  }, [resetLayout, t]);
 
   const kpiWidgets = useMemo(() => {
     if (!data) return [];
@@ -369,41 +369,41 @@ const Dashboard = () => {
     return [
       {
         id: 'kpi-loads',
-        title: 'Active Loads',
+        title: t('dashboard.activeLoads'),
         value: data.kpis.activeLoadsCount,
-        subtitle: `${data.kpis.runningLateCount} running late`,
+        subtitle: `${data.kpis.runningLateCount} ${t('dashboard.runningLate')}`,
         trend: data.kpis.trends.loads,
         icon: <LocalShippingIcon />,
         color: 'primary.main'
       },
       {
         id: 'kpi-drivers',
-        title: 'Total Drivers',
+        title: t('dashboard.totalDrivers'),
         value: data.kpis.totalDrivers,
-        subtitle: `${data.kpis.availableDrivers} available`,
+        subtitle: `${data.kpis.availableDrivers} ${t('dashboard.available')}`,
         trend: data.kpis.trends.drivers,
         icon: <PeopleIcon />,
         color: 'success.main'
       },
       {
         id: 'kpi-trucks',
-        title: 'Total Trucks',
+        title: t('dashboard.totalTrucks'),
         value: data.kpis.totalTrucks,
-        subtitle: `${data.kpis.operationalTrucks} operational`,
+        subtitle: `${data.kpis.operationalTrucks} ${t('dashboard.operational')}`,
         trend: data.kpis.trends.trucks,
         icon: <LocalShippingIcon />,
         color: 'info.main'
       },
       {
         id: 'kpi-completed',
-        title: 'Completed Today',
+        title: t('dashboard.completedToday'),
         value: data.kpis.completedToday,
-        subtitle: `On track for ${data.kpis.onTrack}`,
+        subtitle: t('dashboard.onTrackFor', { count: data.kpis.onTrack }),
         icon: <CheckCircleIcon />,
         color: 'warning.main'
       }
     ];
-  }, [data]);
+  }, [data, t]);
 
   // Financial metrics widgets
   const financialWidgets = useMemo(() => {
@@ -449,7 +449,7 @@ const Dashboard = () => {
     return [
       {
         id: 'total-invoices',
-        title: 'Total Invoices',
+        title: t('dashboard.totalInvoices'),
         value: inv.total,
         subtitle: `$${inv.totalAmount.toLocaleString()}`,
         icon: <ReceiptIcon />,
@@ -457,7 +457,7 @@ const Dashboard = () => {
       },
       {
         id: 'paid-invoices',
-        title: 'Paid',
+        title: t('dashboard.paid'),
         value: inv.paid,
         subtitle: `$${inv.paidAmount.toLocaleString()}`,
         icon: <CheckCircleIcon />,
@@ -465,7 +465,7 @@ const Dashboard = () => {
       },
       {
         id: 'unpaid-invoices',
-        title: 'Unpaid',
+        title: t('dashboard.unpaid'),
         value: inv.unpaid,
         subtitle: `$${inv.unpaidAmount.toLocaleString()}`,
         icon: <PendingActionsIcon />,
@@ -473,14 +473,14 @@ const Dashboard = () => {
       },
       {
         id: 'overdue-invoices',
-        title: 'Overdue',
+        title: t('dashboard.overdue'),
         value: inv.overdue,
-        subtitle: 'Requires attention',
+        subtitle: t('dashboard.requiresAttention'),
         icon: <DescriptionIcon />,
         color: 'error.main'
       }
     ];
-  }, [data]);
+  }, [data, t]);
 
   // Operational metrics
   const operationalMetrics = data?.operationalMetrics;
@@ -505,7 +505,7 @@ const Dashboard = () => {
       <Box sx={{ p: 3 }}>
         <Alert severity="error" action={
           <Button size="small" onClick={handleRefresh}>
-            Retry
+            {t('common.retry')}
           </Button>
         }>
           {error}
@@ -630,12 +630,12 @@ const Dashboard = () => {
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
-              Operational Metrics
+              {t('dashboard.operationalMetrics')}
             </Typography>
             <Grid container spacing={{ xs: 2, sm: 3 }}>
               <Grid item xs={6} sm={3}>
                 <Typography variant="caption" color="text.secondary">
-                  Total Loads
+                  {t('dashboard.totalLoads')}
                 </Typography>
                 <Typography variant="h5" fontWeight={700}>
                   {operationalMetrics.totalLoads}
@@ -643,7 +643,7 @@ const Dashboard = () => {
               </Grid>
               <Grid item xs={6} sm={3}>
                 <Typography variant="caption" color="text.secondary">
-                  Assigned Drivers
+                  {t('dashboard.assignedDrivers')}
                 </Typography>
                 <Typography variant="h5" fontWeight={700}>
                   {operationalMetrics.assignedDrivers}
@@ -651,7 +651,7 @@ const Dashboard = () => {
               </Grid>
               <Grid item xs={6} sm={3}>
                 <Typography variant="caption" color="text.secondary">
-                  Completed Loads
+                  {t('dashboard.completedLoads')}
                 </Typography>
                 <Typography variant="h5" fontWeight={700}>
                   {operationalMetrics.completedLoads}
@@ -659,7 +659,7 @@ const Dashboard = () => {
               </Grid>
               <Grid item xs={6} sm={3}>
                 <Typography variant="caption" color="text.secondary">
-                  Total Distance
+                  {t('dashboard.totalDistance')}
                 </Typography>
                 <Typography variant="h5" fontWeight={700}>
                   {operationalMetrics.totalDistanceMiles.toFixed(0)} mi

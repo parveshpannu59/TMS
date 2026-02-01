@@ -1,11 +1,12 @@
 import { memo } from 'react';
 import { Box, Typography, Card, CardContent } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 
 interface KPICardProps {
   title: string;
-  value: number;
+  value: number | string;
   subtitle?: string;
   trend?: number;
   icon?: React.ReactNode;
@@ -20,6 +21,7 @@ export const KPICard = memo(({
   icon, 
   color = 'primary.main' 
 }: KPICardProps) => {
+  const { t } = useTranslation();
   return (
     <Card 
       sx={{ 
@@ -48,7 +50,7 @@ export const KPICard = memo(({
               fontWeight="bold"
               sx={{ mb: 0.5 }}
             >
-              {value.toLocaleString()}
+              {typeof value === 'number' ? value.toLocaleString() : value}
             </Typography>
             {subtitle && (
               <Typography variant="caption" color="text.secondary">
@@ -85,7 +87,7 @@ export const KPICard = memo(({
               ml={0.5}
               fontWeight={600}
             >
-              {trend > 0 ? '+' : ''}{trend}% vs last month
+              {trend > 0 ? '+' : ''}{trend}% {t('dashboard.vsLastMonth')}
             </Typography>
           </Box>
         )}

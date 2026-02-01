@@ -276,7 +276,7 @@ const DriversPage: React.FC = () => {
   const columns: GridColDef[] = [
     {
       field: 'name',
-      headerName: 'Driver Name',
+      headerName: t('drivers.driverName'),
       flex: 1.2,
       minWidth: 150,
       valueGetter: (params) => {
@@ -296,7 +296,7 @@ const DriversPage: React.FC = () => {
     },
     {
       field: 'email',
-      headerName: 'Email',
+      headerName: t('common.email'),
       flex: 1.4,
       minWidth: 180,
       valueGetter: (params) => {
@@ -312,7 +312,7 @@ const DriversPage: React.FC = () => {
     },
     {
       field: 'phone',
-      headerName: 'Phone',
+      headerName: t('common.phone'),
       flex: 1,
       minWidth: 120,
       valueGetter: (params) => {
@@ -328,39 +328,46 @@ const DriversPage: React.FC = () => {
     },
     {
       field: 'licenseNumber',
-      headerName: 'License #',
+      headerName: t('drivers.licenseShort'),
       flex: 1,
       minWidth: 120,
     },
     {
       field: 'licenseExpiry',
-      headerName: 'License Expiry',
+      headerName: t('drivers.licenseExpiry'),
       flex: 1,
       minWidth: 120,
       renderCell: (params) => new Date(params.value).toLocaleDateString(),
     },
     {
       field: 'status',
-      headerName: 'Status',
+      headerName: t('common.status'),
       flex: 1,
       minWidth: 120,
-      renderCell: (params) => (
-        <Chip
-          label={params.value.replace('_', ' ').toUpperCase()}
-          color={statusColors[params.value] || 'default'}
-          size="small"
-        />
-      ),
+      renderCell: (params) => {
+        const statusLabels: Record<string, string> = {
+          active: t('common.active'),
+          inactive: t('common.inactive'),
+          on_trip: t('drivers.onTrip'),
+        };
+        return (
+          <Chip
+            label={statusLabels[params.value] || params.value}
+            color={statusColors[params.value] || 'default'}
+            size="small"
+          />
+        );
+      },
     },
     {
       field: 'currentLoadId',
-      headerName: 'Current Load',
+      headerName: t('drivers.currentLoad'),
       flex: 1.2,
       minWidth: 130,
       renderCell: (params) =>
         params.value ? (
           <Typography variant="body2" color="primary">
-            {params.value.loadNumber || 'Assigned'}
+            {params.value.loadNumber || t('loads.assigned')}
           </Typography>
         ) : (
           <Typography variant="body2" color="text.secondary">
@@ -370,14 +377,14 @@ const DriversPage: React.FC = () => {
     },
     {
       field: 'notes',
-      headerName: 'Notes',
+      headerName: t('common.notes'),
       flex: 1.5,
       minWidth: 150,
       renderCell: (params) => {
         if (!params || !params.row) {
           return (
             <Typography variant="body2" color="text.secondary" fontStyle="italic">
-              No notes
+              {t('common.noNotes')}
             </Typography>
           );
         }
@@ -387,7 +394,7 @@ const DriversPage: React.FC = () => {
         if (!notes) {
           return (
             <Typography variant="body2" color="text.secondary" fontStyle="italic">
-              No notes
+              {t('common.noNotes')}
             </Typography>
           );
         }
@@ -422,7 +429,7 @@ const DriversPage: React.FC = () => {
     {
       field: 'actions',
       type: 'actions',
-      headerName: 'Actions',
+      headerName: t('common.actions'),
       width: 100,
       getActions: (params) => [
         <GridActionsCellItem
@@ -498,7 +505,7 @@ const DriversPage: React.FC = () => {
           
           <TextField
             select
-            label="Status"
+            label={t('common.status')}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             sx={{ minWidth: 150 }}

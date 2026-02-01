@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import { AccountCircle, Logout, Menu as MenuIcon } from '@mui/icons-material';
 import { useAuth } from '@hooks/useAuth';
+import { getApiOrigin } from '@/api/client';
 import { Sidebar, SIDEBAR_WIDTH } from '@components/common/Sidebar';
 import { NotificationMenu } from '@components/common/NotificationMenu';
 import { useTranslation } from 'react-i18next';
@@ -149,7 +150,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = React.memo(({ chi
                   user?.profilePicture 
                     ? (user.profilePicture.startsWith('http') 
                         ? user.profilePicture 
-                        : `http://localhost:5000${user.profilePicture}`)
+                        : `${getApiOrigin()}${user.profilePicture}`)
                     : undefined
                 }
                 sx={{ 

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import Notification, { NotificationPriority } from '../models/Notification';
+import { Load } from '../models/Load.model';
 import { asyncHandler } from '../utils/asyncHandler';
 import { ApiError } from '../utils/ApiError';
 import { PaginationHelper } from '../utils/pagination';
@@ -50,10 +51,34 @@ export const getNotifications = asyncHandler(async (req: Request, res: Response)
     { page: Number(page), limit: Number(limit), sortBy: 'createdAt', sortOrder: 'desc' }
   );
 
+  // Filter out "New Load Assigned" notifications for loads that are no longer assigned
+  const items = result.data || [];
+  const toRemove: string[] = [];
+  for (const n of items) {
+    const nDoc = n as any;
+    const loadId = nDoc?.metadata?.loadId;
+    const isNewLoadAssigned = (nDoc?.title || '').toLowerCase().includes('new load assigned') || (nDoc?.title || '').toLowerCase().includes('assigned');
+    if (isNewLoadAssigned && loadId) {
+      const load = await Load.findById(loadId).select('driverId').lean();
+      if (!load || !(load as any).driverId) {
+        toRemove.push(nDoc._id?.toString());
+      }
+    }
+  }
+  if (toRemove.length > 0) {
+    await Notification.deleteMany({ _id: { $in: toRemove } });
+  }
+  const filteredItems = items.filter((n: any) => !toRemove.includes(n._id?.toString()));
+
   res.json({
     success: true,
     message: 'Notifications retrieved successfully',
-    data: result,
+    data: {
+      data: filteredItems,
+      pagination: result.pagination
+        ? { ...result.pagination, totalItems: Math.max(0, result.pagination.totalItems - toRemove.length) }
+        : result.pagination,
+    },
   });
 });
 

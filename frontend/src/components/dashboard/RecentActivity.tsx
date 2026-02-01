@@ -9,6 +9,7 @@ import {
   ListItemText,
   Chip 
 } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import { Activity } from '../../types/dashboard.types';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -17,6 +18,7 @@ interface RecentActivityProps {
 }
 
 export const RecentActivity = memo(({ activities }: RecentActivityProps) => {
+  const { t } = useTranslation();
   const getColorByType = (type: Activity['type']) => {
     const colors = {
       success: 'success',
@@ -31,13 +33,13 @@ export const RecentActivity = memo(({ activities }: RecentActivityProps) => {
     <Card sx={{ height: '100%' }}>
       <CardContent>
         <Typography variant="h6" gutterBottom fontWeight={600}>
-          Recent Activity
+          {t('dashboard.recentActivity')}
         </Typography>
         
         <List sx={{ pt: 2 }}>
           {activities.length === 0 ? (
             <Typography variant="body2" color="text.secondary" textAlign="center" py={4}>
-              No recent activity
+              {t('dashboard.noRecentActivity')}
             </Typography>
           ) : (
             activities.map((activity) => (
