@@ -177,11 +177,36 @@ export const loadApi = {
     return response.data.data as Load;
   },
 
+  reportDelay: async (loadId: string, data: { reason: string; notes?: string }): Promise<void> => {
+    await apiClient.post(`/loads/${loadId}/report-delay`, data);
+  },
+
   updateLocation: async (
     id: string,
     data: { lat: number; lng: number; speed?: number; heading?: number }
   ): Promise<void> => {
     await apiClient.post(`/loads/${id}/update-location`, data);
+  },
+
+  addExpense: async (
+    loadId: string,
+    data: {
+      category: string;
+      type?: string;
+      amount: number;
+      date?: string;
+      location?: string;
+      description?: string;
+      receiptUrl?: string;
+    }
+  ): Promise<any> => {
+    const response = await apiClient.post<ApiResponse<any>>(`/loads/${loadId}/expenses`, data);
+    return response.data.data;
+  },
+
+  getLoadExpenses: async (loadId: string): Promise<{ expenses: any[]; summary: { total: number; fuel: number; tolls: number; other: number } }> => {
+    const response = await apiClient.get<ApiResponse<any>>(`/loads/${loadId}/expenses`);
+    return response.data.data;
   },
 
   endTrip: async (

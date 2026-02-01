@@ -95,7 +95,6 @@ const DriversPage: React.FC = () => {
     try {
       const response = await userApi.getAllUsers({ limit: 100, role: 'driver' });
       // Set driver role users
-      console.log('Fetched users for driver selection:', response.data);
       setUsers(response.data);
     } catch (err: any) {
       console.error('Failed to fetch users:', err);
@@ -191,14 +190,12 @@ const DriversPage: React.FC = () => {
           return;
         }
         // For update, send all form fields including notes
-        console.log('Updating driver with data:', data);
         const updateData = {
           licenseNumber: data.licenseNumber,
           licenseExpiry: data.licenseExpiry,
           status: data.status,
           notes: data.notes || '',
         };
-        console.log('Sending update request:', updateData);
         await driverApi.updateDriver(driverId, updateData);
         setSuccess('Driver updated successfully');
       } else {

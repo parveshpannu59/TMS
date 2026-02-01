@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { loadApi } from '@/api/all.api';
 import type { Load } from '@/types/all.types';
@@ -40,7 +40,10 @@ export default function DriverTripsMobile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const fetchingRef = useRef(false);
   const fetchLoads = useCallback(async () => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
     try {
       setLoading(true);
       const assigned = await loadApi.getMyAssignedLoads();
@@ -51,6 +54,7 @@ export default function DriverTripsMobile() {
       setLoads([]);
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   }, []);
 
@@ -126,7 +130,7 @@ export default function DriverTripsMobile() {
                 cursor: 'pointer',
                 borderLeft: `4px solid ${STATUS_COLOR[load.status] || 'var(--dm-accent)'}`,
               }}
-              onClick={() => navigate('/driver/mobile/dashboard')}
+              onClick={() => navigate(`/driver/mobile/load/${load.id || (load as any)._id}`)}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ fontWeight: 800, fontSize: 16 }}>Load #{load.loadNumber}</div>
@@ -160,7 +164,8 @@ export default function DriverTripsMobile() {
             <div
               key={load.id || (load as any)._id}
               className="dm-card"
-              style={{ display: 'grid', gap: 8, opacity: 0.9 }}
+              style={{ display: 'grid', gap: 8, opacity: 0.9, cursor: 'pointer' }}
+              onClick={() => navigate(`/driver/mobile/load/${load.id || (load as any)._id}`)}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ fontWeight: 700 }}>Load #{load.loadNumber}</div>

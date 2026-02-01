@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Box,
   Container,
@@ -93,8 +93,13 @@ const DriverDashboard: React.FC = () => {
   const [receiverOffloadDialogOpen, setReceiverOffloadDialogOpen] = useState(false);
   const [endTripDialogOpen, setEndTripDialogOpen] = useState(false);
 
+  const fetchingLoadsRef = useRef(false);
+  const fetchingUnreadRef = useRef(false);
+
   // Fetch driver's current and assigned loads
   const fetchLoads = useCallback(async () => {
+    if (fetchingLoadsRef.current) return;
+    fetchingLoadsRef.current = true;
     try {
       setLoading(true);
       
@@ -124,16 +129,21 @@ const DriverDashboard: React.FC = () => {
       setLoads([]);
     } finally {
       setLoading(false);
+      fetchingLoadsRef.current = false;
     }
   }, []);
 
   // Fetch unread message count
   const fetchUnreadCount = useCallback(async () => {
+    if (fetchingUnreadRef.current) return;
+    fetchingUnreadRef.current = true;
     try {
       const data = await messageApi.getUnreadCount();
       setUnreadCount(data.count);
     } catch (err) {
-      console.error('Failed to fetch unread count:', err);
+      // Failed to fetch unread count
+    } finally {
+      fetchingUnreadRef.current = false;
     }
   }, []);
 

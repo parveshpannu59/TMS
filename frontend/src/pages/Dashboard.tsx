@@ -542,10 +542,13 @@ const Dashboard = () => {
       {/* Toolbar */}
       <Toolbar sx={{ px: 0, mb: 2, minHeight: '48px !important' }}>
         <Select
+          id="dashboard-date-range"
           value={dateRange}
           onChange={(e) => setDateRange(e.target.value)}
           size="small"
           sx={{ minWidth: 120 }}
+          displayEmpty
+          inputProps={{ 'aria-label': 'Date range' }}
         >
           <MenuItem value="today">{t('dashboard.today')}</MenuItem>
           <MenuItem value="week">{t('dashboard.thisWeek')}</MenuItem>

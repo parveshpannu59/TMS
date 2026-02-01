@@ -187,8 +187,14 @@ export const EditUserDialog: React.FC<EditUserDialogProps> = React.memo(
                 control={control}
                 render={({ field }) => (
                   <FormControl fullWidth error={!!errors.role}>
-                    <InputLabel>{t('users.userRole', { defaultValue: 'User Role' })}</InputLabel>
-                    <Select {...field} label={t('users.userRole', { defaultValue: 'User Role' })} disabled={isSubmitting}>
+                    <InputLabel id="edit-user-role-label">{t('users.userRole', { defaultValue: 'User Role' })}</InputLabel>
+                    <Select
+                      {...field}
+                      labelId="edit-user-role-label"
+                      id="edit-user-role"
+                      label={t('users.userRole', { defaultValue: 'User Role' })}
+                      disabled={isSubmitting}
+                    >
                       <MenuItem value={UserRole.DISPATCHER}>{t('users.dispatcher', { defaultValue: 'Dispatcher' })}</MenuItem>
                       <MenuItem value={UserRole.DRIVER}>{t('users.driver', { defaultValue: 'Driver' })}</MenuItem>
                       <MenuItem value={UserRole.ACCOUNTANT}>{t('users.accountant', { defaultValue: 'Accountant' })}</MenuItem>
@@ -220,8 +226,14 @@ export const EditUserDialog: React.FC<EditUserDialogProps> = React.memo(
                 control={control}
                 render={({ field }) => (
                   <FormControl fullWidth error={!!errors.status}>
-                    <InputLabel>{t('common.status')}</InputLabel>
-                    <Select {...field} label={t('common.status')} disabled={isSubmitting}>
+                    <InputLabel id="edit-user-status-label">{t('common.status')}</InputLabel>
+                    <Select
+                      {...field}
+                      labelId="edit-user-status-label"
+                      id="edit-user-status"
+                      label={t('common.status')}
+                      disabled={isSubmitting}
+                    >
                       <MenuItem value="active">{t('users.active')}</MenuItem>
                       <MenuItem value="inactive">{t('users.inactive')}</MenuItem>
                     </Select>

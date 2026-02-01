@@ -25,6 +25,8 @@ interface EndTripDialogProps {
   onClose: () => void;
   load: Load;
   onSuccess: () => void;
+  /** Pre-logged expenses from driver (fuel, toll, etc.) */
+  loadExpenses?: { summary: { fuel: number; tolls: number; other: number } } | null;
 }
 
 export const EndTripDialog: React.FC<EndTripDialogProps> = ({
@@ -32,6 +34,7 @@ export const EndTripDialog: React.FC<EndTripDialogProps> = ({
   onClose,
   load,
   onSuccess,
+  loadExpenses,
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -41,8 +44,16 @@ export const EndTripDialog: React.FC<EndTripDialogProps> = ({
   const [fuelExpenses, setFuelExpenses] = useState('');
 
   useEffect(() => {
-    if (open && load?.rate) setRate(String(load.rate));
-  }, [open]);
+    if (open) {
+      if (load?.rate) setRate(String(load.rate));
+      if (loadExpenses?.summary) {
+        const s = loadExpenses.summary;
+        if (s.fuel > 0) setFuelExpenses(String(s.fuel));
+        if (s.tolls > 0) setTolls(String(s.tolls));
+        if (s.other > 0) setOtherCosts(String(s.other));
+      }
+    }
+  }, [open, load?.rate, loadExpenses?.summary]);
   const [tolls, setTolls] = useState('');
   const [otherCosts, setOtherCosts] = useState('');
   const [additionalExpenseDetails, setAdditionalExpenseDetails] = useState('');

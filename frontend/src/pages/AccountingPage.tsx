@@ -25,12 +25,13 @@ import {
   MonetizationOn,
   Receipt,
   AttachMoney,
-  PendingActions,
   CheckCircle,
   Description,
+  Download,
 } from '@mui/icons-material';
 import { DashboardLayout } from '@layouts/DashboardLayout';
 import { dashboardApi, type AccountantDashboardData } from '@/api/dashboardApi';
+import { getApiOrigin } from '@/api/client';
 import { useAuth } from '@hooks/useAuth';
 import { useMediaQuery } from '@mui/material';
 import { useTranslation } from 'react-i18next';
@@ -62,12 +63,12 @@ interface AccountingSummary {
 
 const AccountingPage: React.FC = () => {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [tabValue, setTabValue] = useState(0);
   const [dateFilter, setDateFilter] = useState('month');
   const [data, setData] = useState<AccountantDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -257,8 +258,10 @@ const AccountingPage: React.FC = () => {
             </Typography>
           </Box>
           <FormControl size="small" sx={{ minWidth: 200 }}>
-            <InputLabel>{t('accounting.period', { defaultValue: 'Period' })}</InputLabel>
+            <InputLabel id="accounting-period-label">{t('accounting.period', { defaultValue: 'Period' })}</InputLabel>
             <Select
+              labelId="accounting-period-label"
+              id="accounting-period"
               value={dateFilter}
               label={t('accounting.period', { defaultValue: 'Period' })}
               onChange={(e) => setDateFilter(e.target.value)}
@@ -457,7 +460,7 @@ const AccountingPage: React.FC = () => {
           </TabPanel>
 
           <TabPanel value={tabValue} index={3}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
               {t('accounting.documentsSummary', { defaultValue: 'Documents Summary' })}
             </Typography>
             <Grid container spacing={2} sx={{ mt: 1 }}>
@@ -479,6 +482,81 @@ const AccountingPage: React.FC = () => {
                 </Grid>
               ))}
             </Grid>
+            {data?.documents?.documentList && data.documents.documentList.length > 0 && (
+              <Box sx={{ mt: 3 }}>
+                <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
+                  {t('accounting.downloadDocuments', { defaultValue: 'Download Documents' })}
+                </Typography>
+                <Box sx={{ overflowX: 'auto' }}>
+                  <DataGrid
+                    rows={data.documents.documentList}
+                    getRowId={(row) => row.loadNumber || row.loadId || String(Math.random())}
+                    columns={[
+                      {
+                        field: 'loadNumber',
+                        headerName: t('loads.loadNumber'),
+                        flex: 1,
+                        minWidth: 120,
+                      },
+                      {
+                        field: 'bolUrl',
+                        headerName: t('accounting.bol', { defaultValue: 'BOL' }),
+                        flex: 1,
+                        minWidth: 140,
+                        renderCell: (params) =>
+                          params.value ? (
+                            <Button
+                              size="small"
+                              startIcon={<Download />}
+                              href={params.value.startsWith('http') ? params.value : `${getApiOrigin()}${params.value.startsWith('/') ? '' : '/'}${params.value}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              download
+                            >
+                              {t('accounting.download', { defaultValue: 'Download' })}
+                            </Button>
+                          ) : (
+                            <Typography variant="caption" color="text.secondary">
+                              —
+                            </Typography>
+                          ),
+                      },
+                      {
+                        field: 'podUrl',
+                        headerName: t('accounting.pod', { defaultValue: 'POD' }),
+                        flex: 1,
+                        minWidth: 140,
+                        renderCell: (params) =>
+                          params.value ? (
+                            <Button
+                              size="small"
+                              startIcon={<Download />}
+                              href={params.value.startsWith('http') ? params.value : `${getApiOrigin()}${params.value.startsWith('/') ? '' : '/'}${params.value}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              download
+                            >
+                              {t('accounting.download', { defaultValue: 'Download' })}
+                            </Button>
+                          ) : (
+                            <Typography variant="caption" color="text.secondary">
+                              —
+                            </Typography>
+                          ),
+                      },
+                    ]}
+                    pageSizeOptions={[10, 25]}
+                    initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
+                    disableRowSelectionOnClick
+                    autoHeight
+                    sx={{
+                      border: 'none',
+                      '& .MuiDataGrid-cell:focus': { outline: 'none' },
+                    }}
+                  />
+                </Box>
+              </Box>
+            )}
           </TabPanel>
         </Card>
       </Box>

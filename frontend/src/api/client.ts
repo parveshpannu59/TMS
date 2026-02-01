@@ -62,8 +62,6 @@ apiClient.interceptors.response.use(
       statusCode: error.response?.status || 500,
     };
 
-    console.log('ApiError object created:', apiError);
-
     // Handle 401 Unauthorized - Token expired
     if (error.response?.status === 401) {
       clearAuthToken();

@@ -58,6 +58,12 @@ export interface AccountantDashboardData {
     podDocuments: number;
     missingBol: number;
     missingPod: number;
+    documentList?: Array<{
+      loadNumber: string;
+      loadId?: string;
+      bolUrl: string | null;
+      podUrl: string | null;
+    }>;
   };
   expenses: {
     total: number;

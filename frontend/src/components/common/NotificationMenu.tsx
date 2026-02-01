@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   IconButton,
   Badge,
@@ -49,8 +49,13 @@ export const NotificationMenu: React.FC = () => {
   const [selectedLoad, setSelectedLoad] = useState<Load | null>(null);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
 
-  // Fetch notifications
+  const fetchingRef = useRef(false);
+  const mountedRef = useRef(false);
+
+  // Fetch notifications - single in-flight guard prevents duplicate concurrent calls
   const fetchNotifications = useCallback(async () => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
     try {
       setLoading(true);
       setError(null);
@@ -61,17 +66,17 @@ export const NotificationMenu: React.FC = () => {
       setNotifications(notificationData.data);
       setUnreadCount(count);
     } catch (err: any) {
-      console.error('Failed to fetch notifications:', err);
       setError(err.response?.data?.message || 'Failed to load notifications');
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   }, []);
 
-  // Fetch on mount and when menu opens
   useEffect(() => {
+    if (mountedRef.current) return;
+    mountedRef.current = true;
     fetchNotifications();
-    // Poll for new notifications every 60 seconds
     const interval = setInterval(fetchNotifications, 60000);
     return () => clearInterval(interval);
   }, [fetchNotifications]);
@@ -109,7 +114,6 @@ export const NotificationMenu: React.FC = () => {
           } catch (err: any) {
             // If not found by ID, try loadNumber fallback if available
             if (err.statusCode === 404 || err.response?.status === 404) {
-              console.log('Load not found by ID, trying loadNumber fallback...');
               // Fall through to loadNumber search
               load = undefined;
             } else {

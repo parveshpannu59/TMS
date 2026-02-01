@@ -69,7 +69,6 @@ export const LoginForm: React.FC = React.memo(() => {
           errorMessage = err;
         }
         
-        console.log('Setting error message:', errorMessage);
         setError(errorMessage);
         // Keep form data for user to correct
       } finally {
@@ -234,6 +233,7 @@ export const LoginForm: React.FC = React.memo(() => {
         render={({ field }) => (
           <TextField
             {...field}
+            id="login-email"
             label="Email Address"
             type="email"
             fullWidth
@@ -265,6 +265,7 @@ export const LoginForm: React.FC = React.memo(() => {
         render={({ field }) => (
           <TextField
             {...field}
+            id="login-password"
             label="Password"
             type={showPassword ? 'text' : 'password'}
             fullWidth

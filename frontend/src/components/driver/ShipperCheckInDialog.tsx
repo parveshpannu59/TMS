@@ -97,6 +97,7 @@ export const ShipperCheckInDialog: React.FC<ShipperCheckInDialogProps> = ({
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
           <TextField
+            id="shipper-checkin-po"
             fullWidth
             label="PO Number *"
             value={poNumber}
@@ -104,8 +105,8 @@ export const ShipperCheckInDialog: React.FC<ShipperCheckInDialogProps> = ({
             placeholder="Enter Purchase Order number"
             required
           />
-
           <TextField
+            id="shipper-checkin-load"
             fullWidth
             label="Load Number *"
             value={loadNumber}
@@ -113,8 +114,8 @@ export const ShipperCheckInDialog: React.FC<ShipperCheckInDialogProps> = ({
             placeholder="Enter load number"
             required
           />
-
           <TextField
+            id="shipper-checkin-reference"
             fullWidth
             label="Reference Number *"
             value={referenceNumber}
