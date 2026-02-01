@@ -35,6 +35,7 @@ import {
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { DashboardLayout } from '@layouts/DashboardLayout';
 import { loadApi, driverApi, truckApi, trailerApi } from '@api/all.api';
+import { useTranslation } from 'react-i18next';
 
 interface ActiveTrip {
   id: string;
@@ -60,6 +61,7 @@ interface ActiveTrip {
 }
 
 const TripManagementDashboard: React.FC = () => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
@@ -280,10 +282,10 @@ const TripManagementDashboard: React.FC = () => {
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Box>
             <Typography variant="h5" fontWeight={700} gutterBottom>
-              📋 Trip Management Dashboard
+              📋 {t('trips.title')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              View all active driver-load-truck-trailer assignments
+              {t('trips.subtitle')}
             </Typography>
           </Box>
           <Button
@@ -292,7 +294,7 @@ const TripManagementDashboard: React.FC = () => {
             onClick={fetchTrips}
             disabled={loading}
           >
-            Refresh
+            {t('trips.refresh')}
           </Button>
         </Box>
 
@@ -310,7 +312,7 @@ const TripManagementDashboard: React.FC = () => {
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Box>
                     <Typography color="text.secondary" variant="caption">
-                      Active Trips
+                      {t('trips.activeTrips')}
                     </Typography>
                     <Typography variant="h5" fontWeight={700}>
                       {trips.length}
@@ -328,7 +330,7 @@ const TripManagementDashboard: React.FC = () => {
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Box>
                     <Typography color="text.secondary" variant="caption">
-                      Assigned
+                      {t('trips.assigned')}
                     </Typography>
                     <Typography variant="h5" fontWeight={700}>
                       {assignedCount}
@@ -346,7 +348,7 @@ const TripManagementDashboard: React.FC = () => {
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Box>
                     <Typography color="text.secondary" variant="caption">
-                      In Transit
+                      {t('trips.inTransit')}
                     </Typography>
                     <Typography variant="h5" fontWeight={700}>
                       {inTransitCount}
@@ -364,7 +366,7 @@ const TripManagementDashboard: React.FC = () => {
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Box>
                     <Typography color="text.secondary" variant="caption">
-                      Total Value
+                      {t('trips.totalValue')}
                     </Typography>
                     <Typography variant="h5" fontWeight={700}>
                       ₹{totalValue.toLocaleString()}
@@ -379,7 +381,7 @@ const TripManagementDashboard: React.FC = () => {
 
         {/* Data Grid */}
         <Card>
-          <CardHeader title="Active Trips" subheader="Driver • Truck • Trailer • Load Assignments" />
+          <CardHeader title={t('trips.activeTrips')} subheader={t('trips.driverTruckTrailerLoad')} />
           <Divider />
           <Box sx={{ height: 600, width: '100%' }}>
             {loading ? (
@@ -388,7 +390,7 @@ const TripManagementDashboard: React.FC = () => {
               </Box>
             ) : trips.length === 0 ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                <Typography color="text.secondary">No active trips</Typography>
+                <Typography color="text.secondary">{t('trips.noActiveTrips')}</Typography>
               </Box>
             ) : (
               <DataGrid

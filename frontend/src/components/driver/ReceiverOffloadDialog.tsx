@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -25,6 +25,8 @@ interface ReceiverOffloadDialogProps {
   onClose: () => void;
   load: Load;
   onSuccess: () => void;
+  /** Pre-captured POD photo (e.g. from Scan POD camera) */
+  initialPodPhoto?: File | null;
 }
 
 export const ReceiverOffloadDialog: React.FC<ReceiverOffloadDialogProps> = ({
@@ -32,6 +34,7 @@ export const ReceiverOffloadDialog: React.FC<ReceiverOffloadDialogProps> = ({
   onClose,
   load,
   onSuccess,
+  initialPodPhoto,
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -45,6 +48,15 @@ export const ReceiverOffloadDialog: React.FC<ReceiverOffloadDialogProps> = ({
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open && initialPodPhoto) {
+      setPodPhoto(initialPodPhoto);
+      const reader = new FileReader();
+      reader.onloadend = () => setPodPhotoPreview(reader.result as string);
+      reader.readAsDataURL(initialPodPhoto);
+    }
+  }, [open, initialPodPhoto]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -79,9 +91,15 @@ export const ReceiverOffloadDialog: React.FC<ReceiverOffloadDialogProps> = ({
       setLoading(true);
       setError(null);
 
-      // TODO: Upload files to server and get URLs
-      const podDocumentUrl = podFile ? '' : undefined;
-      const podPhotoUrl = podPhotoPreview || undefined;
+      let podDocumentUrl: string | undefined;
+      let podPhotoUrl: string | undefined;
+      if (podFile) podDocumentUrl = await loadApi.uploadLoadDocument(load.id, podFile);
+      if (podPhoto) podPhotoUrl = await loadApi.uploadLoadDocument(load.id, podPhoto);
+
+      if (!podDocumentUrl && !podPhotoUrl) {
+        setError('Please upload proof of delivery (document or photo)');
+        return;
+      }
 
       await loadApi.receiverOffload(load.id, {
         quantity,
@@ -193,6 +211,7 @@ export const ReceiverOffloadDialog: React.FC<ReceiverOffloadDialogProps> = ({
               ref={photoInputRef}
               type="file"
               accept="image/*"
+              capture="environment"
               onChange={handlePhotoSelect}
               style={{ display: 'none' }}
             />

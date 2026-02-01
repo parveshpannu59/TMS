@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '../../api/auth.api';
+import { setAuthToken } from '../../api/client';
 import { saveAuth } from '../../utils/mobileAuth';
 import '../../layouts/mobile/mobile.css';
 
@@ -23,6 +24,7 @@ export default function DriverLoginMobile() {
       if (!token) throw new Error('Missing access token');
       const role = user?.role || user?.userType;
       if (role && role !== 'driver') throw new Error('Only driver accounts can sign in here');
+      setAuthToken(token); // Enable API calls (loadApi, etc.)
       saveAuth({ accessToken: token, user, role });
       navigate('/driver/mobile/dashboard', { replace: true });
     } catch (err: any) {

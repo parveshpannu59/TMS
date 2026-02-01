@@ -473,6 +473,7 @@ import {
 import { DashboardLayout } from '@layouts/DashboardLayout';
 import { useThemeMode } from '@/contexts/ThemeContext';
 import { useAuth } from '@/hooks/useAuth';
+import { getApiOrigin } from '@/api/client';
 import { settingsApi } from '@/api/settings.api';
 import type { UserSettings, PasswordChange } from '@/api/settings.api';
 import { useTranslation } from 'react-i18next';
@@ -1447,7 +1448,7 @@ const SettingsPage: React.FC = () => {
                             user?.profilePicture 
                               ? (user.profilePicture.startsWith('http') 
                                   ? user.profilePicture 
-                                  : `http://localhost:5000${user.profilePicture}`)
+                                  : `${getApiOrigin()}${user.profilePicture}`)
                               : undefined
                           }
                           sx={{ 

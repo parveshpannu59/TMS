@@ -12,6 +12,7 @@ import {
   CircularProgress,
   Fab,
   useTheme,
+  useMediaQuery,
   List,
   ListItem,
   ListItemText,
@@ -42,6 +43,7 @@ export const SOSButton: React.FC<SOSButtonProps> = ({
   ],
 }) => {
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [dialogOpen, setDialogOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [location, setLocation] = useState<{ lat: number; lng: number; address: string } | null>(null);
@@ -151,7 +153,7 @@ export const SOSButton: React.FC<SOSButtonProps> = ({
         disabled={sosActive}
         sx={{
           position: 'fixed',
-          bottom: isMobile => (isMobile ? 80 : 24),
+          bottom: isMobile ? 88 : 24,
           right: 24,
           animation: sosActive ? 'none' : 'pulse 2s ease-in-out infinite',
           '@keyframes pulse': {

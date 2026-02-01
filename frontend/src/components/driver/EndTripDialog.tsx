@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -16,7 +16,7 @@ import {
   useMediaQuery,
   Grid,
 } from '@mui/material';
-import { Close, AttachMoney, LocalGasStation, Toll, Build } from '@mui/icons-material';
+import { Close, AttachMoney, LocalGasStation, Toll, Build, PhotoCamera } from '@mui/icons-material';
 import { loadApi } from '@/api/all.api';
 import type { Load } from '@/types/all.types';
 
@@ -39,9 +39,14 @@ export const EndTripDialog: React.FC<EndTripDialogProps> = ({
   const [totalMiles, setTotalMiles] = useState('');
   const [rate, setRate] = useState('');
   const [fuelExpenses, setFuelExpenses] = useState('');
+
+  useEffect(() => {
+    if (open && load?.rate) setRate(String(load.rate));
+  }, [open]);
   const [tolls, setTolls] = useState('');
   const [otherCosts, setOtherCosts] = useState('');
   const [additionalExpenseDetails, setAdditionalExpenseDetails] = useState('');
+  const [endingPhoto, setEndingPhoto] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,6 +76,11 @@ export const EndTripDialog: React.FC<EndTripDialogProps> = ({
       setLoading(true);
       setError(null);
 
+      let endingPhotoUrl: string | undefined;
+      if (endingPhoto) {
+        endingPhotoUrl = await loadApi.uploadLoadDocument(load.id, endingPhoto);
+      }
+
       await loadApi.endTrip(load.id, {
         endingMileage: parseInt(endingMileage),
         totalMiles: parseFloat(totalMiles),
@@ -79,6 +89,7 @@ export const EndTripDialog: React.FC<EndTripDialogProps> = ({
         tolls: parseFloat(tolls) || 0,
         otherCosts: parseFloat(otherCosts) || 0,
         additionalExpenseDetails,
+        endingPhoto: endingPhotoUrl,
       });
 
       onSuccess();
@@ -98,6 +109,7 @@ export const EndTripDialog: React.FC<EndTripDialogProps> = ({
     setTolls('');
     setOtherCosts('');
     setAdditionalExpenseDetails('');
+    setEndingPhoto(null);
     setError(null);
     onClose();
   };
@@ -194,6 +206,39 @@ export const EndTripDialog: React.FC<EndTripDialogProps> = ({
                 </Typography>
               </Alert>
             )}
+          </Box>
+
+          <Divider />
+
+          {/* Ending Odometer Photo */}
+          <Box>
+            <Typography variant="h6" sx={{ mb: 2 }}>
+              Ending Odometer Photo (Optional)
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              Upload a photo of the odometer reading at trip end for verification.
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Button
+                variant="outlined"
+                component="label"
+                startIcon={<PhotoCamera />}
+                disabled={loading}
+              >
+                {endingPhoto ? endingPhoto.name : 'Choose Photo'}
+                <input
+                  type="file"
+                  hidden
+                  accept="image/*"
+                  onChange={(e) => setEndingPhoto(e.target.files?.[0] || null)}
+                />
+              </Button>
+              {endingPhoto && (
+                <Typography variant="caption" color="text.secondary">
+                  ({(endingPhoto.size / 1024).toFixed(0)} KB)
+                </Typography>
+              )}
+            </Box>
           </Box>
 
           <Divider />

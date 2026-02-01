@@ -43,15 +43,6 @@ const statusColors: Record<string, 'success' | 'warning' | 'error' | 'info'> = {
   out_of_service: 'error',
 };
 
-const trailerTypes: Record<string, string> = {
-  dry_van: 'Dry Van',
-  reefer: 'Reefer',
-  flatbed: 'Flatbed',
-  step_deck: 'Step Deck',
-  lowboy: 'Lowboy',
-  tanker: 'Tanker',
-};
-
 const TrailersPage: React.FC = () => {
   const { t } = useTranslation();
   const [trailers, setTrailers] = useState<Trailer[]>([]);
@@ -201,10 +192,19 @@ const TrailersPage: React.FC = () => {
     }
   };
 
+  const trailerTypes: Record<string, string> = {
+    dry_van: t('trailers.dryVan'),
+    reefer: t('trailers.reefer'),
+    flatbed: t('trailers.flatbed'),
+    step_deck: t('trailers.stepDeck'),
+    lowboy: t('trailers.lowboy'),
+    tanker: t('trailers.tanker'),
+  };
+
   const columns: GridColDef[] = [
     {
       field: 'unitNumber',
-      headerName: 'Unit #',
+      headerName: t('trailers.unitShort'),
       flex: 0.8,
       minWidth: 100,
       renderCell: (params) => (
@@ -215,57 +215,65 @@ const TrailersPage: React.FC = () => {
     },
     {
       field: 'type',
-      headerName: 'Type',
+      headerName: t('trailers.type'),
       flex: 1,
       minWidth: 110,
       renderCell: (params) => trailerTypes[params.value] || params.value,
     },
     {
       field: 'make',
-      headerName: 'Make',
+      headerName: t('trailers.make'),
       flex: 1,
       minWidth: 110,
     },
     {
       field: 'year',
-      headerName: 'Year',
+      headerName: t('trailers.year'),
       flex: 0.6,
       minWidth: 80,
     },
     {
       field: 'vin',
-      headerName: 'VIN',
+      headerName: t('trailers.vin'),
       flex: 1.4,
       minWidth: 140,
     },
     {
       field: 'licensePlate',
-      headerName: 'License Plate',
+      headerName: t('trailers.licensePlate'),
       flex: 1,
       minWidth: 120,
     },
     {
       field: 'status',
-      headerName: 'Status',
+      headerName: t('common.status'),
       flex: 1.2,
       minWidth: 130,
-      renderCell: (params) => (
-        <Chip
-          label={params.value.replace('_', ' ').toUpperCase()}
-          color={statusColors[params.value] || 'default'}
-          size="small"
-        />
-      ),
+      renderCell: (params) => {
+        const statusLabels: Record<string, string> = {
+          available: t('common.available'),
+          on_road: t('trailers.onRoad'),
+          in_maintenance: t('trailers.inMaintenance'),
+          out_of_service: t('trailers.outOfService'),
+        };
+        return (
+          <Chip
+            label={statusLabels[params.value] || params.value}
+            color={statusColors[params.value] || 'default'}
+            size="small"
+          />
+        );
+      },
     },
     {
       field: 'currentLoadId',
-      headerName: 'Current Load',
+      headerName: t('trailers.currentLoad'),
       flex: 1.2,
       minWidth: 130,
       renderCell: (params) =>
         params.value ? (
           <Typography variant="body2" color="primary">
-            {params.value.loadNumber || 'Assigned'}
+            {params.value.loadNumber || t('loads.assigned')}
           </Typography>
         ) : (
           <Typography variant="body2" color="text.secondary">
@@ -275,14 +283,14 @@ const TrailersPage: React.FC = () => {
     },
     {
       field: 'notes',
-      headerName: 'Notes',
+      headerName: t('common.notes'),
       flex: 1.5,
       minWidth: 150,
       renderCell: (params) => {
         if (!params || !params.row) {
           return (
             <Typography variant="body2" color="text.secondary" fontStyle="italic">
-              No notes
+              {t('common.noNotes')}
             </Typography>
           );
         }
@@ -290,7 +298,7 @@ const TrailersPage: React.FC = () => {
         if (!notes) {
           return (
             <Typography variant="body2" color="text.secondary" fontStyle="italic">
-              No notes
+              {t('common.noNotes')}
             </Typography>
           );
         }
@@ -325,12 +333,12 @@ const TrailersPage: React.FC = () => {
     {
       field: 'actions',
       type: 'actions',
-      headerName: 'Actions',
+      headerName: t('common.actions'),
       width: 100,
       getActions: (params) => [
         <GridActionsCellItem
           icon={<Edit />}
-          label="Edit"
+          label={t('common.edit')}
           onClick={() => handleOpenDialog(params.row as Trailer)}
         />,
         <GridActionsCellItem

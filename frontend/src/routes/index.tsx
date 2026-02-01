@@ -59,8 +59,11 @@ const DriverDashboard = lazy(() => import('@pages/DriverDashboard'));
 const PendingAssignmentsPage = lazy(() => import('@pages/driver/PendingAssignmentsPage'));
 import DriverMobileShell from '../layouts/mobile/DriverMobileShell';
 import DriverDashboardMobile from '../pages/driver/DriverDashboardMobile';
+import DriverTripsMobile from '../pages/driver/DriverTripsMobile';
+import DriverMessagesMobile from '../pages/driver/DriverMessagesMobile';
 import DriverLoginMobile from '../pages/driver/DriverLoginMobile';
 import DriverSettingsMobile from '../pages/driver/DriverSettingsMobile';
+import { DriverMobileProvider } from '../contexts/DriverMobileContext';
 import { isDriverAuthenticated } from '../utils/mobileAuth';
 
 function roleIsDriver() {
@@ -193,14 +196,16 @@ export const AppRoutes = () => {
           path="/driver/mobile"
           element={
             <DriverMobileGuard>
-              <DriverMobileShell />
+              <DriverMobileProvider>
+                <DriverMobileShell />
+              </DriverMobileProvider>
             </DriverMobileGuard>
           }
         >
           <Route index element={<Navigate to="/driver/mobile/dashboard" replace />} />
           <Route path="dashboard" element={<DriverDashboardMobile />} />
-          <Route path="trips" element={<div className="dm-content">Trips (mobile)</div>} />
-          <Route path="messages" element={<div className="dm-content">Messages (mobile)</div>} />
+          <Route path="trips" element={<DriverTripsMobile />} />
+          <Route path="messages" element={<DriverMessagesMobile />} />
           <Route path="settings" element={<DriverSettingsMobile />} />
         </Route>
         <Route path="/" element={roleIsDriver() ? <Navigate to="/driver/mobile/dashboard" replace /> : <Navigate to="/dashboard" replace />} />

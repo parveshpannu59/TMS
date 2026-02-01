@@ -102,6 +102,18 @@ export const loadApi = {
     return response.data.data as Load;
   },
 
+  // Upload document for load (odometer, BOL, POD)
+  uploadLoadDocument: async (loadId: string, file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await apiClient.post<ApiResponse<{ url: string }>>(
+      `/loads/${loadId}/upload-document`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data.data!.url;
+  },
+
   // Trip workflow endpoints
   startTrip: async (
     id: string,
@@ -163,6 +175,13 @@ export const loadApi = {
   ): Promise<Load> => {
     const response = await apiClient.post<ApiResponse<Load>>(`/loads/${id}/receiver-offload`, data);
     return response.data.data as Load;
+  },
+
+  updateLocation: async (
+    id: string,
+    data: { lat: number; lng: number; speed?: number; heading?: number }
+  ): Promise<void> => {
+    await apiClient.post(`/loads/${id}/update-location`, data);
   },
 
   endTrip: async (

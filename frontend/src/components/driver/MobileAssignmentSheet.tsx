@@ -11,11 +11,11 @@ export default function MobileAssignmentSheet({ open, onClose, onAccepted }: { o
   return (
     <div className={`dm-drawer ${open ? 'open' : ''}`} onClick={onClose}>
       <div className="dm-drawer-panel" onClick={e => e.stopPropagation()} style={{height:'100%', display:'grid', gridTemplateRows:'auto 1fr', gap:12}}>
-        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-          <div style={{fontWeight:800}}>Notifications</div>
-          <button className="dm-chip" onClick={onClose}>Close</button>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, minWidth:0}}>
+          <div style={{fontWeight:800, flex:1, minWidth:0}}>Notifications</div>
+          <button className="dm-chip" onClick={onClose} style={{flexShrink:0}}>Close</button>
         </div>
-        <div style={{overflow:'auto', display:'grid', gap:10}}>
+        <div style={{overflow:'auto', display:'grid', gap:10, minWidth:0}}>
           {error && <div style={{color:'#ff8080', fontSize:13}}>{error}</div>}
           {loading && <div style={{color:'var(--dm-muted)'}}>Loading…</div>}
 
@@ -27,16 +27,18 @@ export default function MobileAssignmentSheet({ open, onClose, onAccepted }: { o
           {pending.map((a) => {
             const id = a.id || a._id!;
             return (
-              <div key={id} className="dm-card" style={{display:'grid', gap:8}}>
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                  <div style={{fontWeight:700}}>Assignment</div>
-                  <div className="dm-chip">{a.loadNumber || id.substring(0,6)}</div>
+              <div key={id} className="dm-card" style={{display:'grid', gap:8, minWidth:0}}>
+                <div className="dm-notif-header">
+                  <div className="dm-notif-title" style={{fontWeight:700}}>Assignment</div>
+                  <div className="dm-notif-chips">
+                    <span className="dm-chip">{a.loadNumber || id.substring(0,6)}</span>
+                  </div>
                 </div>
-                <div style={{display:'grid', gap:6, color:'var(--dm-muted)', fontSize:13}}>
+                <div style={{display:'grid', gap:6, color:'var(--dm-muted)', fontSize:13, wordBreak:'break-word'}}>
                   <div>From: {a.pickupLocation?.city || '—'}</div>
                   <div>To: {a.deliveryLocation?.city || '—'}</div>
                 </div>
-                <div className="dm-row">
+                <div className="dm-notif-row">
                   <button className="dm-btn" disabled={busy===id} onClick={async() => { setBusy(id); try { await accept(id); onAccepted?.(id); } finally { setBusy(null);} }}>Accept</button>
                   <button className="dm-btn ghost" disabled={busy===id} onClick={async() => { setBusy(id); try { await reject(id); } finally { setBusy(null);} }}>Decline</button>
                 </div>
@@ -51,22 +53,64 @@ export default function MobileAssignmentSheet({ open, onClose, onAccepted }: { o
           )}
           {notifications.map((n: any) => {
             const id = n.id || n._id;
-            const type = (n.type || '').toString().toUpperCase();
             const ts = n.createdAt ? new Date(n.createdAt).toLocaleString() : '';
             const status = n.metadata?.status || n.status;
+            const assignmentId = n.metadata?.assignmentId;
+            const loadNumber = n.metadata?.loadNumber;
+            const isNewLoadAssigned = (n.title || '').toLowerCase().includes('new load assigned') || (n.title || '').toLowerCase().includes('assigned');
+            const canAcceptReject = isNewLoadAssigned && assignmentId && !status;
+
             return (
-              <div key={id} className="dm-card" style={{display:'grid', gap:6}}>
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                  <div style={{fontWeight:600}}>{n.title || 'Notification'}</div>
-                  {status && <div className="dm-chip">{String(status).toUpperCase()}</div>}
+              <div key={id} className="dm-card" style={{display:'grid', gap:8, minWidth:0}}>
+                <div className="dm-notif-header">
+                  <div className="dm-notif-title" style={{fontWeight:600}}>{n.title || 'Notification'}</div>
+                  <div className="dm-notif-chips">
+                    {loadNumber && <span className="dm-chip">{loadNumber}</span>}
+                    {status && !canAcceptReject && <span className="dm-chip">{String(status).toUpperCase()}</span>}
+                  </div>
                 </div>
-                <div style={{color:'var(--dm-muted)', fontSize:13}}>{n.message || n.description || '-'}</div>
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                  <div style={{fontSize:12, color:'var(--dm-muted)'}}>{ts}</div>
-                  {!n.read && (
+                <div className="dm-notif-msg" style={{color:'var(--dm-muted)', fontSize:13}}>{n.message || n.description || '-'}</div>
+                <div style={{fontSize:12, color:'var(--dm-muted)'}}>{ts}</div>
+                {canAcceptReject ? (
+                  <div className="dm-notif-row">
+                    <button
+                      className="dm-btn"
+                      disabled={busy === assignmentId}
+                      onClick={async () => {
+                        setBusy(assignmentId);
+                        try {
+                          await accept(assignmentId);
+                          await markAsRead(id);
+                          onClose();
+                          onAccepted?.(assignmentId);
+                        } finally {
+                          setBusy(null);
+                        }
+                      }}
+                    >
+                      Accept
+                    </button>
+                    <button
+                      className="dm-btn ghost"
+                      disabled={busy === assignmentId}
+                      onClick={async () => {
+                        setBusy(assignmentId);
+                        try {
+                          await reject(assignmentId);
+                          await markAsRead(id);
+                        } finally {
+                          setBusy(null);
+                        }
+                      }}
+                    >
+                      Reject
+                    </button>
+                  </div>
+                ) : (
+                  !n.read && (
                     <button className="dm-chip" onClick={() => markAsRead(id)}>Mark as read</button>
-                  )}
-                </div>
+                  )
+                )}
               </div>
             );
           })}

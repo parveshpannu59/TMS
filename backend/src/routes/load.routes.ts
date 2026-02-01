@@ -1,6 +1,7 @@
 import express from 'express';
 import { LoadController } from '../controllers/load.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
+import { uploadDocument } from '../middleware/upload.middleware';
 import { UserRole } from '../types/auth.types';
 
 const router = express.Router();
@@ -88,6 +89,14 @@ router.post(
   LoadController.submitDriverForm
 );
 
+// Upload document for load (odometer, BOL, POD)
+router.post(
+  '/:id/upload-document',
+  authorize(UserRole.DRIVER),
+  uploadDocument,
+  LoadController.uploadDocument
+);
+
 // Trip workflow endpoints (Driver)
 router.post(
   '/:id/start-trip',
@@ -132,6 +141,13 @@ router.post(
   '/:id/end-trip',
   authorize(UserRole.DRIVER),
   LoadController.endTrip
+);
+
+// Update location during trip (Driver - live tracking)
+router.post(
+  '/:id/update-location',
+  authorize(UserRole.DRIVER),
+  LoadController.updateLocation
 );
 
 // SOS/Emergency notification (Driver)

@@ -14,10 +14,25 @@ export interface KPIData {
     };
   }
   
+  export interface LoadStatusByStage {
+    booked: number;
+    assigned: number;
+    tripAccepted: number;
+    tripStarted: number;
+    shipperCheckIn: number;
+    shipperLoadIn: number;
+    shipperLoadOut: number;
+    inTransit: number;
+    receiverCheckIn: number;
+    receiverOffload: number;
+    completed: number;
+  }
+
   export interface LoadStatus {
     pending: number;
     inTransit: number;
     delayed: number;
+    byStatus?: LoadStatusByStage;
   }
   
   export interface Activity {

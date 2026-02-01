@@ -3,6 +3,12 @@ import type { ApiError } from '../types/api.types';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
+/** Base URL for API server (used for static assets like profile pictures) */
+export const getApiOrigin = (): string => {
+  const base = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:5000/api';
+  return base.replace(/\/api\/?$/, '') || 'http://localhost:5000';
+};
+
 // Create axios instance
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,

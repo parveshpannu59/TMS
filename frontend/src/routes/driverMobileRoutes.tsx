@@ -1,7 +1,9 @@
 import { Navigate } from 'react-router-dom';
 import DriverMobileShell from '../layouts/mobile/DriverMobileShell';
 import DriverDashboardMobile from '../pages/driver/DriverDashboardMobile';
-import DriverLoginMobile from '../pages/driver/DriverLoginMobile';
+import DriverTripsMobile from '../pages/driver/DriverTripsMobile';
+import DriverMessagesMobile from '../pages/driver/DriverMessagesMobile';
+import DriverSettingsMobile from '../pages/driver/DriverSettingsMobile';
 import { isDriverAuthenticated } from '../utils/mobileAuth';
 
 function DriverGuard({ children }: { children: JSX.Element }) {
@@ -22,10 +24,9 @@ export const driverMobileRoutes = [
     children: [
       { index: true, element: <Navigate to="/driver/mobile/dashboard" replace /> },
       { path: 'dashboard', element: <DriverDashboardMobile /> },
-      // placeholders for future mobile-first driver pages
-      { path: 'trips', element: <div className="dm-content">Trips (mobile)</div> },
-      { path: 'messages', element: <div className="dm-content">Messages (mobile)</div> },
-      { path: 'settings', element: <div className="dm-content">Settings (mobile)</div> },
+      { path: 'trips', element: <DriverTripsMobile /> },
+      { path: 'messages', element: <DriverMessagesMobile /> },
+      { path: 'settings', element: <DriverSettingsMobile /> },
     ],
   },
 ];

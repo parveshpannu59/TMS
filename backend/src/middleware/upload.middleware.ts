@@ -41,3 +41,33 @@ export const upload = multer({
 
 // Single file upload middleware for profile pictures
 export const uploadProfilePicture = upload.single('profilePicture');
+
+// Document upload (BOL, POD, odometer) - images and PDFs
+const documentsDir = path.join(process.cwd(), 'uploads', 'documents');
+if (!fs.existsSync(documentsDir)) {
+  fs.mkdirSync(documentsDir, { recursive: true });
+}
+
+const documentStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, documentsDir),
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname) || (file.mimetype === 'application/pdf' ? '.pdf' : '.jpg');
+    cb(null, `doc-${uniqueSuffix}${ext}`);
+  },
+});
+
+const documentFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
+  const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+  if (file.mimetype && allowed.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only images (JPEG, PNG, GIF, WebP) and PDF are allowed'));
+  }
+};
+
+export const uploadDocument = multer({
+  storage: documentStorage,
+  fileFilter: documentFilter,
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB (compress PDFs if larger)
+}).single('file');

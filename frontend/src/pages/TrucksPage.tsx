@@ -194,7 +194,7 @@ const TrucksPage: React.FC = () => {
   const columns: GridColDef[] = [
     {
       field: 'unitNumber',
-      headerName: 'Unit #',
+      headerName: t('trucks.unitShort'),
       flex: 0.8,
       minWidth: 100,
       renderCell: (params) => (
@@ -205,56 +205,64 @@ const TrucksPage: React.FC = () => {
     },
     {
       field: 'make',
-      headerName: 'Make',
+      headerName: t('trucks.make'),
       flex: 1,
       minWidth: 110,
     },
     {
       field: 'model',
-      headerName: 'Model',
+      headerName: t('trucks.model'),
       flex: 1,
       minWidth: 110,
     },
     {
       field: 'year',
-      headerName: 'Year',
+      headerName: t('trucks.year'),
       flex: 0.6,
       minWidth: 80,
     },
     {
       field: 'vin',
-      headerName: 'VIN',
+      headerName: t('trucks.vin'),
       flex: 1.4,
       minWidth: 140,
     },
     {
       field: 'licensePlate',
-      headerName: 'License Plate',
+      headerName: t('trucks.licensePlate'),
       flex: 1,
       minWidth: 120,
     },
     {
       field: 'status',
-      headerName: 'Status',
+      headerName: t('common.status'),
       flex: 1.2,
       minWidth: 130,
-      renderCell: (params) => (
-        <Chip
-          label={params.value.replace('_', ' ').toUpperCase()}
-          color={statusColors[params.value] || 'default'}
-          size="small"
-        />
-      ),
+      renderCell: (params) => {
+        const statusLabels: Record<string, string> = {
+          available: t('trucks.available'),
+          on_road: t('trucks.onRoad'),
+          in_maintenance: t('trucks.inMaintenance'),
+          out_of_service: t('trucks.outOfService'),
+        };
+        return (
+          <Chip
+            label={statusLabels[params.value] || params.value}
+            color={statusColors[params.value] || 'default'}
+            size="small"
+          />
+        );
+      },
     },
     {
       field: 'currentLoadId',
-      headerName: 'Current Load',
+      headerName: t('trucks.currentLoad'),
       flex: 1.2,
       minWidth: 130,
       renderCell: (params) =>
         params.value ? (
           <Typography variant="body2" color="primary">
-            {params.value.loadNumber || 'Assigned'}
+            {params.value.loadNumber || t('loads.assigned')}
           </Typography>
         ) : (
           <Typography variant="body2" color="text.secondary">
@@ -264,14 +272,14 @@ const TrucksPage: React.FC = () => {
     },
     {
       field: 'notes',
-      headerName: 'Notes',
+      headerName: t('common.notes'),
       flex: 1.5,
       minWidth: 150,
       renderCell: (params) => {
         if (!params || !params.row) {
           return (
             <Typography variant="body2" color="text.secondary" fontStyle="italic">
-              No notes
+              {t('common.noNotes')}
             </Typography>
           );
         }
@@ -279,7 +287,7 @@ const TrucksPage: React.FC = () => {
         if (!notes) {
           return (
             <Typography variant="body2" color="text.secondary" fontStyle="italic">
-              No notes
+              {t('common.noNotes')}
             </Typography>
           );
         }
@@ -319,12 +327,12 @@ const TrucksPage: React.FC = () => {
       getActions: (params) => [
         <GridActionsCellItem
           icon={<Edit />}
-          label="Edit"
+          label={t('common.edit')}
           onClick={() => handleOpenDialog(params.row as Truck)}
         />,
         <GridActionsCellItem
           icon={<Delete />}
-          label="Delete"
+          label={t('common.delete')}
           onClick={() => handleDelete(params.row._id)}
           showInMenu
         />,
@@ -394,7 +402,7 @@ const TrucksPage: React.FC = () => {
             sx={{ minWidth: 150 }}
             size="small"
           >
-            <MenuItem value="all">{t('common.allStatus')}</MenuItem>
+            <MenuItem value="all">{t('common.allStatuses')}</MenuItem>
             <MenuItem value="available">{t('common.available')}</MenuItem>
             <MenuItem value="on_trip">{t('trucks.onTrip', { defaultValue: 'On Trip' })}</MenuItem>
             <MenuItem value="maintenance">{t('trucks.maintenance', { defaultValue: 'Maintenance' })}</MenuItem>
