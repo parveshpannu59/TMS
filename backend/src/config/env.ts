@@ -9,6 +9,7 @@ interface EnvConfig {
   jwtSecret: string;
   jwtExpiresIn: string;
   corsOrigin: string;
+  corsOrigins: string[];
   r2: {
     accountId: string;
     accessKeyId: string;
@@ -37,6 +38,7 @@ export const config: EnvConfig = {
   jwtSecret: getEnvVar('JWT_SECRET'),
   jwtExpiresIn: getEnvVar('JWT_EXPIRES_IN', '24h'),
   corsOrigin: getEnvVar('CORS_ORIGIN', 'http://localhost:3000'),
+  corsOrigins: getOptionalEnvVar('CORS_ORIGINS', '').split(',').map(s => s.trim()).filter(Boolean),
   r2: {
     accountId: getOptionalEnvVar('R2_ACCOUNT_ID'),
     accessKeyId: getOptionalEnvVar('R2_ACCESS_KEY_ID'),

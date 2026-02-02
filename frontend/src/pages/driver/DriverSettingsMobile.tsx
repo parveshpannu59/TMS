@@ -5,11 +5,13 @@ import { clearAuth, getAuth, saveAuth } from '../../utils/mobileAuth';
 import { clearAuthToken, getApiOrigin } from '../../api/client';
 import { settingsApi } from '../../api/settings.api';
 import { useDriverMobile } from '../../contexts/DriverMobileContext';
+import { useAuth } from '../../contexts/AuthContext';
 import '../../layouts/mobile/mobile.css';
 
 export default function DriverSettingsMobile() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { logout: authLogout } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [auth, setAuthState] = useState<ReturnType<typeof getAuth>>(null);
   const [uploadingPic, setUploadingPic] = useState(false);
@@ -68,7 +70,7 @@ export default function DriverSettingsMobile() {
   const handleLogout = () => {
     clearAuth();
     clearAuthToken();
-    navigate('/driver/login', { replace: true });
+    authLogout();
   };
 
   return (

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { clearAuth, getAuth } from '../../utils/mobileAuth';
 import { clearAuthToken, setAuthToken, getApiOrigin } from '../../api/client';
 import { useDriverMobile } from '../../contexts/DriverMobileContext';
+import { useAuth } from '../../contexts/AuthContext';
 import './mobile.css';
 import { useDriverAssignments } from '../../hooks/useDriverAssignments';
 import { useDriverNotifications } from '../../hooks/useDriverNotifications';
@@ -12,6 +13,7 @@ import MobileAssignmentSheet from '../../components/driver/MobileAssignmentSheet
 export default function DriverMobileShell() {
   const { t } = useTranslation();
   const { theme } = useDriverMobile();
+  const { logout: authLogout } = useAuth();
   const [open, setOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [, setRefresh] = useState(0);
@@ -35,7 +37,7 @@ export default function DriverMobileShell() {
   const logout = () => {
     clearAuth();
     clearAuthToken();
-    navigate('/driver/login', { replace: true });
+    authLogout();
   };
 
   return (

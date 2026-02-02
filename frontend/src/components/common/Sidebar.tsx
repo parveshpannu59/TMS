@@ -27,7 +27,9 @@ import {
   Assessment,
   History,
   Settings,
+  HelpOutline,
 } from '@mui/icons-material';
+import { Link } from '@mui/material';
 import { useAuth } from '@hooks/useAuth';
 import { UserRole } from '../../types/user.types';
 import { useTranslation } from 'react-i18next';
@@ -254,6 +256,25 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(
           </List>
         </Box>
         <Divider />
+        <Box sx={{ px: 2, py: 1, borderTop: `1px solid ${theme.palette.divider}` }}>
+          <Link
+            href="mailto:support@yourdomain.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              color: 'text.secondary',
+              textDecoration: 'none',
+              fontSize: '0.8125rem',
+              '&:hover': { color: 'primary.main' },
+            }}
+          >
+            <HelpOutline sx={{ fontSize: 18 }} />
+            {t('driverSettings.helpSupport', { defaultValue: 'Help & Support' })}
+          </Link>
+        </Box>
         <Box 
           sx={{ 
             p: 2, 

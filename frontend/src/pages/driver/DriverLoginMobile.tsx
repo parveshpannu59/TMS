@@ -44,7 +44,7 @@ export default function DriverLoginMobile() {
             <input className="dm-input" placeholder="Password" type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" />
             {error && <div style={{color:'#ff7676', fontSize:13}}>{error}</div>}
             <button className="dm-btn" disabled={loading}>{loading ? 'Signing in…' : 'Sign In'}</button>
-            <button type="button" className="dm-btn ghost" onClick={() => navigate('/driver/login')}>Use Email/Phone</button>
+            <button type="button" className="dm-btn ghost" onClick={() => navigate('/login')}>Use Email/Phone</button>
           </div>
         </form>
         <div style={{marginTop:10, textAlign:'center', fontSize:12, color:'var(--dm-muted)'}}>Mobile-only driver access</div>

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import authRoutes from './auth.routes';
 import userRoutes from './user.routes';
 import dashboardRoutes from './dashboardRoutes';
@@ -17,7 +18,31 @@ import settingsRoutes from './settings.route';
 const router = Router();
 
 router.get('/health', (_req, res) => {
-  res.json({ success: true, message: 'TMS API is running' });
+  res.json({
+    success: true,
+    message: 'TMS API is running',
+    version: '1.0',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
+});
+
+router.get('/health/ready', (_req, res) => {
+  const dbState = mongoose.connection.readyState;
+  const dbOk = dbState === 1;
+  if (!dbOk) {
+    return res.status(503).json({
+      success: false,
+      message: 'Service unavailable',
+      database: dbState === 0 ? 'connecting' : dbState === 2 ? 'disconnecting' : 'disconnected',
+    });
+  }
+  return res.json({
+    success: true,
+    message: 'Ready',
+    database: 'connected',
+    timestamp: new Date().toISOString(),
+  });
 });
 
 router.use('/auth', authRoutes);
