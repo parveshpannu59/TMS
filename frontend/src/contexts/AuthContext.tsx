@@ -2,6 +2,7 @@ import React, { createContext, useState, useCallback, useEffect, useMemo, useCon
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '@api/auth.api';
 import { setAuthToken, clearAuthToken, getAuthToken } from '@api/client';
+import { saveAuth, clearAuth } from '../utils/mobileAuth';
 import type {
   AuthState,
   AuthContextValue,
@@ -51,7 +52,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = React.memo(
             expiresAt,
           });
 
-          navigate('/dashboard', { replace: true });
+          const role = user?.role || user?.userType;
+          if (role === 'driver') {
+            saveAuth({ accessToken: token, user, role });
+            navigate('/driver/mobile/dashboard', { replace: true });
+          } else {
+            clearAuth();
+            navigate('/dashboard', { replace: true });
+          }
         } catch (error) {
           console.error('Login error in AuthContext:', error);
           setState((prev) => ({ ...prev, isLoading: false }));
@@ -77,6 +85,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = React.memo(
       } finally {
         // Clear token AFTER logout request is sent
         clearAuthToken();
+        clearAuth();
         setState({
           user: null,
           token: null,
@@ -99,8 +108,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = React.memo(
           isAuthenticated: true,
           isLoading: false,
         }));
+        const role = user?.role || user?.userType;
+        if (role === 'driver') {
+          const token = getAuthToken();
+          if (token) saveAuth({ accessToken: token, user, role });
+        } else {
+          clearAuth();
+        }
       } catch (error) {
         clearAuthToken();
+        clearAuth();
         setState({
           user: null,
           token: null,

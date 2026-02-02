@@ -81,7 +81,7 @@ function roleIsDriver() {
 
 function DriverMobileGuard({ children }: { children: JSX.Element }) {
   const ok = isDriverAuthenticated();
-  if (!ok) return <Navigate to="/driver/login" replace />;
+  if (!ok) return <Navigate to="/login" replace />;
   return children;
 }
 
