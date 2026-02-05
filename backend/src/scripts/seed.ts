@@ -43,6 +43,21 @@ const seedUsers = async () => {
     console.log('   Password: 123456');
     console.log('   ID:', owner._id);
 
+    // Create test driver
+    const driver = await User.create({
+      name: 'Test Driver',
+      email: 'driver@tms.com',
+      password: '123456',
+      role: UserRole.DRIVER,
+      phone: '9876543212',
+      status: 'active',
+    });
+
+    console.log('✅ Test Driver created:');
+    console.log('   Email: driver@tms.com');
+    console.log('   Password: 123456');
+    console.log('   ID:', driver._id);
+
     process.exit(0);
   } catch (error) {
     console.error('❌ Seed failed:', error);

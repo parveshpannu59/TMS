@@ -1,7 +1,7 @@
 import express from 'express';
 import { LoadController } from '../controllers/load.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
-import { uploadDocument } from '../middleware/upload.middleware';
+import { uploadDocument, uploadLoadImage } from '../middleware/upload.middleware';
 import { UserRole } from '../types/auth.types';
 
 const router = express.Router();
@@ -101,6 +101,14 @@ router.post(
   authorize(UserRole.DRIVER),
   uploadDocument,
   LoadController.uploadDocument
+);
+
+// Upload load/cargo image (Owner, Dispatcher)
+router.post(
+  '/:id/upload-image',
+  authorize(UserRole.OWNER, UserRole.DISPATCHER),
+  uploadLoadImage,
+  LoadController.uploadLoadImage
 );
 
 // Trip workflow endpoints (Driver)

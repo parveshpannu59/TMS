@@ -1248,6 +1248,28 @@ export class LoadController {
     });
   });
 
+  // Upload load/cargo image (Owner, Dispatcher)
+  static uploadLoadImage = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    if (!req.file) {
+      throw ApiError.badRequest('No file uploaded');
+    }
+
+    const userId = req.user!.id;
+    const companyId = req.user?.companyId ?? userId;
+
+    const load = await Load.findOne({ _id: id, companyId });
+    if (!load) {
+      throw ApiError.notFound('Load not found');
+    }
+
+    const imagePath = `/uploads/loads/${req.file.filename}`;
+    load.loadImage = imagePath;
+    await load.save();
+
+    return ApiResponse.success(res, { loadImage: imagePath }, 'Load image uploaded successfully');
+  });
+
   // Driver updates location during active trip (live tracking)
   static updateLocation = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;

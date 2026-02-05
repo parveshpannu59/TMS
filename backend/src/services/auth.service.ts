@@ -37,6 +37,7 @@ export class AuthService {
       id: user._id.toString(),
       email: user.email,
       role: user.role,
+      companyId: user.companyId || user._id.toString(),
     });
 
     const expiresAt = TokenService.getTokenExpiryDate();
@@ -50,6 +51,7 @@ export class AuthService {
         email: user.email,
         role: user.role,
         status: user.status,
+        companyId: user.companyId || user._id.toString(),
         profilePicture: (user as any).profilePicture || undefined,
       },
       expiresAt,
@@ -73,6 +75,7 @@ export class AuthService {
       email: user.email,
       role: user.role,
       status: user.status,
+      companyId: user.companyId || user._id.toString(),
       profilePicture: (user as any).profilePicture || undefined,
     };
   }

@@ -82,15 +82,9 @@ const getMenuItems = (t: (key: string) => string): MenuItem[] => [
     roles: [UserRole.OWNER, UserRole.DISPATCHER],
   },
   {
-    text: t('navigation.trucks'),
+    text: 'Vehicles', // Unified trucks + trailers
     icon: <DirectionsCar />,
-    path: '/trucks',
-    roles: [UserRole.OWNER, UserRole.DISPATCHER],
-  },
-  {
-    text: t('navigation.trailers'),
-    icon: <RvHookup />,
-    path: '/trailers',
+    path: '/vehicles',
     roles: [UserRole.OWNER, UserRole.DISPATCHER],
   },
   {

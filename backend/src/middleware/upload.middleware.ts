@@ -71,3 +71,72 @@ export const uploadDocument = multer({
   fileFilter: documentFilter,
   limits: { fileSize: 25 * 1024 * 1024 }, // 25MB (compress PDFs if larger)
 }).single('file');
+
+// Driver documents upload (photo, license, aadhar, pan, etc)
+const driverDocsDir = path.join(process.cwd(), 'uploads', 'drivers');
+if (!fs.existsSync(driverDocsDir)) {
+  fs.mkdirSync(driverDocsDir, { recursive: true });
+}
+
+const driverDocStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, driverDocsDir),
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname) || (file.mimetype === 'application/pdf' ? '.pdf' : '.jpg');
+    cb(null, `driver-${uniqueSuffix}${ext}`);
+  },
+});
+
+export const uploadDriverDocument = multer({
+  storage: driverDocStorage,
+  fileFilter: documentFilter,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+}).single('file');
+
+// Vehicle images upload
+const vehicleImagesDir = path.join(process.cwd(), 'uploads', 'vehicles');
+if (!fs.existsSync(vehicleImagesDir)) {
+  fs.mkdirSync(vehicleImagesDir, { recursive: true });
+}
+
+const vehicleImageStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, vehicleImagesDir),
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname) || '.jpg';
+    cb(null, `vehicle-${uniqueSuffix}${ext}`);
+  },
+});
+
+export const uploadVehicleImage = multer({
+  storage: vehicleImageStorage,
+  fileFilter,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+}).single('image');
+
+export const uploadVehicleDocument = multer({
+  storage: vehicleImageStorage,
+  fileFilter: documentFilter,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+}).single('file');
+
+// Load/Cargo images upload
+const loadImagesDir = path.join(process.cwd(), 'uploads', 'loads');
+if (!fs.existsSync(loadImagesDir)) {
+  fs.mkdirSync(loadImagesDir, { recursive: true });
+}
+
+const loadImageStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, loadImagesDir),
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname) || '.jpg';
+    cb(null, `load-${uniqueSuffix}${ext}`);
+  },
+});
+
+export const uploadLoadImage = multer({
+  storage: loadImageStorage,
+  fileFilter,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+}).single('image');

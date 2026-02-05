@@ -25,6 +25,13 @@ export interface Driver {
   licenseExpiry: Date | string;
   status: 'active' | 'inactive' | 'on_trip';
   currentLoadId?: any;
+  documents?: {
+    photo?: string;
+    license?: string;
+    aadhar?: string;
+    pan?: string;
+    others?: string[];
+  };
   createdAt: string;
   updatedAt: string;
 }
@@ -65,5 +72,26 @@ export const driverApi = {
   // Delete driver
   deleteDriver: async (id: string): Promise<void> => {
     await apiClient.delete(`/drivers/${id}`);
+  },
+
+  // Upload driver photo
+  uploadPhoto: async (id: string, file: File): Promise<Driver> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await apiClient.post(`/drivers/${id}/photo`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data.data;
+  },
+
+  // Upload driver document (license, aadhar, pan, other)
+  uploadDocument: async (id: string, file: File, type: 'license' | 'aadhar' | 'pan' | 'other'): Promise<Driver> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('type', type);
+    const response = await apiClient.post(`/drivers/${id}/document`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data.data;
   },
 };

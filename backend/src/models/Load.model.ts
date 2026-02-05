@@ -141,10 +141,12 @@ export interface ILoad extends Document {
   driverId?: string;
   truckId?: string;
   trailerId?: string;
+  vehicleId?: string; // Unified vehicle reference
   cargoType: string;
   cargoDescription: string;
   weight: number;
   loadType: LoadType;
+  loadImage?: string; // Image of the load/cargo
   rate: number;
   advancePaid: number;
   balance: number;
@@ -350,6 +352,10 @@ const loadSchema = new Schema<ILoad>(
       type: String,
       ref: 'Trailer',
     },
+    vehicleId: {
+      type: String,
+      ref: 'Vehicle',
+    },
     cargoType: {
       type: String,
       required: [true, 'Cargo type is required'],
@@ -367,6 +373,9 @@ const loadSchema = new Schema<ILoad>(
       type: String,
       enum: Object.values(LoadType),
       required: true,
+    },
+    loadImage: {
+      type: String,
     },
     rate: {
       type: Number,

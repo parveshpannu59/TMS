@@ -44,4 +44,33 @@ export class DriverController {
     await DriverService.deleteDriver(id as string);
     return ApiResponse.success(res, null, 'Driver deleted successfully');
   });
+
+  // Upload driver photo
+  static uploadPhoto = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    if (!req.file) {
+      return ApiResponse.error(res, 'No file uploaded', 400);
+    }
+    const filePath = `/uploads/drivers/${req.file.filename}`;
+    const driver = await DriverService.updateDriverDocument(id as string, 'photo', filePath);
+    return ApiResponse.success(res, driver, 'Driver photo uploaded successfully');
+  });
+
+  // Upload driver verification document (license, aadhar, pan)
+  static uploadDocument = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { type } = req.body; // 'license', 'aadhar', 'pan', or 'other'
+    
+    if (!req.file) {
+      return ApiResponse.error(res, 'No file uploaded', 400);
+    }
+    
+    if (!type || !['license', 'aadhar', 'pan', 'other'].includes(type)) {
+      return ApiResponse.error(res, 'Invalid document type', 400);
+    }
+    
+    const filePath = `/uploads/drivers/${req.file.filename}`;
+    const driver = await DriverService.updateDriverDocument(id as string, type, filePath);
+    return ApiResponse.success(res, driver, `Driver ${type} uploaded successfully`);
+  });
 }

@@ -63,6 +63,7 @@ export interface Load extends LoadFormData {
     unitNumber: string;
     type: string;
   };
+  loadImage?: string; // Cargo image
   status: string;
   hasRateConfirmation: boolean;
   hasBOL: boolean;
@@ -269,5 +270,15 @@ export const loadApi = {
     data: { location: { lat: number; lng: number }; message: string }
   ): Promise<void> => {
     await apiClient.post(`/loads/${id}/sos`, data);
+  },
+
+  // Upload load/cargo image
+  uploadLoadImage: async (id: string, file: File): Promise<{ loadImage: string }> => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const response = await apiClient.post(`/loads/${id}/upload-image`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data.data;
   },
 };

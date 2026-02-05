@@ -333,6 +333,7 @@ import PendingActionsIcon from '@mui/icons-material/PendingActions';
 import { useDashboard } from '../hooks/useDashboard';
 import { useDashboardLayout } from '../hooks/useDashboardLayout';
 import { KPICard } from '../components/dashboard/KPICard';
+import { VehicleStatsCard } from '../components/dashboard/VehicleStatsCard';
 import { LoadStatusChart } from '../components/dashboard/LoadStatusChart';
 import { RecentActivity } from '../components/dashboard/RecentActivity';
 import { CriticalTrips } from '../components/dashboard/CriticalTrips';
@@ -384,15 +385,6 @@ const Dashboard = () => {
         trend: data.kpis.trends.drivers,
         icon: <PeopleIcon />,
         color: 'success.main'
-      },
-      {
-        id: 'kpi-trucks',
-        title: t('dashboard.totalTrucks'),
-        value: data.kpis.totalTrucks,
-        subtitle: `${data.kpis.operationalTrucks} ${t('dashboard.operational')}`,
-        trend: data.kpis.trends.trucks,
-        icon: <LocalShippingIcon />,
-        color: 'info.main'
       },
       {
         id: 'kpi-completed',
@@ -590,6 +582,12 @@ const Dashboard = () => {
             </Suspense>
           </Grid>
         ))}
+        {/* Unified Vehicles Card */}
+        <Grid item xs={12} sm={6} md={3}>
+          <Suspense fallback={<Skeleton variant="rectangular" height={120} />}>
+            <VehicleStatsCard />
+          </Suspense>
+        </Grid>
       </Grid>
 
       {/* Financial Metrics */}
