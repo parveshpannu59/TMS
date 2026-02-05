@@ -48,6 +48,7 @@ const Login = lazy(() => import('@pages/Login'));
 const Dashboard = lazy(() => import('@pages/Dashboard'));
 const UsersPage = lazy(() => import('@pages/UsersPage'));
 const LoadsPage = lazy(() => import('@pages/LoadsPage'));
+const VehiclesPage = lazy(() => import('@pages/VehiclesPage'));
 const TrucksPage = lazy(() => import('@pages/TrucksPage'));
 const TrailersPage = lazy(() => import('@pages/TrailersPage'));
 const DriversPage = lazy(() => import('@pages/DriversPage'));
@@ -55,6 +56,8 @@ const TripManagementDashboard = lazy(() => import('@pages/TripManagementDashboar
 const AccountingPage = lazy(() => import('@pages/AccountingPage'));
 const SettingsPage = lazy(() => import('@pages/SettingsPage'));
 const ActivityHistoryPage = lazy(() => import('@pages/ActivityHistoryPage'));
+const MaintenancePage = lazy(() => import('@pages/MaintenancePage'));
+const ResourcesPage = lazy(() => import('@pages/ResourcesPage'));
 const DriverDashboard = lazy(() => import('@pages/DriverDashboard'));
 const PendingAssignmentsPage = lazy(() => import('@pages/driver/PendingAssignmentsPage'));
 const DriverMobileShell = lazy(() => import('../layouts/mobile/DriverMobileShell'));
@@ -119,6 +122,14 @@ export const AppRoutes = () => {
           }
         />
         <Route
+          path="/vehicles"
+          element={
+            <ProtectedRoute>
+              <VehiclesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/trucks"
           element={
             <ProtectedRoute>
@@ -171,6 +182,22 @@ export const AppRoutes = () => {
           element={
             <ProtectedRoute>
               <ActivityHistoryPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/maintenance"
+          element={
+            <ProtectedRoute>
+              <MaintenancePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/resources"
+          element={
+            <ProtectedRoute>
+              <ResourcesPage />
             </ProtectedRoute>
           }
         />

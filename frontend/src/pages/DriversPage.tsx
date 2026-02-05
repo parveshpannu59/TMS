@@ -22,6 +22,7 @@ import { DashboardLayout } from '@layouts/DashboardLayout';
 import { EmptyState } from '@/components/common/EmptyState';
 import { driverApi, Driver, DriverFormData } from '@/api/driver.api';
 import { userApi } from '@/api/user.api';
+import { getApiOrigin } from '@/api/client';
 import { useForm, Controller } from 'react-hook-form';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -77,6 +78,10 @@ const DriversPage: React.FC = () => {
   // Local state for selected user - managed separately from react-hook-form
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [userError, setUserError] = useState<string | null>(null);
+
+  // Image upload states
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const fetchDrivers = useCallback(async () => {
     try {
@@ -169,7 +174,25 @@ const DriversPage: React.FC = () => {
     setEditingDriver(null);
     setSelectedUser(null);
     setUserError(null);
+    setImageFile(null);
+    setImagePreview(null);
     reset();
+  };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setError('Image size must be less than 5MB');
+        return;
+      }
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const onSubmit = async (data: Omit<DriverFormData, 'userId'>) => {
@@ -197,7 +220,18 @@ const DriversPage: React.FC = () => {
           notes: data.notes || '',
         };
         await driverApi.updateDriver(driverId, updateData);
+        
+        // Upload image if new one selected
+        if (imageFile) {
+          await driverApi.uploadPhoto(driverId, imageFile);
+          // Clear image states after upload
+          setImageFile(null);
+          setImagePreview(null);
+        }
+        
         setSuccess('Driver updated successfully');
+        // Refresh drivers list to show updated data
+        await fetchDrivers();
       } else {
         // For create, we need to send all required fields
         // Extract user data to build complete driver object
@@ -230,7 +264,16 @@ const DriversPage: React.FC = () => {
           emergencyContactName: selectedUser!.name || 'Please update',
         };
         
-        await driverApi.createDriver(driverData);
+        const created = await driverApi.createDriver(driverData);
+        
+        // Upload image if provided
+        if (imageFile) {
+          const createdId = (created as any)._id || (created as any).id;
+          if (createdId) {
+            await driverApi.uploadPhoto(createdId, imageFile);
+          }
+        }
+        
         setSuccess('Driver created successfully. Please update address and emergency contact details later.');
       }
       handleCloseDialog();
@@ -271,6 +314,56 @@ const DriversPage: React.FC = () => {
   };
 
   const columns: GridColDef[] = [
+    {
+      field: 'photo',
+      headerName: t('drivers.photo', { defaultValue: 'Photo' }),
+      width: 70,
+      sortable: false,
+      renderCell: (params) => {
+        const row = params.row as any;
+        const photoUrl = row.documents?.photo 
+          ? `${getApiOrigin()}${row.documents.photo}` 
+          : null;
+        
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+            {photoUrl ? (
+              <img
+                src={photoUrl}
+                alt={row.name || 'Driver'}
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                }}
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  target.nextElementSibling?.classList.remove('hidden');
+                }}
+              />
+            ) : (
+              <Box
+                sx={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: '50%',
+                  bgcolor: 'primary.main',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  fontWeight: 600,
+                }}
+              >
+                {(row.name || 'D').charAt(0).toUpperCase()}
+              </Box>
+            )}
+          </Box>
+        );
+      },
+    },
     {
       field: 'name',
       headerName: t('drivers.driverName'),
@@ -619,6 +712,35 @@ const DriversPage: React.FC = () => {
                     />
                   )}
                 />
+
+                {/* Driver Photo Upload */}
+                <Box>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Driver Photo
+                  </Typography>
+                  {(imagePreview || (editingDriver?.documents?.photo)) && (
+                    <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
+                      <img
+                        src={imagePreview || `${getApiOrigin()}${editingDriver?.documents?.photo}`}
+                        alt="Driver"
+                        style={{ maxWidth: '200px', maxHeight: '200px', borderRadius: '8px', objectFit: 'cover' }}
+                        onError={(e) => {
+                          console.error('Failed to load image:', editingDriver?.documents?.photo);
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    </Box>
+                  )}
+                  <Button variant="outlined" component="label" fullWidth>
+                    {imageFile ? imageFile.name : 'Upload Photo'}
+                    <input
+                      type="file"
+                      hidden
+                      accept="image/*"
+                      onChange={handleImageSelect}
+                    />
+                  </Button>
+                </Box>
 
                 <Controller
                   name="licenseNumber"

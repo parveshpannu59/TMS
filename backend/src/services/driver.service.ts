@@ -148,6 +148,42 @@ export class DriverService {
     };
   }
 
+  static async updateDriverDocument(driverId: string, docType: string, filePath: string) {
+    const driver = await Driver.findById(driverId);
+
+    if (!driver) {
+      throw ApiError.notFound('Driver not found');
+    }
+
+    if (docType === 'other') {
+      // Add to 'others' array
+      if (!driver.documents.others) {
+        driver.documents.others = [];
+      }
+      driver.documents.others.push(filePath);
+    } else {
+      // Update specific document field
+      (driver.documents as any)[docType] = filePath;
+    }
+
+    await driver.save();
+
+    // If uploading photo, also update the User's profilePicture so it shows in mobile app
+    if (docType === 'photo' && driver.userId) {
+      try {
+        const User = (await import('../models/User.model')).User;
+        await User.findByIdAndUpdate(driver.userId, { 
+          profilePicture: filePath 
+        });
+      } catch (error) {
+        console.error('Failed to update user profile picture:', error);
+        // Don't throw error - driver photo is already saved
+      }
+    }
+
+    return this.formatDriver(driver);
+  }
+
   private static formatDriver(driver: any) {
     return {
       id: driver._id.toString(),

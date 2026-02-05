@@ -16,6 +16,7 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { CircularProgress } from '@mui/material';
 import type { Load, LoadFormData } from '@/api/load.api';
+import { loadApi } from '@/api/load.api';
 
 const loadSchema = yup.object({
   origin: yup.object({
@@ -72,9 +73,34 @@ export const LoadsCreateEditDialog = memo<LoadsCreateEditDialogProps>(function L
   const [cargoDescription, setCargoDescription] = useState('');
   const [loadType, setLoadType] = useState<'FTL' | 'LTL'>('FTL');
   const [notes, setNotes] = useState('');
+  
+  // Image upload states
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size must be less than 5MB');
+        return;
+      }
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      // Reset image states when dialog closes
+      setImageFile(null);
+      setImagePreview(null);
+      return;
+    }
     if (editingLoad) {
       const load = editingLoad as Record<string, unknown>;
       const pickup = load.pickupLocation ?? load.origin ?? {};
@@ -164,11 +190,27 @@ export const LoadsCreateEditDialog = memo<LoadsCreateEditDialogProps>(function L
 
     if (editingLoad) {
       await onUpdateLoad(editingLoad._id, loadData);
+      
+      // Upload image if new one selected
+      if (imageFile) {
+        await loadApi.uploadLoadImage(editingLoad._id, imageFile);
+      }
+      
       onSuccess('update');
     } else {
-      await onCreateLoad(loadData);
+      const created: any = await onCreateLoad(loadData);
+      
+      // Upload image if provided
+      if (imageFile && created?._id) {
+        await loadApi.uploadLoadImage(created._id, imageFile);
+      }
+      
       onSuccess('create');
     }
+    
+    // Reset image states
+    setImageFile(null);
+    setImagePreview(null);
     onClose();
   };
 
@@ -193,6 +235,10 @@ export const LoadsCreateEditDialog = memo<LoadsCreateEditDialogProps>(function L
             setLoadType={setLoadType}
             notes={notes}
             setNotes={setNotes}
+            imageFile={imageFile}
+            imagePreview={imagePreview}
+            onImageSelect={handleImageSelect}
+            editingLoad={editingLoad}
           />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -225,6 +271,10 @@ type LoadFormFieldsProps = {
   setLoadType: (v: 'FTL' | 'LTL') => void;
   notes: string;
   setNotes: (v: string) => void;
+  imageFile: File | null;
+  imagePreview: string | null;
+  onImageSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  editingLoad: Load | null;
 };
 
 function LoadFormFields({
@@ -235,6 +285,10 @@ function LoadFormFields({
   setCustomerName,
   customerContact,
   setCustomerContact,
+  imageFile,
+  imagePreview,
+  onImageSelect,
+  editingLoad,
   cargoType,
   setCargoType,
   cargoDescription,
@@ -331,9 +385,31 @@ function LoadFormFields({
           </Grid>
         </Grid>
       </Box>
+      <Divider />
+      <Box>
+        <Typography variant="subtitle1" fontWeight={600} gutterBottom>Load/Cargo Image</Typography>
+        {(imagePreview || editingLoad?.loadImage) && (
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
+            <img
+              src={imagePreview || `${window.location.origin}${editingLoad?.loadImage}`}
+              alt="Load"
+              style={{ maxWidth: '300px', maxHeight: '200px', borderRadius: '8px' }}
+            />
+          </Box>
+        )}
+        <Button variant="outlined" component="label" fullWidth disabled={isSubmitting}>
+          {imageFile ? imageFile.name : 'Upload Cargo Image'}
+          <input
+            type="file"
+            hidden
+            accept="image/*"
+            onChange={onImageSelect}
+          />
+        </Button>
+      </Box>
+      <Divider />
       <Box>
         <Typography variant="subtitle1" fontWeight={600} gutterBottom>Additional Notes</Typography>
-        <Divider sx={{ mb: 2 }} />
         <TextField label="Notes (Optional)" value={notes} onChange={(e) => setNotes(e.target.value)} multiline rows={4} disabled={isSubmitting} fullWidth placeholder="Add any additional notes..." helperText="Use this field to record customer communication or special requirements" />
       </Box>
     </Box>
