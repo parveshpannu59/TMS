@@ -46,14 +46,18 @@ export const authorize = (...roles: UserRole[]) => {
     const user = (req as any).user;
     
     if (!user) {
+      console.error('❌ No user found in request');
       throw ApiError.unauthorized('Authentication required');
     }
 
     // Debug logging
     console.log('🔐 Authorization Check:', {
+      endpoint: req.method + ' ' + req.path,
       userRole: user.role,
+      userRoleType: typeof user.role,
       allowedRoles: roles,
       isAuthorized: roles.includes(user.role),
+      comparison: roles.map(r => ({ role: r, matches: r === user.role }))
     });
 
     if (!roles.includes(user.role)) {
@@ -61,6 +65,7 @@ export const authorize = (...roles: UserRole[]) => {
       throw ApiError.forbidden('You do not have permission to access this resource');
     }
 
+    console.log('✅ Authorization passed');
     next();
   };
 };

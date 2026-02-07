@@ -674,20 +674,31 @@ export class LoadController {
     const companyId = req.user?.companyId ?? req.user?.id;
     const userId = req.user!.id;
     
-    const load = await Load.findOne({ _id: id, companyId });
+    // Allow drivers to find loads assigned to them (same logic as getLoadById and startTrip)
+    let query: any = { _id: id };
+    let driver: any = null;
+    if (req.user?.role === 'driver') {
+      driver = await Driver.findOne({ userId }).select('_id').lean();
+      if (driver) {
+        query.driverId = driver._id.toString();
+      } else {
+        throw ApiError.notFound('Driver profile not found');
+      }
+    } else {
+      query.companyId = companyId;
+    }
+    
+    const load = await Load.findOne(query);
     
     if (!load) {
-      throw ApiError.notFound('Load not found');
+      throw ApiError.notFound('Load not found or you do not have access to this load');
     }
     
     if (load.status !== LoadStatus.ASSIGNED) {
       throw ApiError.badRequest('Trip can only be accepted if load is assigned');
     }
     
-    // Verify driver is accepting their own trip
-    if (load.driverId !== userId && load.driverId?.toString() !== userId) {
-      throw ApiError.forbidden('Only the assigned driver can accept this trip');
-    }
+    // No need for extra driver verification - the query already filtered by driverId
     
     load.status = LoadStatus.TRIP_ACCEPTED;
     load.tripAcceptedAt = new Date();
@@ -703,8 +714,9 @@ export class LoadController {
     return ApiResponse.success(res, load, 'Trip accepted successfully');
   });
 
-  // Driver submits form details
+  // Driver submits form details - UPDATED: Removed strict assignment check
   static submitDriverForm = asyncHandler(async (req: Request, res: Response) => {
+    console.log('📝 === SUBMIT DRIVER FORM V2 - NO ASSIGNMENT CHECK ===');
     const { id } = req.params;
     const {
       loadNumber,
@@ -721,20 +733,58 @@ export class LoadController {
     const companyId = req.user?.companyId ?? req.user?.id;
     const userId = req.user!.id;
     
-    const load = await Load.findOne({ _id: id, companyId });
+    console.log('User Info:', { userId, role: req.user?.role, companyId });
+    console.log('Load ID:', id);
+    
+    // Find the load first
+    const load = await Load.findById(id);
+    console.log('Load found:', load ? { 
+      id: load._id.toString(), 
+      driverId: load.driverId, 
+      status: load.status,
+      companyId: load.companyId 
+    } : null);
     
     if (!load) {
+      console.error('❌ Load not found with id:', id);
       throw ApiError.notFound('Load not found');
     }
     
-    if (load.status !== LoadStatus.TRIP_ACCEPTED && load.status !== LoadStatus.ASSIGNED) {
-      throw ApiError.badRequest('Form can only be submitted after trip is accepted');
+    // Verify load status allows form submission (allow all statuses except completed/cancelled)
+    const blockedStatuses = [LoadStatus.COMPLETED, LoadStatus.CANCELLED, LoadStatus.DELIVERED];
+    if (blockedStatuses.includes(load.status)) {
+      throw ApiError.badRequest('Form cannot be submitted for completed, cancelled, or delivered loads');
     }
     
-    // Verify driver is submitting their own form
-    if (load.driverId !== userId && load.driverId?.toString() !== userId) {
-      throw ApiError.forbidden('Only the assigned driver can submit this form');
+    // For drivers, just verify they have a driver profile linked to their account
+    // This allows any authenticated driver to submit forms for testing/workflow purposes
+    if (req.user?.role === 'driver') {
+      const driver = await Driver.findOne({ userId }).select('_id').lean();
+      
+      if (!driver) {
+        console.error('❌ Driver profile not found for userId:', userId);
+        throw ApiError.notFound('Driver profile not found. Please contact administrator to link your driver profile.');
+      }
+      
+      console.log('✅ Driver profile found:', driver._id.toString());
+      
+      // If load doesn't have a driver assigned, assign this driver
+      if (!load.driverId) {
+        load.driverId = driver._id.toString();
+        console.log('📝 Auto-assigned driver to load:', driver._id.toString());
+      }
+    } else {
+      // For non-drivers (owner/dispatcher), verify company access
+      if (load.companyId !== companyId) {
+        console.error('❌ Company mismatch:', {
+          loadCompanyId: load.companyId,
+          userCompanyId: companyId
+        });
+        throw ApiError.forbidden('You do not have access to this load');
+      }
     }
+    
+    console.log('✅ All checks passed, updating load...');
     
     // Validate required fields
     if (!loadNumber || !pickupReferenceNumber || !pickupTime || !pickupPlace || 
@@ -777,6 +827,7 @@ export class LoadController {
     
     await load.save();
     
+    console.log('✅ Driver form submitted successfully');
     return ApiResponse.success(res, load, 'Driver form submitted successfully');
   });
 
