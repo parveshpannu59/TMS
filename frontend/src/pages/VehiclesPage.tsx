@@ -29,12 +29,14 @@ import {
   CloudUpload as UploadIcon,
   LocalShipping,
   RvHookup,
+  Visibility as ViewIcon,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridActionsCellItem } from '@mui/x-data-grid';
 import { DashboardLayout } from '@layouts/DashboardLayout';
 import { vehicleApi, Vehicle, CreateVehicleData } from '@/api/vehicle.api';
 import { getApiOrigin } from '@/api/client';
 import { useTranslation } from 'react-i18next';
+import VehicleDocumentsDialog from '@/components/dialogs/VehicleDocumentsDialog';
 
 type VehicleTypeFilter = 'all' | 'truck' | 'trailer';
 
@@ -54,6 +56,8 @@ const VehiclesPage: React.FC = () => {
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [vehicleToDelete, setVehicleToDelete] = useState<Vehicle | null>(null);
+  const [documentsDialogOpen, setDocumentsDialogOpen] = useState(false);
+  const [documentsVehicle, setDocumentsVehicle] = useState<Vehicle | null>(null);
   
   // Form state
   const [formData, setFormData] = useState<CreateVehicleData>({
@@ -135,6 +139,11 @@ const VehiclesPage: React.FC = () => {
   const handleDeleteOpen = (vehicle: Vehicle) => {
     setVehicleToDelete(vehicle);
     setDeleteConfirmOpen(true);
+  };
+
+  const handleDocumentsOpen = (vehicle: Vehicle) => {
+    setDocumentsVehicle(vehicle);
+    setDocumentsDialogOpen(true);
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -256,8 +265,15 @@ const VehiclesPage: React.FC = () => {
       field: 'actions',
       type: 'actions',
       headerName: 'Actions',
-      width: 100,
+      width: 140,
       getActions: (params) => [
+        <GridActionsCellItem
+          key="docs"
+          icon={<ViewIcon color="primary" />}
+          label="View Documents"
+          onClick={() => handleDocumentsOpen(params.row)}
+          showInMenu={false}
+        />,
         <GridActionsCellItem
           key="edit"
           icon={<EditIcon />}
@@ -528,6 +544,16 @@ const VehiclesPage: React.FC = () => {
             </Button>
           </DialogActions>
         </Dialog>
+
+        {/* Vehicle Documents Dialog */}
+        <VehicleDocumentsDialog
+          open={documentsDialogOpen}
+          onClose={() => {
+            setDocumentsDialogOpen(false);
+            setDocumentsVehicle(null);
+          }}
+          vehicle={documentsVehicle}
+        />
       </Box>
     </DashboardLayout>
   );

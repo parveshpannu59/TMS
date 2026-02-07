@@ -793,16 +793,26 @@ export class LoadController {
       throw ApiError.badRequest('All form fields are required');
     }
     
+    // Combine date + time into valid Date objects
+    // Frontend sends time as "HH:mm" and date as "YYYY-MM-DD"
+    const buildDateTime = (dateStr: string, timeStr: string): Date => {
+      // If timeStr is already a valid ISO date, use it directly
+      const directDate = new Date(timeStr);
+      if (!isNaN(directDate.getTime())) return directDate;
+      // Otherwise combine date + time (e.g. "2026-02-07" + "14:15")
+      return new Date(`${dateStr}T${timeStr}:00`);
+    };
+
     // Update load with driver form details
     load.driverFormDetails = {
       loadNumber,
       pickupReferenceNumber,
-      pickupTime: new Date(pickupTime),
+      pickupTime: buildDateTime(pickupDate, pickupTime),
       pickupPlace,
       pickupDate: new Date(pickupDate),
       pickupLocation,
       dropoffReferenceNumber,
-      dropoffTime: new Date(dropoffTime),
+      dropoffTime: buildDateTime(dropoffDate, dropoffTime),
       dropoffLocation,
       dropoffDate: new Date(dropoffDate),
     };

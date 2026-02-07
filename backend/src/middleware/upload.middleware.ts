@@ -120,6 +120,36 @@ export const uploadVehicleDocument = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 }).single('file');
 
+// Vehicle document files upload (Registration, Inspection, Title PDFs)
+const vehicleDocsDir = path.join(process.cwd(), 'uploads', 'vehicle-documents');
+if (!fs.existsSync(vehicleDocsDir)) {
+  fs.mkdirSync(vehicleDocsDir, { recursive: true });
+}
+
+const vehicleDocStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, vehicleDocsDir),
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname) || '.pdf';
+    cb(null, `vdoc-${uniqueSuffix}${ext}`);
+  },
+});
+
+const vehicleDocFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
+  const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+  if (file.mimetype && allowed.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only PDF and image files (JPEG, PNG, WebP) are allowed'));
+  }
+};
+
+export const uploadVehicleDocFile = multer({
+  storage: vehicleDocStorage,
+  fileFilter: vehicleDocFilter,
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
+}).single('file');
+
 // Load/Cargo images upload
 const loadImagesDir = path.join(process.cwd(), 'uploads', 'loads');
 if (!fs.existsSync(loadImagesDir)) {

@@ -11,7 +11,7 @@ import { ApiResponse } from '../utils/ApiResponse';
  */
 export const getVehicles = asyncHandler(async (req: Request, res: Response) => {
   const { status, vehicleType } = req.query;
-  const companyId = (req as any).user?.companyId || (req as any).user?._id;
+  const companyId = (req as any).user?.companyId || (req as any).user?.id;
 
   const query: any = { companyId };
   if (status) query.status = status;
@@ -28,7 +28,7 @@ export const getVehicles = asyncHandler(async (req: Request, res: Response) => {
  * @access Private
  */
 export const getVehicleStats = asyncHandler(async (req: Request, res: Response) => {
-  const companyId = (req as any).user?.companyId || (req as any).user?._id;
+  const companyId = (req as any).user?.companyId || (req as any).user?.id;
 
   const [available, assigned, outForDelivery, totalActive] = await Promise.all([
     Vehicle.countDocuments({ companyId, status: VehicleStatus.AVAILABLE }),
@@ -55,7 +55,7 @@ export const getVehicleStats = asyncHandler(async (req: Request, res: Response) 
  */
 export const getVehiclesByStatus = asyncHandler(async (req: Request, res: Response) => {
   const { status, vehicleType } = req.query;
-  const companyId = (req as any).user?.companyId || (req as any).user?._id;
+  const companyId = (req as any).user?.companyId || (req as any).user?.id;
 
   const query: any = { companyId };
   if (status) {
@@ -107,7 +107,7 @@ export const getVehicleById = asyncHandler(async (req: Request, res: Response) =
  * @access Private
  */
 export const createVehicle = asyncHandler(async (req: Request, res: Response) => {
-  const userId = (req as any).user?._id;
+  const userId = (req as any).user?.id;
   const companyId = (req as any).user?.companyId || userId;
 
   // Clean up the data - remove empty strings for optional enum fields

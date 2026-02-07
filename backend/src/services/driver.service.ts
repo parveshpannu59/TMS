@@ -2,6 +2,7 @@ import { Driver, DriverStatus } from '../models/Driver.model';
 import { ApiError } from '../utils/ApiError';
 
 interface CreateDriverData {
+  userId?: string; // Link to User account for driver login
   name: string;
   email?: string;
   phone: string;
@@ -43,6 +44,7 @@ export class DriverService {
 
     const driver = await Driver.create({
       ...data,
+      userId: data.userId || undefined, // Link to User account if provided
       status: DriverStatus.ACTIVE,
       joiningDate: new Date(),
       createdBy: userId,

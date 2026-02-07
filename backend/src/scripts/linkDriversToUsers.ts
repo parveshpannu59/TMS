@@ -19,8 +19,12 @@ async function linkDriversToUsers() {
 
     // Find all drivers that don't have userId set but have an email
     const driversWithoutUserId = await Driver.find({ 
-      email: { $exists: true, $ne: null, $ne: '' },
-      userId: { $exists: false } 
+      email: { $exists: true, $nin: [null, ''] },
+      $or: [
+        { userId: { $exists: false } },
+        { userId: null },
+        { userId: '' },
+      ]
     });
 
     console.log(`Found ${driversWithoutUserId.length} drivers without userId`);
@@ -90,8 +94,12 @@ async function linkDriversByPhone() {
     console.log('');
 
     const driversWithoutUserId = await Driver.find({ 
-      phone: { $exists: true, $ne: null, $ne: '' },
-      userId: { $exists: false } 
+      phone: { $exists: true, $nin: [null, ''] },
+      $or: [
+        { userId: { $exists: false } },
+        { userId: null },
+        { userId: '' },
+      ]
     });
 
     console.log(`Found ${driversWithoutUserId.length} drivers without userId`);

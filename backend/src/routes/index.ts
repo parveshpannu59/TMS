@@ -15,6 +15,7 @@ import assignmentRoutes from './assignment.routes';
 import tripRoutes from './trip.routes';
 import sosRoutes from './sos.routes';
 import settingsRoutes from './settings.route';
+import vehicleDocumentRoutes, { vehicleDocSubRouter } from './vehicleDocument.routes';
 
 const router = Router();
 
@@ -51,6 +52,8 @@ router.use('/users', userRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/loads', loadRoutes);
 router.use('/vehicles', vehicleRoutes);
+router.use('/vehicles/:vehicleId/documents', vehicleDocSubRouter);
+router.use('/vehicle-documents', vehicleDocumentRoutes);
 router.use('/trucks', truckRoutes);
 router.use('/trailers', trailerRoutes);
 router.use('/drivers', driverRoutes);

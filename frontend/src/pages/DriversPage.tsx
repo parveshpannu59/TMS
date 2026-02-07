@@ -250,6 +250,7 @@ const DriversPage: React.FC = () => {
         // Build complete driver data with user info
         // Backend expects CreateDriverData format
         const driverData: any = {
+          userId, // Link driver profile to user account for login
           name: selectedUser!.name || '',
           phone: selectedUser!.phone || '',
           email: selectedUser!.email || '',

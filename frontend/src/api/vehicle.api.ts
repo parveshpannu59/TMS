@@ -53,6 +53,29 @@ export interface CreateVehicleData {
   notes?: string;
 }
 
+export type VehicleDocumentType = 'registration' | 'inspection' | 'title';
+export type DocumentStatus = 'active' | 'expired' | 'expiring_soon' | 'archived';
+
+export interface VehicleDocumentData {
+  _id: string;
+  vehicleId: string | Vehicle;
+  companyId: string;
+  documentType: VehicleDocumentType;
+  fileName: string;
+  filePath: string;
+  fileSize: number;
+  mimeType: string;
+  expiryDate: string;
+  issuedDate?: string;
+  status: DocumentStatus;
+  version: number;
+  isLatest: boolean;
+  notes?: string;
+  uploadedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const vehicleApi = {
   /**
    * Get all vehicles
@@ -127,7 +150,7 @@ export const vehicleApi = {
   },
 
   /**
-   * Upload vehicle document
+   * Upload vehicle document (legacy)
    */
   async uploadDocument(
     id: string,
@@ -143,6 +166,77 @@ export const vehicleApi = {
         'Content-Type': 'multipart/form-data',
       },
     });
+    return response.data.data;
+  },
+
+  // ── Vehicle Document Management (Registration, Inspection, Title) ──
+
+  /**
+   * Get all latest documents for a vehicle
+   */
+  async getDocuments(vehicleId: string): Promise<VehicleDocumentData[]> {
+    const response = await apiClient.get(`/vehicles/${vehicleId}/documents`);
+    return response.data.data;
+  },
+
+  /**
+   * Get document history (all versions) for a vehicle
+   */
+  async getDocumentHistory(vehicleId: string, documentType?: VehicleDocumentType): Promise<VehicleDocumentData[]> {
+    const response = await apiClient.get(`/vehicles/${vehicleId}/documents/history`, {
+      params: documentType ? { documentType } : {},
+    });
+    return response.data.data;
+  },
+
+  /**
+   * Upload a new vehicle document (Registration/Inspection/Title PDF)
+   */
+  async uploadVehicleDoc(
+    vehicleId: string,
+    file: File,
+    documentType: VehicleDocumentType,
+    expiryDate: string,
+    issuedDate?: string,
+    notes?: string
+  ): Promise<VehicleDocumentData> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('documentType', documentType);
+    formData.append('expiryDate', expiryDate);
+    if (issuedDate) formData.append('issuedDate', issuedDate);
+    if (notes) formData.append('notes', notes);
+
+    const response = await apiClient.post(`/vehicles/${vehicleId}/documents`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data.data;
+  },
+
+  /**
+   * Delete a vehicle document
+   */
+  async deleteVehicleDoc(vehicleId: string, documentId: string): Promise<void> {
+    await apiClient.delete(`/vehicles/${vehicleId}/documents/${documentId}`);
+  },
+
+  /**
+   * Search documents across all vehicles
+   */
+  async searchDocuments(params: {
+    q?: string;
+    status?: DocumentStatus;
+    documentType?: VehicleDocumentType;
+  }): Promise<VehicleDocumentData[]> {
+    const response = await apiClient.get('/vehicle-documents/search', { params });
+    return response.data.data;
+  },
+
+  /**
+   * Get expiring documents
+   */
+  async getExpiringDocuments(): Promise<VehicleDocumentData[]> {
+    const response = await apiClient.get('/vehicle-documents/expiring');
     return response.data.data;
   },
 };
