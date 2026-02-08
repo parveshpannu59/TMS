@@ -85,10 +85,6 @@ export const ConfirmRateDialog: React.FC<ConfirmRateDialogProps> = ({
 
   const handleSubmit = async () => {
     if (!load) return;
-    if (!trackingLink?.trim()) {
-      setError('Tracking link is required');
-      return;
-    }
     if (!pickupAddress.address || !pickupAddress.city || !pickupAddress.state || !pickupAddress.pincode) {
       setError('Pickup address fields are required');
       return;
@@ -106,7 +102,7 @@ export const ConfirmRateDialog: React.FC<ConfirmRateDialogProps> = ({
       setLoading(true);
       setError(null);
       await loadService.confirmRate(load._id, {
-        trackingLink: trackingLink.trim(),
+        trackingLink: trackingLink.trim() || '',
         pickupAddress: {
           address: pickupAddress.address,
           city: pickupAddress.city,
@@ -169,11 +165,10 @@ export const ConfirmRateDialog: React.FC<ConfirmRateDialogProps> = ({
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 1 }}>
           <TextField
             fullWidth
-            label="Tracking Link *"
+            label="Tracking Link (Optional)"
             value={trackingLink}
             onChange={(e) => setTrackingLink(e.target.value)}
             placeholder="https://..."
-            required
           />
 
           <Typography variant="subtitle2" color="primary">Pickup Address</Typography>

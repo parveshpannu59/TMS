@@ -6,8 +6,10 @@ import path from 'path';
 import fs from 'fs';
 
 // Dynamic imports for optional deps
-let pdfParse: any = null;
-try { pdfParse = require('pdf-parse'); } catch { /* optional */ }
+let PDFParseLib: any = null;
+let TesseractLib: any = null;
+try { PDFParseLib = require('pdf-parse'); } catch { /* optional */ }
+try { TesseractLib = require('tesseract.js'); } catch { /* optional */ }
 
 // ─── BOL / POD / Invoice Pattern Matchers ────────────────────
 
@@ -123,15 +125,40 @@ export class DocumentController {
 
     try {
       if (ext === '.pdf') {
-        // ─── PDF Parsing ─────────────────
-        if (!pdfParse) throw ApiError.badRequest('PDF parsing not available');
+        // ─── PDF Text Extraction (pdf-parse v2.x — pdfjs-dist based) ─────
+        if (!PDFParseLib?.PDFParse) throw ApiError.badRequest('PDF parsing library not available');
         const buffer = fs.readFileSync(filePath);
-        const data = await pdfParse(buffer);
-        rawText = data.text || '';
+        const parser = new PDFParseLib.PDFParse({ data: new Uint8Array(buffer) });
+        await parser.load();
+
+        // Extract text from each page using the underlying pdfjs-dist API
+        const pageTexts: string[] = [];
+        const pageCount = parser.doc?.numPages || 0;
+        for (let i = 1; i <= pageCount; i++) {
+          try {
+            const page = await parser.doc.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items
+              .map((item: any) => item.str || '')
+              .join(' ')
+              .replace(/\s{2,}/g, ' ')
+              .trim();
+            if (pageText) pageTexts.push(pageText);
+          } catch { /* skip unreadable pages */ }
+        }
+        rawText = pageTexts.join('\n\n');
+        parser.destroy();
+
+        // ─── Scanned PDF Fallback: Use OCR if no text layer found ────
+        if (!rawText.trim() && TesseractLib) {
+          console.log('📄 PDF has no text layer — falling back to OCR (Tesseract)...');
+          const result = await TesseractLib.recognize(filePath, 'eng', { logger: () => {} });
+          rawText = result.data.text || '';
+        }
       } else if (['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.tif'].includes(ext)) {
         // ─── Image OCR with Tesseract ────
-        const Tesseract = require('tesseract.js');
-        const result = await Tesseract.recognize(filePath, 'eng', {
+        if (!TesseractLib) throw ApiError.badRequest('OCR library not available');
+        const result = await TesseractLib.recognize(filePath, 'eng', {
           logger: () => {},
         });
         rawText = result.data.text || '';

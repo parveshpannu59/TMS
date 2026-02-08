@@ -99,9 +99,10 @@ const LoadsPage: React.FC = () => {
       const driverId = (selectedDriver as { _id?: string; id?: string })._id ?? (selectedDriver as { _id?: string; id?: string }).id ?? '';
       const truckId = (selectedTruck as { _id?: string; id?: string })._id ?? (selectedTruck as { _id?: string; id?: string }).id ?? '';
       const trailerId = (selectedTrailer as { _id?: string; id?: string })._id ?? (selectedTrailer as { _id?: string; id?: string }).id ?? '';
+      // Close dialog immediately, then assign in background
+      handleCloseAssignDialog();
       await assignLoad(assigningLoad._id, { driverId, truckId, trailerId });
       setSuccess('Load assigned successfully!');
-      handleCloseAssignDialog();
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: unknown) {
       setErrorState(err instanceof Error ? err.message : 'Failed to assign load');

@@ -134,6 +134,7 @@ export interface ILoad extends Document {
   customerName: string;
   customerContact: string;
   customerEmail?: string;
+  broker?: string;
   pickupLocation: ILocation;
   deliveryLocation: ILocation;
   pickupDate: Date;
@@ -327,6 +328,10 @@ const loadSchema = new Schema<ILoad>(
       trim: true,
       lowercase: true,
     },
+    broker: {
+      type: String,
+      trim: true,
+    },
     pickupLocation: {
       type: LocationSchema,
       required: true,
@@ -347,19 +352,19 @@ const loadSchema = new Schema<ILoad>(
       type: Date,
     },
     driverId: {
-      type: String,
+      type: Schema.Types.ObjectId,
       ref: 'Driver',
     },
     truckId: {
-      type: String,
+      type: Schema.Types.ObjectId,
       ref: 'Truck',
     },
     trailerId: {
-      type: String,
+      type: Schema.Types.ObjectId,
       ref: 'Trailer',
     },
     vehicleId: {
-      type: String,
+      type: Schema.Types.ObjectId,
       ref: 'Vehicle',
     },
     cargoType: {

@@ -132,7 +132,7 @@ export const LoadsCreateEditDialog = memo<LoadsCreateEditDialogProps>(function L
         deliveryDate: new Date((load.expectedDeliveryDate as string) || (load.deliveryDate as string) || Date.now()),
         miles: (load.distance as number) || 0,
         rate: (load.rate as number) || 0,
-        broker: '',
+        broker: (load.broker as string) || '',
         weight: (load.weight as number) || 0,
         commodity: (load.cargoType as string) || '',
       } as LoadFormData);
@@ -162,6 +162,7 @@ export const LoadsCreateEditDialog = memo<LoadsCreateEditDialogProps>(function L
       customerName,
       customerContact,
       customerEmail: '',
+      broker: data.broker || '',
       pickupLocation: {
         address: data.origin.address,
         city: data.origin.city,

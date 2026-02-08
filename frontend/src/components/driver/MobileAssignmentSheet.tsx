@@ -46,6 +46,11 @@ export default function MobileAssignmentSheet({ open, onClose, onAccepted }: { o
 
           {pending.map((a) => {
             const id = a.id || a._id!;
+            // Load data is populated via loadId
+            const load = (a as any).loadId || {};
+            const pickup = load.pickupLocation || a.pickupLocation || {};
+            const delivery = load.deliveryLocation || a.deliveryLocation || {};
+            const loadNum = load.loadNumber || a.loadNumber || id.substring(0, 6);
             return (
               <div key={id} className="dm-card" style={{ display: 'grid', gap: 10 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -55,17 +60,17 @@ export default function MobileAssignmentSheet({ open, onClose, onAccepted }: { o
                     background: `${ios.blue}12`, color: ios.blue,
                     fontSize: 12, fontWeight: 600,
                   }}>
-                    {a.loadNumber || id.substring(0, 6)}
+                    {loadNum}
                   </span>
                 </div>
                 <div style={{ display: 'grid', gap: 4, fontSize: 14, color: 'var(--dm-muted)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: ios.green, display: 'inline-block' }} />
-                    From: {a.pickupLocation?.city || '—'}
+                    From: {pickup.city ? `${pickup.city}, ${pickup.state || ''}` : '—'}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: ios.red, display: 'inline-block' }} />
-                    To: {a.deliveryLocation?.city || '—'}
+                    To: {delivery.city ? `${delivery.city}, ${delivery.state || ''}` : '—'}
                   </div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>

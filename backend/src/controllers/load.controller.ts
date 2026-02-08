@@ -691,12 +691,12 @@ export class LoadController {
     }
     
     // Validate required fields
-    if (!trackingLink || !pickupAddress || !deliveryAddress || !miles) {
-      throw ApiError.badRequest('Tracking link, pickup address, delivery address, and miles are required');
+    if (!pickupAddress || !deliveryAddress || !miles) {
+      throw ApiError.badRequest('Pickup address, delivery address, and miles are required');
     }
     
     // Update load with broker confirmation details
-    load.trackingLink = trackingLink;
+    if (trackingLink) load.trackingLink = trackingLink;
     load.brokerConfirmedRate = true;
     load.brokerConfirmedAt = new Date();
     load.brokerConfirmationDetails = {
@@ -720,7 +720,7 @@ export class LoadController {
     load.statusHistory.push({
       status: LoadStatus.RATE_CONFIRMED,
       timestamp: new Date(),
-      notes: `Rate confirmed by broker. Tracking link: ${trackingLink}`,
+      notes: `Rate confirmed by broker.${trackingLink ? ` Tracking link: ${trackingLink}` : ''}`,
       updatedBy: userId,
     } as any);
     
