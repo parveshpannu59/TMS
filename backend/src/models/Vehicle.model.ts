@@ -170,7 +170,7 @@ const vehicleSchema = new Schema<IVehicle>(
 vehicleSchema.index({ companyId: 1, unitNumber: 1 });
 vehicleSchema.index({ companyId: 1, status: 1 });
 vehicleSchema.index({ companyId: 1, vehicleType: 1, status: 1 });
-vehicleSchema.index({ vin: 1 }, { unique: true });
+// vin index already created by `unique: true` in field definition
 vehicleSchema.index({ currentDriverId: 1 });
 vehicleSchema.index({ currentLoadId: 1 });
 vehicleSchema.index({ registrationNumber: 1 });

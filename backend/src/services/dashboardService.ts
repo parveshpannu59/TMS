@@ -322,8 +322,11 @@ export class DashboardService {
     // Get completed loads for revenue
     const completedLoads = await Load.find({
       companyId,
-      status: 'completed',
-      completedAt: { $gte: startDate, $lte: endDate },
+      status: { $in: ['completed', 'delivered'] },
+      $or: [
+        { completedAt: { $gte: startDate, $lte: endDate } },
+        { updatedAt: { $gte: startDate, $lte: endDate }, status: 'delivered' },
+      ],
     }).lean();
 
     // Calculate revenue from loads (rate + additional charges)

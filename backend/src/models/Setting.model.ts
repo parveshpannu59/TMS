@@ -52,7 +52,7 @@ const settingsSchema = new Schema<ISettings>(
       ref: 'User',
       required: true,
       unique: true,
-      index: true,
+      // index already created by `unique: true`
     },
     companyId: {
       type: Schema.Types.ObjectId,

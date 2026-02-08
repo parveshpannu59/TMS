@@ -5,3 +5,4 @@ export { LoadsDataGrid } from './LoadsDataGrid';
 export { LoadsAssignDialog } from './LoadsAssignDialog';
 export { LoadsNotesDialog } from './LoadsNotesDialog';
 export { LoadsCreateEditDialog } from './LoadsCreateEditDialog';
+export { LoadDetailsDialog } from './LoadDetailsDialog';

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { TripController } from '../controllers/trip.controller';
-import { authenticate } from '../middleware/auth.middleware';
+import { authenticate, authorize } from '../middleware/auth.middleware';
+import { UserRole } from '../types/auth.types';
 
 const router = Router();
 
@@ -8,14 +9,14 @@ const router = Router();
 router.use(authenticate);
 
 // Driver routes
-router.post('/start', TripController.startTrip);
-router.get('/current', TripController.getCurrentTrip);
+router.post('/start', authorize(UserRole.DRIVER), TripController.startTrip);
+router.get('/current', authorize(UserRole.DRIVER), TripController.getCurrentTrip);
 router.get('/history', TripController.getTripHistory);
-router.patch('/:id/location', TripController.updateLocation);
-router.patch('/:id/complete', TripController.completeTrip);
-router.patch('/:id/status', TripController.updateTripStatus);
+router.patch('/:id/location', authorize(UserRole.DRIVER), TripController.updateLocation);
+router.patch('/:id/complete', authorize(UserRole.DRIVER), TripController.completeTrip);
+router.patch('/:id/status', authorize(UserRole.DRIVER), TripController.updateTripStatus);
 
-// General routes
+// General routes (Owner/Dispatcher/Driver)
 router.get('/:id', TripController.getTripById);
 
 export default router;

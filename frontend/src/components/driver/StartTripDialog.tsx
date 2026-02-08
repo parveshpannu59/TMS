@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -13,8 +13,9 @@ import {
   CircularProgress,
   useTheme,
   useMediaQuery,
+  Chip,
 } from '@mui/material';
-import { PhotoCamera, Close, CloudUpload } from '@mui/icons-material';
+import { PhotoCamera, Close, CloudUpload, LocationOn, GpsFixed } from '@mui/icons-material';
 import { loadApi } from '@/api/all.api';
 import type { Load } from '@/types/all.types';
 
@@ -40,10 +41,82 @@ export const StartTripDialog: React.FC<StartTripDialogProps> = ({
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Location state
+  const [locationStatus, setLocationStatus] = useState<'idle' | 'requesting' | 'granted' | 'denied'>('idle');
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
+  const watchRef = useRef<number | null>(null);
+
+  // Request location on dialog open — uses watchPosition for progressive accuracy improvement
+  const requestLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      setLocationStatus('denied');
+      setLocationError('Geolocation is not supported by your browser');
+      return;
+    }
+
+    setLocationStatus('requesting');
+    setLocationError(null);
+    setGpsAccuracy(null);
+
+    // Use watchPosition to keep improving accuracy until we get a good GPS fix
+    const wId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const acc = pos.coords.accuracy;
+        setGpsAccuracy(acc);
+        // Always update with the best position we can get
+        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocationStatus('granted');
+        setLocationError(null);
+
+        // Stop watching once we have good accuracy (under 100m)
+        if (acc <= 100 && watchRef.current !== null) {
+          navigator.geolocation.clearWatch(watchRef.current);
+          watchRef.current = null;
+        }
+      },
+      (err) => {
+        setLocationStatus('denied');
+        switch (err.code) {
+          case err.PERMISSION_DENIED:
+            setLocationError('Location permission denied. Please enable location access in your browser settings.');
+            break;
+          case err.POSITION_UNAVAILABLE:
+            setLocationError('Location information unavailable. Please go outside or near a window for GPS signal.');
+            break;
+          case err.TIMEOUT:
+            setLocationError('Location request timed out. Please ensure GPS is enabled and try again.');
+            break;
+          default:
+            setLocationError('Failed to get location.');
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,     // Never use cached positions
+        timeout: 30000,    // Wait up to 30s for GPS fix
+      }
+    );
+    watchRef.current = wId;
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      requestLocation();
+    }
+    return () => {
+      if (watchRef.current !== null) {
+        navigator.geolocation.clearWatch(watchRef.current);
+        watchRef.current = null;
+      }
+    };
+  }, [open, requestLocation]);
+
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) { // 10MB limit
+      if (file.size > 10 * 1024 * 1024) {
         setError('Photo size should be less than 10MB');
         return;
       }
@@ -62,6 +135,11 @@ export const StartTripDialog: React.FC<StartTripDialogProps> = ({
       return;
     }
 
+    if (locationStatus !== 'granted') {
+      setError('Location access is required to start the trip. Please enable location.');
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -71,6 +149,8 @@ export const StartTripDialog: React.FC<StartTripDialogProps> = ({
       await loadApi.startTrip(load.id, {
         startingMileage: parseInt(startingMileage),
         startingPhoto: photoUrl,
+        latitude: coords?.lat,
+        longitude: coords?.lng,
       });
 
       onSuccess();
@@ -87,6 +167,9 @@ export const StartTripDialog: React.FC<StartTripDialogProps> = ({
     setPhoto(null);
     setPhotoPreview(null);
     setError(null);
+    setLocationStatus('idle');
+    setCoords(null);
+    setLocationError(null);
     onClose();
   };
 
@@ -114,39 +197,127 @@ export const StartTripDialog: React.FC<StartTripDialogProps> = ({
         )}
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 1 }}>
-          <TextField
-            fullWidth
-            label="Starting Mileage *"
-            type="number"
-            value={startingMileage}
-            onChange={(e) => setStartingMileage(e.target.value)}
-            placeholder="Enter odometer reading"
-            required
-            inputProps={{ min: 0 }}
-          />
 
+          {/* Step 1: Location Access */}
+          <Box sx={{
+            border: `2px solid ${locationStatus === 'granted' ? '#22c55e' : locationStatus === 'denied' ? '#ef4444' : theme.palette.divider}`,
+            borderRadius: 2,
+            p: 2,
+            bgcolor: locationStatus === 'granted' ? 'rgba(34,197,94,0.06)' : locationStatus === 'denied' ? 'rgba(239,68,68,0.06)' : 'background.default',
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+              <GpsFixed sx={{ color: locationStatus === 'granted' ? '#22c55e' : locationStatus === 'denied' ? '#ef4444' : 'text.secondary' }} />
+              <Typography variant="subtitle2" fontWeight={700}>
+                Step 1: Enable Location Tracking
+              </Typography>
+              {locationStatus === 'granted' && (
+                <Chip label="ENABLED" size="small" sx={{ bgcolor: '#22c55e', color: '#fff', fontWeight: 600, fontSize: 10 }} />
+              )}
+            </Box>
+
+            {locationStatus === 'requesting' && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                <CircularProgress size={16} />
+                <Typography variant="body2" color="text.secondary">Acquiring GPS signal — please wait...</Typography>
+              </Box>
+            )}
+
+            {locationStatus === 'granted' && coords && (
+              <Box sx={{ mt: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <LocationOn sx={{ fontSize: 16, color: '#22c55e' }} />
+                  <Typography variant="body2" color="text.secondary">
+                    GPS: {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
+                  </Typography>
+                </Box>
+                {gpsAccuracy !== null && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                    <Box sx={{
+                      width: 8, height: 8, borderRadius: '50%',
+                      bgcolor: gpsAccuracy <= 50 ? '#22c55e' : gpsAccuracy <= 150 ? '#f59e0b' : '#ef4444',
+                    }} />
+                    <Typography variant="caption" color={gpsAccuracy <= 50 ? 'success.main' : gpsAccuracy <= 150 ? 'warning.main' : 'error.main'}>
+                      Accuracy: {gpsAccuracy.toFixed(0)}m — {gpsAccuracy <= 50 ? 'Excellent' : gpsAccuracy <= 150 ? 'Good' : 'Low (move to open area for GPS fix)'}
+                    </Typography>
+                  </Box>
+                )}
+                <Typography variant="caption" color="success.main" display="block" sx={{ mt: 0.5 }}>
+                  Location will be tracked continuously during your trip.
+                </Typography>
+              </Box>
+            )}
+
+            {locationStatus === 'denied' && (
+              <Box sx={{ mt: 1 }}>
+                {locationError && (
+                  <Typography variant="body2" color="error" sx={{ mb: 1 }}>
+                    {locationError}
+                  </Typography>
+                )}
+                <Button
+                  variant="outlined"
+                  color="error"
+                  size="small"
+                  startIcon={<GpsFixed />}
+                  onClick={requestLocation}
+                >
+                  Retry Location Access
+                </Button>
+              </Box>
+            )}
+
+            {locationStatus === 'idle' && (
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<GpsFixed />}
+                onClick={requestLocation}
+                sx={{ mt: 1 }}
+              >
+                Grant Location Access
+              </Button>
+            )}
+          </Box>
+
+          {/* Step 2: Odometer */}
           <Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              Upload Odometer/Speedometer Photo *
+            <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+              Step 2: Enter Starting Mileage
+            </Typography>
+            <TextField
+              fullWidth
+              label="Starting Mileage *"
+              type="number"
+              value={startingMileage}
+              onChange={(e) => setStartingMileage(e.target.value)}
+              placeholder="Enter odometer reading"
+              required
+              inputProps={{ min: 0 }}
+            />
+          </Box>
+
+          {/* Step 3: Photo */}
+          <Box>
+            <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+              Step 3: Upload Odometer Photo
             </Typography>
             <input
               ref={fileInputRef}
               type="file"
               accept="image/*"
+              capture="environment"
               onChange={handlePhotoSelect}
               style={{ display: 'none' }}
             />
             <Box
               sx={{
-                border: `2px dashed ${theme.palette.divider}`,
+                border: `2px dashed ${photoPreview ? '#22c55e' : theme.palette.divider}`,
                 borderRadius: 2,
                 p: 3,
                 textAlign: 'center',
                 cursor: 'pointer',
-                bgcolor: photoPreview ? 'action.selected' : 'background.default',
-                '&:hover': {
-                  bgcolor: 'action.hover',
-                },
+                bgcolor: photoPreview ? 'rgba(34,197,94,0.06)' : 'background.default',
+                '&:hover': { bgcolor: 'action.hover' },
               }}
               onClick={() => fileInputRef.current?.click()}
             >
@@ -155,12 +326,7 @@ export const StartTripDialog: React.FC<StartTripDialogProps> = ({
                   <img
                     src={photoPreview}
                     alt="Odometer"
-                    style={{
-                      maxWidth: '100%',
-                      maxHeight: '300px',
-                      borderRadius: 8,
-                      marginBottom: 8,
-                    }}
+                    style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: 8, marginBottom: 8 }}
                   />
                   <Typography variant="caption" color="text.secondary">
                     {photo?.name} ({((photo?.size || 0) / 1024 / 1024).toFixed(2)} MB)
@@ -172,7 +338,7 @@ export const StartTripDialog: React.FC<StartTripDialogProps> = ({
                       setPhoto(null);
                       setPhotoPreview(null);
                     }}
-                    sx={{ mt: 1 }}
+                    sx={{ mt: 1, display: 'block', mx: 'auto' }}
                   >
                     Remove
                   </Button>
@@ -181,7 +347,7 @@ export const StartTripDialog: React.FC<StartTripDialogProps> = ({
                 <Box>
                   <PhotoCamera sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
                   <Typography variant="body2" color="text.secondary">
-                    Click to upload odometer photo
+                    Tap to take or upload odometer photo
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     Max size: 10MB
@@ -191,8 +357,11 @@ export const StartTripDialog: React.FC<StartTripDialogProps> = ({
             </Box>
           </Box>
 
-          <Alert severity="info">
-            Make sure the odometer reading is clearly visible in the photo before submitting.
+          <Alert severity="info" icon={<LocationOn />}>
+            <Typography variant="body2" fontWeight={600}>Location tracking will start automatically</Typography>
+            <Typography variant="caption">
+              Your location will be tracked throughout the trip and shared with the dispatcher for real-time updates.
+            </Typography>
           </Alert>
         </Box>
       </DialogContent>
@@ -203,10 +372,11 @@ export const StartTripDialog: React.FC<StartTripDialogProps> = ({
         <Button
           variant="contained"
           onClick={handleSubmit}
-          disabled={loading || !startingMileage || !photo}
+          disabled={loading || !startingMileage || !photo || locationStatus !== 'granted'}
           startIcon={loading ? <CircularProgress size={16} /> : <CloudUpload />}
+          sx={{ bgcolor: '#22c55e', '&:hover': { bgcolor: '#16a34a' } }}
         >
-          Start Trip
+          {loading ? 'Starting Trip...' : 'Start Trip & Begin Tracking'}
         </Button>
       </DialogActions>
     </Dialog>

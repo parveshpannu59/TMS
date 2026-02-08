@@ -42,7 +42,7 @@ const TrailerSchema = new Schema({
 TrailerSchema.index({ companyId: 1, unitNumber: 1 }, { unique: true }); // Unique unit number per company
 TrailerSchema.index({ companyId: 1, status: 1 }); // Filter by company and status
 TrailerSchema.index({ companyId: 1, type: 1, status: 1 }); // Filter by type and status
-TrailerSchema.index({ vin: 1 }, { unique: true }); // Unique VIN lookup
+// vin index already created by `unique: true` in field definition
 TrailerSchema.index({ currentTruckId: 1 }); // Find trailer by truck
 TrailerSchema.index({ currentLoadId: 1 }); // Find trailer by load
 

@@ -94,8 +94,31 @@ export enum LoadStatus {
     podPhoto?: string;
   }
 
+  export interface StatusHistoryEntry {
+    status: string;
+    timestamp: string;
+    notes?: string;
+    location?: string;
+    updatedBy?: string;
+  }
+
+  export interface TripCompletionDetails {
+    endingMileage?: number;
+    endingPhoto?: string;
+    totalMiles?: number;
+    expenses?: {
+      totalExpenses: number;
+      fuelCost: number;
+      tollCharges: number;
+      otherExpenses: number;
+    };
+    tripEndedAt?: string;
+  }
+
   export interface Load {
     id: string;
+    _id?: string;
+    companyId?: string;
     loadNumber: string;
     customerName: string;
     customerContact: string;
@@ -105,8 +128,11 @@ export enum LoadStatus {
     pickupDate: string;
     expectedDeliveryDate: string;
     actualDeliveryDate?: string;
+    driverId?: string | Driver;
     driver?: Driver;
+    truckId?: string;
     truck?: Truck;
+    trailerId?: string;
     cargoType: string;
     cargoDescription: string;
     weight: number;
@@ -116,6 +142,7 @@ export enum LoadStatus {
     balance: number;
     fuelAdvance: number;
     distance: number;
+    estimatedFuelCost?: number;
     documents: {
       bol?: string;
       pod?: string;
@@ -124,7 +151,10 @@ export enum LoadStatus {
     };
     status: LoadStatus;
     specialInstructions?: string;
+    notes?: string;
     currentLocation?: GPSLocation;
+    locationHistory?: GPSLocation[];
+    statusHistory?: StatusHistoryEntry[];
     // Broker confirmation fields
     trackingLink?: string;
     brokerConfirmedRate?: boolean;
@@ -140,7 +170,11 @@ export enum LoadStatus {
     shipperLoadOutDetails?: ShipperLoadOutDetails;
     receiverCheckInDetails?: ReceiverCheckInDetails;
     receiverOffloadDetails?: ReceiverOffloadDetails;
+    tripCompletionDetails?: TripCompletionDetails;
     tripEndedAt?: string;
+    completedAt?: string;
+    cancelledAt?: string;
+    cancellationReason?: string;
     createdAt: string;
     updatedAt: string;
   }

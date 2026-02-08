@@ -65,6 +65,7 @@ const DriverDashboardMobile = lazy(() => import('../pages/driver/DriverDashboard
 const DriverTripsMobile = lazy(() => import('../pages/driver/DriverTripsMobile'));
 const DriverMessagesMobile = lazy(() => import('../pages/driver/DriverMessagesMobile'));
 const DriverLoadDetailMobile = lazy(() => import('../pages/driver/DriverLoadDetailMobile'));
+const LoadTrackingMobile = lazy(() => import('../pages/driver/LoadTrackingMobile'));
 const DriverLoginMobile = lazy(() => import('../pages/driver/DriverLoginMobile'));
 const DriverSettingsMobile = lazy(() => import('../pages/driver/DriverSettingsMobile'));
 import { DriverMobileProvider } from '../contexts/DriverMobileContext';
@@ -233,6 +234,7 @@ export const AppRoutes = () => {
           <Route index element={<Navigate to="/driver/mobile/dashboard" replace />} />
           <Route path="dashboard" element={<DriverDashboardMobile />} />
           <Route path="load/:id" element={<DriverLoadDetailMobile />} />
+          <Route path="tracking/:id" element={<LoadTrackingMobile />} />
           <Route path="trips" element={<DriverTripsMobile />} />
           <Route path="messages" element={<DriverMessagesMobile />} />
           <Route path="settings" element={<DriverSettingsMobile />} />

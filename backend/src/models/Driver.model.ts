@@ -188,8 +188,7 @@ const driverSchema = new Schema<IDriver>(
   }
 );
 
-driverSchema.index({ phone: 1 });
-driverSchema.index({ licenseNumber: 1 });
+// phone and licenseNumber indexes already created by `unique: true` in field definition
 driverSchema.index({ status: 1 });
 driverSchema.index({ createdBy: 1 });
 driverSchema.index({ userId: 1 }, { sparse: true }); // Sparse index allows multiple null values

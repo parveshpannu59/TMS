@@ -120,6 +120,8 @@ export const loadApi = {
     data: {
       startingMileage: number;
       startingPhoto: string;
+      latitude?: number;
+      longitude?: number;
     }
   ): Promise<Load> => {
     const response = await apiClient.post<ApiResponse<Load>>(`/loads/${id}/start-trip`, data);
@@ -129,9 +131,11 @@ export const loadApi = {
   shipperCheckIn: async (
     id: string,
     data: {
-      poNumber: string;
-      loadNumber: string;
-      referenceNumber: string;
+      poNumber?: string;
+      loadNumber?: string;
+      referenceNumber?: string;
+      latitude?: number;
+      longitude?: number;
     }
   ): Promise<Load> => {
     const response = await apiClient.post<ApiResponse<Load>>(`/loads/${id}/shipper-check-in`, data);
@@ -142,6 +146,8 @@ export const loadApi = {
     id: string,
     data?: {
       confirmationDetails?: string;
+      latitude?: number;
+      longitude?: number;
     }
   ): Promise<Load> => {
     const response = await apiClient.post<ApiResponse<Load>>(`/loads/${id}/shipper-load-in`, data || {});
@@ -152,14 +158,16 @@ export const loadApi = {
     id: string,
     data: {
       bolDocument: string;
+      latitude?: number;
+      longitude?: number;
     }
   ): Promise<Load> => {
     const response = await apiClient.post<ApiResponse<Load>>(`/loads/${id}/shipper-load-out`, data);
     return response.data.data as Load;
   },
 
-  receiverCheckIn: async (id: string): Promise<Load> => {
-    const response = await apiClient.post<ApiResponse<Load>>(`/loads/${id}/receiver-check-in`);
+  receiverCheckIn: async (id: string, data?: { latitude?: number; longitude?: number }): Promise<Load> => {
+    const response = await apiClient.post<ApiResponse<Load>>(`/loads/${id}/receiver-check-in`, data || {});
     return response.data.data as Load;
   },
 
@@ -171,6 +179,8 @@ export const loadApi = {
       bolAcknowledged: boolean;
       podDocument?: string;
       podPhoto?: string;
+      latitude?: number;
+      longitude?: number;
     }
   ): Promise<Load> => {
     const response = await apiClient.post<ApiResponse<Load>>(`/loads/${id}/receiver-offload`, data);
@@ -183,9 +193,24 @@ export const loadApi = {
 
   updateLocation: async (
     id: string,
-    data: { lat: number; lng: number; speed?: number; heading?: number }
+    data: { lat: number; lng: number; speed?: number; heading?: number; accuracy?: number }
   ): Promise<void> => {
     await apiClient.post(`/loads/${id}/update-location`, data);
+  },
+
+  getLocationHistory: async (
+    id: string
+  ): Promise<{
+    currentLocation: { lat: number; lng: number; timestamp: string; speed?: number } | null;
+    locationHistory: { lat: number; lng: number; timestamp: string; speed?: number }[];
+    pickupLocation: any;
+    deliveryLocation: any;
+    status: string;
+    loadNumber: string;
+    driverName: string;
+  }> => {
+    const response = await apiClient.get<ApiResponse<any>>(`/loads/${id}/location-history`);
+    return response.data.data;
   },
 
   addExpense: async (
@@ -198,6 +223,16 @@ export const loadApi = {
       location?: string;
       description?: string;
       receiptUrl?: string;
+      paidBy?: string;
+      fuelQuantity?: number;
+      fuelStation?: string;
+      odometerBefore?: number;
+      odometerAfter?: number;
+      odometerBeforePhoto?: string;
+      odometerAfterPhoto?: string;
+      repairStartTime?: string;
+      repairEndTime?: string;
+      repairDescription?: string;
     }
   ): Promise<any> => {
     const response = await apiClient.post<ApiResponse<any>>(`/loads/${loadId}/expenses`, data);
@@ -220,6 +255,8 @@ export const loadApi = {
       tolls?: number;
       otherCosts?: number;
       additionalExpenseDetails?: string;
+      latitude?: number;
+      longitude?: number;
     }
   ): Promise<Load> => {
     const response = await apiClient.post<ApiResponse<Load>>(`/loads/${id}/end-trip`, data || {});
@@ -236,6 +273,43 @@ export const loadApi = {
     }
   ): Promise<any> => {
     const response = await apiClient.post<ApiResponse<any>>(`/loads/${id}/sos`, data);
+    return response.data.data;
+  },
+
+  // Expense approval (Owner/Dispatcher)
+  getPendingExpenses: async (): Promise<any> => {
+    const response = await apiClient.get<ApiResponse<any>>('/loads/expenses/pending');
+    return response.data.data;
+  },
+
+  approveExpense: async (
+    expenseId: string,
+    data: { action: 'approve' | 'reject'; reimbursementAmount?: number; notes?: string }
+  ): Promise<any> => {
+    const response = await apiClient.patch<ApiResponse<any>>(`/loads/expenses/${expenseId}/approve`, data);
+    return response.data.data;
+  },
+
+  markExpenseReimbursed: async (expenseId: string): Promise<any> => {
+    const response = await apiClient.patch<ApiResponse<any>>(`/loads/expenses/${expenseId}/reimburse`, {});
+    return response.data.data;
+  },
+
+  // Document Analysis (OCR/PDF reading)
+  analyzeDocument: async (file: File): Promise<{
+    documentType: string;
+    summary: string;
+    extractedFields: Record<string, string>;
+    rawText: string;
+    confidence: number;
+    wordCount?: number;
+    pageInfo?: string;
+  }> => {
+    const formData = new FormData();
+    formData.append('document', file);
+    const response = await apiClient.post<ApiResponse<any>>('/loads/documents/analyze', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return response.data.data;
   },
 };

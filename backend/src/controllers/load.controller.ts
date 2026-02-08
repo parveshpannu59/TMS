@@ -8,8 +8,8 @@ import Assignment from '../models/Assignment';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
 import { ApiError } from '../utils/ApiError';
-import { notifyLoadAssigned } from '../utils/notificationHelper';
-import Notification from '../models/Notification';
+import { notifyLoadAssigned, notifyLoadCompleted, notifyLoadDelayed, createNotification } from '../utils/notificationHelper';
+import Notification, { NotificationType, NotificationPriority } from '../models/Notification';
 import AssignmentService from '../services/assignment.service';
 import Expense from '../models/Expense';
 
@@ -507,6 +507,30 @@ export class LoadController {
   });
 
   // Update load status
+  // Valid status transitions: each status maps to the statuses it can transition TO
+  static VALID_TRANSITIONS: Record<string, string[]> = {
+    [LoadStatus.BOOKED]: [LoadStatus.RATE_CONFIRMED, LoadStatus.ASSIGNED, LoadStatus.CANCELLED],
+    [LoadStatus.RATE_CONFIRMED]: [LoadStatus.ASSIGNED, LoadStatus.CANCELLED],
+    [LoadStatus.ASSIGNED]: [LoadStatus.TRIP_ACCEPTED, LoadStatus.BOOKED, LoadStatus.CANCELLED],
+    [LoadStatus.TRIP_ACCEPTED]: [LoadStatus.TRIP_STARTED, LoadStatus.ASSIGNED, LoadStatus.CANCELLED],
+    [LoadStatus.TRIP_STARTED]: [LoadStatus.SHIPPER_CHECK_IN, LoadStatus.CANCELLED],
+    [LoadStatus.SHIPPER_CHECK_IN]: [LoadStatus.SHIPPER_LOAD_IN, LoadStatus.CANCELLED],
+    [LoadStatus.SHIPPER_LOAD_IN]: [LoadStatus.SHIPPER_LOAD_OUT, LoadStatus.CANCELLED],
+    [LoadStatus.SHIPPER_LOAD_OUT]: [LoadStatus.IN_TRANSIT, LoadStatus.CANCELLED],
+    [LoadStatus.IN_TRANSIT]: [LoadStatus.RECEIVER_CHECK_IN, LoadStatus.CANCELLED],
+    [LoadStatus.RECEIVER_CHECK_IN]: [LoadStatus.RECEIVER_OFFLOAD, LoadStatus.CANCELLED],
+    [LoadStatus.RECEIVER_OFFLOAD]: [LoadStatus.DELIVERED, LoadStatus.CANCELLED],
+    [LoadStatus.DELIVERED]: [LoadStatus.COMPLETED],
+    [LoadStatus.COMPLETED]: [],
+    [LoadStatus.CANCELLED]: [],
+  };
+
+  static validateTransition(currentStatus: string, newStatus: string): boolean {
+    const allowed = LoadController.VALID_TRANSITIONS[currentStatus];
+    if (!allowed) return false;
+    return allowed.includes(newStatus);
+  }
+
   static updateStatus = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const { status, notes, location } = req.body;
@@ -519,11 +543,18 @@ export class LoadController {
       throw ApiError.notFound('Load not found');
     }
     
-    // Validate status transition
+    // Validate status is a valid enum value
     const validStatuses = Object.values(LoadStatus);
-    
     if (!validStatuses.includes(status as LoadStatus)) {
       throw ApiError.badRequest('Invalid status');
+    }
+
+    // Validate the status transition is allowed
+    if (!LoadController.validateTransition(load.status, status)) {
+      throw ApiError.badRequest(
+        `Cannot transition from "${load.status.replace(/_/g, ' ')}" to "${status.replace(/_/g, ' ')}". ` +
+        `Allowed transitions: ${(LoadController.VALID_TRANSITIONS[load.status] || []).map((s: string) => s.replace(/_/g, ' ')).join(', ') || 'none'}`
+      );
     }
     
     // Update status
@@ -587,6 +618,36 @@ export class LoadController {
     }
     
     await load.save();
+
+    // Send notifications for key status changes
+    const notifCompanyId = companyId || load.companyId;
+    if (notifCompanyId) {
+      try {
+        if (status === LoadStatus.DELIVERED || status === LoadStatus.COMPLETED) {
+          await notifyLoadCompleted(notifCompanyId, load.loadNumber);
+        }
+        if (status === LoadStatus.CANCELLED) {
+          await createNotification({
+            companyId: notifCompanyId,
+            type: NotificationType.WARNING,
+            priority: NotificationPriority.HIGH,
+            title: 'Load Cancelled',
+            message: `Load #${load.loadNumber} has been cancelled${notes ? `: ${notes}` : ''}`,
+            metadata: { loadNumber: load.loadNumber, reason: notes },
+          });
+        }
+        if (status === LoadStatus.TRIP_STARTED) {
+          await createNotification({
+            companyId: notifCompanyId,
+            type: NotificationType.INFO,
+            priority: NotificationPriority.MEDIUM,
+            title: 'Trip Started',
+            message: `Driver has started trip for Load #${load.loadNumber}`,
+            metadata: { loadNumber: load.loadNumber },
+          });
+        }
+      } catch { /* notification failures should not block the main operation */ }
+    }
     
     return ApiResponse.success(res, load, 'Status updated successfully');
   });
@@ -888,17 +949,27 @@ export class LoadController {
       throw ApiError.badRequest('Starting mileage and photo are required');
     }
     
+    const { latitude, longitude } = req.body;
+    
     load.status = LoadStatus.TRIP_STARTED;
     load.tripStartDetails = {
       startingMileage,
       startingPhoto,
       tripStartedAt: new Date(),
     };
+    
+    // Store start location if provided
+    if (latitude && longitude) {
+      (load as any).tripStartLocation = { latitude, longitude, timestamp: new Date() };
+    }
+    
     load.statusHistory.push({
       status: LoadStatus.TRIP_STARTED,
       timestamp: new Date(),
       notes: `Trip started. Starting mileage: ${startingMileage}`,
       updatedBy: userId,
+      lat: latitude || undefined,
+      lng: longitude || undefined,
     } as any);
     
     await load.save();
@@ -938,22 +1009,33 @@ export class LoadController {
       throw ApiError.forbidden('Only the assigned driver can perform this action');
     }
     
-    if (!poNumber || !loadNumber || !referenceNumber) {
-      throw ApiError.badRequest('PO number, load number, and reference number are required');
+    // At least one identifier should be provided (PO, load number, or reference)
+    if (!poNumber && !loadNumber && !referenceNumber) {
+      throw ApiError.badRequest('At least one identifier (PO number, load number, or reference number) is required');
     }
+    
+    const { latitude, longitude } = req.body;
     
     load.status = LoadStatus.SHIPPER_CHECK_IN;
     load.shipperCheckInDetails = {
-      poNumber,
-      loadNumber,
-      referenceNumber,
+      poNumber: poNumber || '',
+      loadNumber: loadNumber || load.loadNumber || '',
+      referenceNumber: referenceNumber || '',
       checkInAt: new Date(),
     };
+    
+    // Store check-in location if provided
+    if (latitude && longitude) {
+      (load as any).shipperCheckInLocation = { latitude, longitude, timestamp: new Date() };
+    }
+    
     load.statusHistory.push({
       status: LoadStatus.SHIPPER_CHECK_IN,
       timestamp: new Date(),
-      notes: `Checked in at shipper. PO: ${poNumber}, Ref: ${referenceNumber}`,
+      notes: `Checked in at shipper.${poNumber ? ` PO: ${poNumber}` : ''}${referenceNumber ? ` Ref: ${referenceNumber}` : ''}`,
       updatedBy: userId,
+      lat: latitude || undefined,
+      lng: longitude || undefined,
     } as any);
     
     await load.save();
@@ -993,6 +1075,8 @@ export class LoadController {
       throw ApiError.forbidden('Only the assigned driver can perform this action');
     }
     
+    const { latitude, longitude } = req.body;
+
     load.status = LoadStatus.SHIPPER_LOAD_IN;
     load.shipperLoadInDetails = {
       confirmationDetails,
@@ -1003,6 +1087,8 @@ export class LoadController {
       timestamp: new Date(),
       notes: 'Load in confirmed at shipper location',
       updatedBy: userId,
+      lat: latitude || undefined,
+      lng: longitude || undefined,
     } as any);
     
     await load.save();
@@ -1046,6 +1132,8 @@ export class LoadController {
       throw ApiError.badRequest('BOL document is required');
     }
     
+    const { latitude, longitude } = req.body;
+
     load.status = LoadStatus.SHIPPER_LOAD_OUT;
     load.shipperLoadOutDetails = {
       loadOutAt: new Date(),
@@ -1058,6 +1146,8 @@ export class LoadController {
       timestamp: new Date(),
       notes: 'Load out confirmed. BOL uploaded',
       updatedBy: userId,
+      lat: latitude || undefined,
+      lng: longitude || undefined,
     } as any);
     
     await load.save();
@@ -1099,6 +1189,8 @@ export class LoadController {
       throw ApiError.forbidden('Only the assigned driver can perform this action');
     }
     
+    const { latitude, longitude } = req.body;
+
     load.status = LoadStatus.RECEIVER_CHECK_IN;
     load.receiverCheckInDetails = {
       checkInAt: new Date(),
@@ -1109,6 +1201,8 @@ export class LoadController {
       timestamp: new Date(),
       notes: 'Checked in at receiver location',
       updatedBy: userId,
+      lat: latitude || undefined,
+      lng: longitude || undefined,
     } as any);
     
     await load.save();
@@ -1162,11 +1256,15 @@ export class LoadController {
     if (podDocument) load.documents.pod = podDocument;
     if (podPhoto) load.documents.pod = podPhoto;
     
+    const { latitude, longitude } = req.body;
+
     load.statusHistory.push({
       status: LoadStatus.RECEIVER_OFFLOAD,
       timestamp: new Date(),
       notes: 'Load offloaded at receiver. POD received',
       updatedBy: userId,
+      lat: latitude || undefined,
+      lng: longitude || undefined,
     } as any);
     
     await load.save();
@@ -1247,11 +1345,15 @@ export class LoadController {
     load.completedAt = new Date();
     load.actualDeliveryDate = new Date();
     
+    const { latitude, longitude } = req.body;
+
     load.statusHistory.push({
       status: LoadStatus.COMPLETED,
       timestamp: new Date(),
       notes: `Trip completed. Total miles: ${totalMiles}, Payment: $${totalPayment}, Expenses: $${totalExpenses}`,
       updatedBy: userId,
+      lat: latitude || undefined,
+      lng: longitude || undefined,
     } as any);
     
     // Free up resources
@@ -1334,11 +1436,16 @@ export class LoadController {
   // Driver updates location during active trip (live tracking)
   static updateLocation = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { lat, lng, speed, heading } = req.body;
+    const { lat, lng, speed, heading, accuracy } = req.body;
     const userId = req.user!.id;
 
-    if (!lat || !lng) {
+    if (lat === undefined || lat === null || lng === undefined || lng === null) {
       throw ApiError.badRequest('Latitude and longitude are required');
+    }
+    const numLat = Number(lat);
+    const numLng = Number(lng);
+    if (isNaN(numLat) || isNaN(numLng) || numLat < -90 || numLat > 90 || numLng < -180 || numLng > 180) {
+      throw ApiError.badRequest('Invalid coordinates. Latitude: -90 to 90, Longitude: -180 to 180');
     }
 
     let query: any = { _id: id };
@@ -1353,13 +1460,76 @@ export class LoadController {
     const load = await Load.findOne(query);
     if (!load) throw ApiError.notFound('Load not found');
 
-    const locationPoint = { lat: Number(lat), lng: Number(lng), timestamp: new Date(), speed, heading };
+    const locationPoint = {
+      lat: numLat, lng: numLng,
+      timestamp: new Date(),
+      speed: speed ?? undefined,
+      heading: heading ?? undefined,
+      accuracy: accuracy ? Number(accuracy) : undefined,
+    };
     load.currentLocation = locationPoint as any;
     if (!load.locationHistory) load.locationHistory = [];
     load.locationHistory.push(locationPoint as any);
     await load.save();
 
-    return ApiResponse.success(res, { updated: true }, 'Location updated');
+    return ApiResponse.success(res, { updated: true, accuracy: locationPoint.accuracy }, 'Location updated');
+  });
+
+  // Get location tracking data for a load (owner/dispatcher/driver)
+  static getLocationHistory = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const userId = req.user!.id;
+
+    let query: any = { _id: id };
+    if (req.user?.role === 'driver') {
+      const driver = await Driver.findOne({ userId }).select('_id').lean();
+      if (driver) query.driverId = driver._id.toString();
+      else throw ApiError.notFound('Driver profile not found');
+    } else {
+      query.companyId = req.user?.companyId ?? req.user?.id;
+    }
+
+    const load = await Load.findOne(query)
+      .select('currentLocation locationHistory pickupLocation deliveryLocation status loadNumber driverId statusHistory tripStartDetails tripCompletionDetails createdAt')
+      .lean();
+    if (!load) throw ApiError.notFound('Load not found');
+
+    // Get driver name
+    let driverName = 'Driver';
+    if (load.driverId) {
+      const driver = await Driver.findById(load.driverId).select('name').lean();
+      if (driver) driverName = (driver as any).name || 'Driver';
+    }
+
+    // Calculate trip distance
+    let totalDistanceKm = 0;
+    const history = load.locationHistory || [];
+    for (let i = 1; i < history.length; i++) {
+      const p1 = history[i - 1];
+      const p2 = history[i];
+      const R = 6371;
+      const dLat = ((p2.lat - p1.lat) * Math.PI) / 180;
+      const dLng = ((p2.lng - p1.lng) * Math.PI) / 180;
+      const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos((p1.lat * Math.PI) / 180) * Math.cos((p2.lat * Math.PI) / 180) *
+        Math.sin(dLng / 2) ** 2;
+      totalDistanceKm += R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    return ApiResponse.success(res, {
+      currentLocation: load.currentLocation || null,
+      locationHistory: history,
+      pickupLocation: load.pickupLocation || null,
+      deliveryLocation: load.deliveryLocation || null,
+      status: load.status,
+      loadNumber: load.loadNumber,
+      driverName,
+      statusHistory: load.statusHistory || [],
+      tripStartDetails: load.tripStartDetails || null,
+      tripCompletionDetails: load.tripCompletionDetails || null,
+      totalDistanceKm: Math.round(totalDistanceKm * 10) / 10,
+      totalPoints: history.length,
+    }, 'Location history retrieved');
   });
 
   // Driver reports delay
@@ -1392,6 +1562,14 @@ export class LoadController {
       updatedBy: userId,
     } as any);
     await load.save();
+
+    // Notify owner/dispatcher about the delay
+    try {
+      const companyId = load.companyId || req.user?.companyId || req.user?.id;
+      if (companyId) {
+        await notifyLoadDelayed(companyId, load.loadNumber, reason.trim());
+      }
+    } catch { /* don't block for notification failure */ }
 
     return ApiResponse.success(res, { reported: true }, 'Delay reported successfully');
   });
@@ -1426,6 +1604,22 @@ export class LoadController {
     const companyId = (load as any).companyId?.toString();
     if (!companyId) throw ApiError.badRequest('Load has no company');
 
+    // Extract additional fields
+    const { paidBy, fuelQuantity, fuelStation, odometerBefore, odometerAfter,
+            odometerBeforePhoto, odometerAfterPhoto, repairStartTime, repairEndTime,
+            repairDescription: repairDesc } = req.body;
+
+    // Calculate downtime hours for repair
+    let repairDowntimeHours: number | undefined;
+    if (repairStartTime && repairEndTime) {
+      const start = new Date(repairStartTime);
+      const end = new Date(repairEndTime);
+      repairDowntimeHours = parseFloat(((end.getTime() - start.getTime()) / 3600000).toFixed(1));
+    }
+
+    // Determine reimbursement status
+    const reimbursementStatus = paidBy === 'driver' ? 'pending' : 'not_applicable';
+
     const expense = await Expense.create({
       loadId: String(id),
       driverId: userId,
@@ -1434,10 +1628,23 @@ export class LoadController {
       type: type || 'on_the_way',
       amount: Number(amount),
       date: date ? new Date(date) : new Date(),
-      location: location || undefined,
+      location: location || fuelStation || undefined,
       description: description || undefined,
       receiptUrl: receiptUrl || undefined,
       status: 'pending',
+      paidBy: paidBy || 'driver',
+      reimbursementStatus,
+      reimbursementAmount: paidBy === 'driver' ? Number(amount) : undefined,
+      fuelQuantity: fuelQuantity ? Number(fuelQuantity) : undefined,
+      fuelStation: fuelStation || undefined,
+      odometerBefore: odometerBefore ? Number(odometerBefore) : undefined,
+      odometerAfter: odometerAfter ? Number(odometerAfter) : undefined,
+      odometerBeforePhoto: odometerBeforePhoto || undefined,
+      odometerAfterPhoto: odometerAfterPhoto || undefined,
+      repairStartTime: repairStartTime ? new Date(repairStartTime) : undefined,
+      repairEndTime: repairEndTime ? new Date(repairEndTime) : undefined,
+      repairDowntimeHours,
+      repairDescription: repairDesc || undefined,
     });
 
     return ApiResponse.success(res, expense, 'Expense logged successfully', 201);
@@ -1473,6 +1680,88 @@ export class LoadController {
     );
 
     return ApiResponse.success(res, { expenses, summary }, 'Expenses retrieved');
+  });
+
+  // ─── Expense Approval & Reimbursement ─────────────────────────
+
+  // Owner/Dispatcher approves or rejects an expense
+  static approveExpense = asyncHandler(async (req: Request, res: Response) => {
+    const { expenseId } = req.params;
+    const { action, reimbursementAmount, notes } = req.body; // action: 'approve' | 'reject'
+    const companyId = req.user?.companyId ?? req.user?.id;
+    const userId = req.user!.id;
+
+    if (!['approve', 'reject'].includes(action)) {
+      throw ApiError.badRequest('Action must be "approve" or "reject"');
+    }
+
+    const expense = await Expense.findOne({ _id: expenseId, companyId });
+    if (!expense) throw ApiError.notFound('Expense not found');
+
+    if (expense.status !== 'pending') {
+      throw ApiError.badRequest(`Expense is already ${expense.status}`);
+    }
+
+    expense.status = action === 'approve' ? 'approved' : 'rejected';
+    (expense as any).approvedBy = userId;
+    (expense as any).approvedAt = new Date();
+
+    if (action === 'approve' && expense.paidBy === 'driver') {
+      expense.reimbursementStatus = 'approved';
+      expense.reimbursementAmount = reimbursementAmount || expense.amount;
+    } else if (action === 'reject') {
+      expense.reimbursementStatus = 'rejected';
+    }
+
+    if (notes) expense.notes = notes;
+    await expense.save();
+
+    return ApiResponse.success(res, expense, `Expense ${action}d successfully`);
+  });
+
+  // Mark an approved expense as paid (reimbursed)
+  static markExpenseReimbursed = asyncHandler(async (req: Request, res: Response) => {
+    const { expenseId } = req.params;
+    const companyId = req.user?.companyId ?? req.user?.id;
+
+    const expense = await Expense.findOne({ _id: expenseId, companyId });
+    if (!expense) throw ApiError.notFound('Expense not found');
+
+    if (expense.status !== 'approved') {
+      throw ApiError.badRequest('Can only reimburse approved expenses');
+    }
+    if (expense.reimbursementStatus !== 'approved' && expense.reimbursementStatus !== 'pending') {
+      throw ApiError.badRequest(`Expense reimbursement is already ${expense.reimbursementStatus}`);
+    }
+
+    expense.reimbursementStatus = 'paid';
+    expense.reimbursementDate = new Date();
+    await expense.save();
+
+    return ApiResponse.success(res, expense, 'Expense marked as reimbursed');
+  });
+
+  // Get all pending expenses for a company (for owner/dispatcher review)
+  static getPendingExpenses = asyncHandler(async (req: Request, res: Response) => {
+    const companyId = req.user?.companyId ?? req.user?.id;
+
+    const expenses = await Expense.find({
+      companyId,
+      status: 'pending',
+    }).sort({ date: -1 }).populate('loadId', 'loadNumber').lean();
+
+    const summary = expenses.reduce(
+      (acc, e: any) => {
+        acc.total += e.amount || 0;
+        acc.count += 1;
+        const cat = e.category || 'other';
+        acc.byCategory[cat] = (acc.byCategory[cat] || 0) + (e.amount || 0);
+        return acc;
+      },
+      { total: 0, count: 0, byCategory: {} as Record<string, number> }
+    );
+
+    return ApiResponse.success(res, { expenses, summary }, 'Pending expenses retrieved');
   });
 
   // SOS/Emergency notification

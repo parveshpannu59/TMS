@@ -16,6 +16,24 @@ export interface IExpense extends Document {
   approvedBy?: string;
   approvedAt?: Date;
   rejectionReason?: string;
+  // Reimbursement tracking
+  paidBy?: 'driver' | 'dispatcher' | 'broker';
+  reimbursementStatus?: 'not_applicable' | 'pending' | 'approved' | 'paid' | 'rejected';
+  reimbursementAmount?: number;
+  reimbursementDate?: Date;
+  // Fuel-specific
+  fuelQuantity?: number;
+  fuelStation?: string;
+  odometerBefore?: number;
+  odometerAfter?: number;
+  odometerBeforePhoto?: string;
+  odometerAfterPhoto?: string;
+  // Repair/maintenance specific
+  repairStartTime?: Date;
+  repairEndTime?: Date;
+  repairDowntimeHours?: number;
+  repairDescription?: string;
+  notes?: string;
 }
 
 const ExpenseSchema = new Schema({
@@ -46,9 +64,36 @@ const ExpenseSchema = new Schema({
   approvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
   approvedAt: { type: Date },
   rejectionReason: { type: String },
+  // Reimbursement tracking
+  paidBy: {
+    type: String,
+    enum: ['driver', 'dispatcher', 'broker'],
+    default: 'driver',
+  },
+  reimbursementStatus: {
+    type: String,
+    enum: ['not_applicable', 'pending', 'approved', 'paid', 'rejected'],
+    default: 'not_applicable',
+  },
+  reimbursementAmount: { type: Number },
+  reimbursementDate: { type: Date },
+  // Fuel-specific
+  fuelQuantity: { type: Number },
+  fuelStation: { type: String },
+  odometerBefore: { type: Number },
+  odometerAfter: { type: Number },
+  odometerBeforePhoto: { type: String },
+  odometerAfterPhoto: { type: String },
+  // Repair/maintenance specific
+  repairStartTime: { type: Date },
+  repairEndTime: { type: Date },
+  repairDowntimeHours: { type: Number },
+  repairDescription: { type: String },
+  notes: { type: String },
 }, { timestamps: true });
 
 ExpenseSchema.index({ loadId: 1, status: 1 });
 ExpenseSchema.index({ driverId: 1, status: 1 });
+ExpenseSchema.index({ companyId: 1, status: 1 });
 
 export default mongoose.model<IExpense>('Expense', ExpenseSchema);

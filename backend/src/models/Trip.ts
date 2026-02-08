@@ -224,8 +224,7 @@ const TripSchema = new Schema(
 
 // Index for finding active trips for a driver
 TripSchema.index({ driverId: 1, status: 1 });
-// Index for finding trips by load
-TripSchema.index({ loadId: 1 });
+// loadId index already created by `index: true` in field definition
 // Index for tracking active trips
 TripSchema.index({ status: 1, startedAt: -1 });
 

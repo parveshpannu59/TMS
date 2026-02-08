@@ -72,6 +72,13 @@ export const uploadDocument = multer({
   limits: { fileSize: 25 * 1024 * 1024 }, // 25MB (compress PDFs if larger)
 }).single('file');
 
+// Document analysis upload (for OCR/PDF parsing)
+export const uploadDocumentForAnalysis = multer({
+  storage: documentStorage,
+  fileFilter: documentFilter,
+  limits: { fileSize: 25 * 1024 * 1024 },
+}).single('document');
+
 // Driver documents upload (photo, license, aadhar, pan, etc)
 const driverDocsDir = path.join(process.cwd(), 'uploads', 'drivers');
 if (!fs.existsSync(driverDocsDir)) {

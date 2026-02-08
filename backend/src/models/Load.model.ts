@@ -37,6 +37,7 @@ interface IGPSLocation {
   timestamp: Date;
   speed?: number;
   heading?: number;
+  accuracy?: number; // GPS accuracy in meters
 }
 
 interface IStatusHistory {
@@ -205,6 +206,7 @@ const GPSLocationSchema = new Schema({
   timestamp: { type: Date, default: Date.now },
   speed: { type: Number },
   heading: { type: Number },
+  accuracy: { type: Number },
 });
 
 const StatusHistorySchema = new Schema({
@@ -212,6 +214,10 @@ const StatusHistorySchema = new Schema({
   timestamp: { type: Date, default: Date.now },
   updatedBy: { type: String, required: true },
   notes: { type: String },
+  location: { type: String },         // human-readable address/place
+  lat: { type: Number },              // GPS latitude
+  lng: { type: Number },              // GPS longitude
+  accuracy: { type: Number },         // GPS accuracy in meters
 });
 
 const DocumentsSchema = new Schema({

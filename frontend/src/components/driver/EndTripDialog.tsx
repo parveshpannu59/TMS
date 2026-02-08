@@ -92,6 +92,17 @@ export const EndTripDialog: React.FC<EndTripDialogProps> = ({
         endingPhotoUrl = await loadApi.uploadLoadDocument(load.id, endingPhoto);
       }
 
+      // Capture current GPS for the status history
+      let gps: { latitude?: number; longitude?: number } = {};
+      try {
+        const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+          navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 })
+        );
+        if (pos.coords.accuracy <= 200) {
+          gps = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+        }
+      } catch { /* ignore GPS failure */ }
+
       await loadApi.endTrip(load.id, {
         endingMileage: parseInt(endingMileage),
         totalMiles: parseFloat(totalMiles),
@@ -101,6 +112,7 @@ export const EndTripDialog: React.FC<EndTripDialogProps> = ({
         otherCosts: parseFloat(otherCosts) || 0,
         additionalExpenseDetails,
         endingPhoto: endingPhotoUrl,
+        ...gps,
       });
 
       onSuccess();

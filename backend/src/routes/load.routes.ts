@@ -1,13 +1,21 @@
 import express from 'express';
 import { LoadController } from '../controllers/load.controller';
+import { DocumentController } from '../controllers/document.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
-import { uploadDocument, uploadLoadImage } from '../middleware/upload.middleware';
+import { uploadDocument, uploadDocumentForAnalysis, uploadLoadImage } from '../middleware/upload.middleware';
 import { UserRole } from '../types/auth.types';
 
 const router = express.Router();
 
 // All load routes require authentication
 router.use(authenticate);
+
+// Document analysis (OCR/PDF reading) - must come before /:id routes
+router.post(
+  '/documents/analyze',
+  uploadDocumentForAnalysis,
+  DocumentController.analyzeDocument
+);
 
 // Get my assigned loads (Driver) - must come before /:id
 router.get(
@@ -20,6 +28,25 @@ router.get(
 router.get(
   '/',
   LoadController.getLoads
+);
+
+// Expense approval routes (Owner/Dispatcher) - MUST come before /:id routes
+router.get(
+  '/expenses/pending',
+  authorize(UserRole.OWNER, UserRole.DISPATCHER),
+  LoadController.getPendingExpenses
+);
+
+router.patch(
+  '/expenses/:expenseId/approve',
+  authorize(UserRole.OWNER, UserRole.DISPATCHER),
+  LoadController.approveExpense
+);
+
+router.patch(
+  '/expenses/:expenseId/reimburse',
+  authorize(UserRole.OWNER, UserRole.DISPATCHER),
+  LoadController.markExpenseReimbursed
 );
 
 // Get load expenses (Driver, Owner, Dispatcher)
@@ -162,6 +189,12 @@ router.post(
   '/:id/update-location',
   authorize(UserRole.DRIVER),
   LoadController.updateLocation
+);
+
+// Get location tracking history (Owner/Dispatcher/Driver)
+router.get(
+  '/:id/location-history',
+  LoadController.getLocationHistory
 );
 
 // Report delay (Driver)

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { SOSController } from '../controllers/sos.controller';
-import { authenticate } from '../middleware/auth.middleware';
+import { authenticate, authorize } from '../middleware/auth.middleware';
+import { UserRole } from '../types/auth.types';
 
 const router = Router();
 
@@ -8,12 +9,12 @@ const router = Router();
 router.use(authenticate);
 
 // Driver routes
-router.post('/', SOSController.createSOS);
-router.get('/my-history', SOSController.getDriverSOSHistory);
+router.post('/', authorize(UserRole.DRIVER), SOSController.createSOS);
+router.get('/my-history', authorize(UserRole.DRIVER), SOSController.getDriverSOSHistory);
 
 // Dispatcher/Owner routes
-router.get('/active', SOSController.getActiveSOS);
-router.patch('/:id/acknowledge', SOSController.acknowledgeSOS);
-router.patch('/:id/resolve', SOSController.resolveSOS);
+router.get('/active', authorize(UserRole.OWNER, UserRole.DISPATCHER), SOSController.getActiveSOS);
+router.patch('/:id/acknowledge', authorize(UserRole.OWNER, UserRole.DISPATCHER), SOSController.acknowledgeSOS);
+router.patch('/:id/resolve', authorize(UserRole.OWNER, UserRole.DISPATCHER), SOSController.resolveSOS);
 
 export default router;
