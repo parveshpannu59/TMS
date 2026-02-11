@@ -1,5 +1,5 @@
-import { memo } from 'react';
-import { Box, Typography, alpha, useTheme } from '@mui/material';
+import { memo, useState } from 'react';
+import { Box, Typography, alpha, useTheme, Collapse, Button } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Activity } from '../../types/dashboard.types';
 import { formatDistanceToNow } from 'date-fns';
@@ -8,10 +8,14 @@ import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import WarningIcon from '@mui/icons-material/Warning';
 import HistoryIcon from '@mui/icons-material/History';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 
 interface RecentActivityProps {
   activities: Activity[];
 }
+
+const INITIAL_COUNT = 3;
 
 const getActivityIcon = (type: Activity['type']) => {
   switch (type) {
@@ -28,9 +32,76 @@ const getActivityIcon = (type: Activity['type']) => {
   }
 };
 
+const ActivityItem = memo(({ activity, idx, theme }: { activity: Activity; idx: number; theme: any }) => {
+  const config = getActivityIcon(activity.type);
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        gap: 2,
+        py: 1.2,
+        position: 'relative',
+        transition: 'all 0.2s',
+        '&:hover': {
+          '& .activity-dot': {
+            transform: 'scale(1.2)',
+          },
+        },
+      }}
+    >
+      {/* Timeline dot */}
+      <Box
+        className="activity-dot"
+        sx={{
+          width: 30,
+          height: 30,
+          borderRadius: '50%',
+          bgcolor: alpha(config.color, 0.12),
+          color: config.color,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+          position: 'relative',
+          zIndex: 1,
+          transition: 'transform 0.2s',
+          border: `2px solid ${theme.palette.background.paper}`,
+        }}
+      >
+        {config.icon}
+      </Box>
+
+      {/* Content */}
+      <Box flex={1} minWidth={0}>
+        <Typography
+          variant="body2"
+          fontWeight={idx === 0 ? 600 : 500}
+          sx={{
+            fontSize: '0.82rem',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {activity.message}
+        </Typography>
+        <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.7rem' }}>
+          {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}
+        </Typography>
+      </Box>
+    </Box>
+  );
+});
+ActivityItem.displayName = 'ActivityItem';
+
 export const RecentActivity = memo(({ activities }: RecentActivityProps) => {
   const { t } = useTranslation();
   const theme = useTheme();
+  const [expanded, setExpanded] = useState(false);
+
+  const hasMore = activities.length > INITIAL_COUNT;
+  const visibleActivities = activities.slice(0, INITIAL_COUNT);
+  const hiddenActivities = activities.slice(INITIAL_COUNT);
 
   return (
     <Box
@@ -43,23 +114,44 @@ export const RecentActivity = memo(({ activities }: RecentActivityProps) => {
           : '#fff',
         border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
         boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
-      <Box display="flex" alignItems="center" gap={1} mb={2.5}>
-        <Box
-          sx={{
-            background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-            borderRadius: 2,
-            p: 0.8,
-            display: 'flex',
-            color: 'white',
-          }}
-        >
-          <HistoryIcon sx={{ fontSize: 18 }} />
+      {/* Header */}
+      <Box display="flex" alignItems="center" justifyContent="space-between" mb={2.5}>
+        <Box display="flex" alignItems="center" gap={1}>
+          <Box
+            sx={{
+              background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+              borderRadius: 2,
+              p: 0.8,
+              display: 'flex',
+              color: 'white',
+            }}
+          >
+            <HistoryIcon sx={{ fontSize: 18 }} />
+          </Box>
+          <Typography variant="subtitle1" fontWeight={700}>
+            {t('dashboard.recentActivity')}
+          </Typography>
         </Box>
-        <Typography variant="subtitle1" fontWeight={700}>
-          {t('dashboard.recentActivity')}
-        </Typography>
+        {activities.length > 0 && (
+          <Typography
+            variant="caption"
+            sx={{
+              bgcolor: alpha('#3b82f6', 0.08),
+              color: '#3b82f6',
+              px: 1.2,
+              py: 0.3,
+              borderRadius: 1.5,
+              fontWeight: 700,
+              fontSize: '0.7rem',
+            }}
+          >
+            {activities.length} total
+          </Typography>
+        )}
       </Box>
 
       {activities.length === 0 ? (
@@ -69,7 +161,7 @@ export const RecentActivity = memo(({ activities }: RecentActivityProps) => {
           </Typography>
         </Box>
       ) : (
-        <Box sx={{ position: 'relative' }}>
+        <Box sx={{ position: 'relative', flex: 1 }}>
           {/* Timeline line */}
           <Box
             sx={{
@@ -83,67 +175,47 @@ export const RecentActivity = memo(({ activities }: RecentActivityProps) => {
             }}
           />
 
-          {activities.slice(0, 8).map((activity, idx) => {
-            const config = getActivityIcon(activity.type);
-            return (
-              <Box
-                key={activity.id}
-                sx={{
-                  display: 'flex',
-                  gap: 2,
-                  py: 1.2,
-                  position: 'relative',
-                  transition: 'all 0.2s',
-                  '&:hover': {
-                    '& .activity-dot': {
-                      transform: 'scale(1.2)',
-                    },
-                  },
-                }}
-              >
-                {/* Timeline dot */}
-                <Box
-                  className="activity-dot"
-                  sx={{
-                    width: 30,
-                    height: 30,
-                    borderRadius: '50%',
-                    bgcolor: alpha(config.color, 0.12),
-                    color: config.color,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                    position: 'relative',
-                    zIndex: 1,
-                    transition: 'transform 0.2s',
-                    border: `2px solid ${theme.palette.background.paper}`,
-                  }}
-                >
-                  {config.icon}
-                </Box>
+          {/* First 3 items - always visible */}
+          {visibleActivities.map((activity, idx) => (
+            <ActivityItem key={activity.id} activity={activity} idx={idx} theme={theme} />
+          ))}
 
-                {/* Content */}
-                <Box flex={1} minWidth={0}>
-                  <Typography
-                    variant="body2"
-                    fontWeight={idx === 0 ? 600 : 500}
-                    sx={{
-                      fontSize: '0.82rem',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {activity.message}
-                  </Typography>
-                  <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.7rem' }}>
-                    {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}
-                  </Typography>
-                </Box>
-              </Box>
-            );
-          })}
+          {/* Remaining items - collapsible */}
+          {hasMore && (
+            <Collapse in={expanded} timeout={400}>
+              {hiddenActivities.map((activity, idx) => (
+                <ActivityItem key={activity.id} activity={activity} idx={INITIAL_COUNT + idx} theme={theme} />
+              ))}
+            </Collapse>
+          )}
+        </Box>
+      )}
+
+      {/* Show More / Show Less button */}
+      {hasMore && (
+        <Box sx={{ mt: 2, textAlign: 'center' }}>
+          <Button
+            size="small"
+            onClick={() => setExpanded(!expanded)}
+            endIcon={expanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+            sx={{
+              borderRadius: 3,
+              textTransform: 'none',
+              fontWeight: 600,
+              fontSize: '0.78rem',
+              color: '#3b82f6',
+              bgcolor: alpha('#3b82f6', 0.06),
+              px: 2.5,
+              py: 0.6,
+              '&:hover': {
+                bgcolor: alpha('#3b82f6', 0.12),
+              },
+            }}
+          >
+            {expanded
+              ? 'Show Less'
+              : `Show ${hiddenActivities.length} More`}
+          </Button>
         </Box>
       )}
     </Box>

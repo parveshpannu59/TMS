@@ -8,6 +8,9 @@ const router = Router();
 // All routes require authentication
 router.use(authenticate);
 
+// Export trips as CSV (Owner, Dispatcher) - must come before /:id routes
+router.get('/export/csv', authorize(UserRole.OWNER, UserRole.DISPATCHER), TripController.exportTripsCsv);
+
 // Driver routes
 router.post('/start', authorize(UserRole.DRIVER), TripController.startTrip);
 router.get('/current', authorize(UserRole.DRIVER), TripController.getCurrentTrip);

@@ -27,6 +27,7 @@ import { useForm, Controller } from 'react-hook-form';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
 import { useTranslation } from 'react-i18next';
+import { usePusherContext } from '@/contexts/PusherContext';
 
 const driverSchema = yup.object({
   licenseNumber: yup.string().required('License number is required'),
@@ -43,6 +44,7 @@ const statusColors: Record<string, 'success' | 'warning' | 'error' | 'info'> = {
 
 const DriversPage: React.FC = () => {
   const { t } = useTranslation();
+  const { onlineDrivers } = usePusherContext();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [filteredDrivers, setFilteredDrivers] = useState<Driver[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -433,20 +435,47 @@ const DriversPage: React.FC = () => {
     {
       field: 'status',
       headerName: t('common.status'),
-      flex: 1,
-      minWidth: 120,
+      flex: 1.2,
+      minWidth: 150,
       renderCell: (params) => {
         const statusLabels: Record<string, string> = {
           active: t('common.active'),
           inactive: t('common.inactive'),
           on_trip: t('drivers.onTrip'),
         };
+        const driverId = params.row.id || params.row._id;
+        const isOnline = onlineDrivers.has(driverId);
         return (
-          <Chip
-            label={statusLabels[params.value] || params.value}
-            color={statusColors[params.value] || 'default'}
-            size="small"
-          />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+            {/* Live online/offline dot */}
+            <Box
+              sx={{
+                width: 9,
+                height: 9,
+                borderRadius: '50%',
+                bgcolor: isOnline ? '#22c55e' : '#d1d5db',
+                boxShadow: isOnline ? '0 0 6px rgba(34,197,94,0.6)' : 'none',
+                animation: isOnline ? 'driverPulse 2s infinite' : 'none',
+                flexShrink: 0,
+                '@keyframes driverPulse': {
+                  '0%': { boxShadow: '0 0 4px rgba(34,197,94,0.4)' },
+                  '50%': { boxShadow: '0 0 10px rgba(34,197,94,0.8)' },
+                  '100%': { boxShadow: '0 0 4px rgba(34,197,94,0.4)' },
+                },
+              }}
+              title={isOnline ? 'Online' : 'Offline'}
+            />
+            <Chip
+              label={statusLabels[params.value] || params.value}
+              color={statusColors[params.value] || 'default'}
+              size="small"
+            />
+            {isOnline && (
+              <Typography variant="caption" sx={{ fontSize: 9, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase' }}>
+                Online
+              </Typography>
+            )}
+          </Box>
         );
       },
     },

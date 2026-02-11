@@ -843,11 +843,24 @@ export const LoadDetailsDialog: React.FC<LoadDetailsDialogProps> = ({ open, onCl
                     deliveryLocation={trackingData?.deliveryLocation || delivery}
                     driverName={trackingData?.driverName || driverName || 'Driver'}
                     loadNumber={ld.loadNumber}
+                    loadId={ld.id || (ld as any)._id}
                     status={trackingData?.status || ld.status}
                     height={400}
                     showRoute={true}
                     autoRefresh={true}
                     onRefresh={fetchTrackingData}
+                    onRealtimeLocation={(data) => {
+                      // Instant map update via Pusher — append to tracking data
+                      setTrackingData((prev: any) => {
+                        if (!prev) return prev;
+                        const newPoint = { lat: data.lat, lng: data.lng, timestamp: data.timestamp, speed: data.speed, accuracy: data.accuracy };
+                        return {
+                          ...prev,
+                          currentLocation: newPoint,
+                          locationHistory: [...(prev.locationHistory || []), newPoint],
+                        };
+                      });
+                    }}
                   />
                 </Suspense>
 

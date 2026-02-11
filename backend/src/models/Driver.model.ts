@@ -42,6 +42,9 @@ export interface IDriver extends Document {
   };
   notes?: string;
   createdBy: string;
+  // Real-time presence tracking
+  isOnline?: boolean;
+  lastSeen?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -173,6 +176,15 @@ const driverSchema = new Schema<IDriver>(
     createdBy: {
       type: String,
       required: true,
+    },
+    // Real-time presence tracking
+    isOnline: {
+      type: Boolean,
+      default: false,
+    },
+    lastSeen: {
+      type: Date,
+      default: null,
     },
   },
   {

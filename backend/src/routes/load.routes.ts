@@ -24,6 +24,13 @@ router.get(
   LoadController.getMyAssignedLoads
 );
 
+// Export loads as CSV (Owner, Dispatcher) - must come before /:id
+router.get(
+  '/export/csv',
+  authorize(UserRole.OWNER, UserRole.DISPATCHER),
+  LoadController.exportLoadsCsv
+);
+
 // Get all loads (all roles)
 router.get(
   '/',

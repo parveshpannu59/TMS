@@ -56,6 +56,7 @@ const TripManagementDashboard = lazy(() => import('@pages/TripManagementDashboar
 const AccountingPage = lazy(() => import('@pages/AccountingPage'));
 const SettingsPage = lazy(() => import('@pages/SettingsPage'));
 const ActivityHistoryPage = lazy(() => import('@pages/ActivityHistoryPage'));
+const MessagesPage = lazy(() => import('@pages/MessagesPage'));
 const MaintenancePage = lazy(() => import('@pages/MaintenancePage'));
 const ResourcesPage = lazy(() => import('@pages/ResourcesPage'));
 const DriverDashboard = lazy(() => import('@pages/DriverDashboard'));
@@ -175,6 +176,14 @@ export const AppRoutes = () => {
           element={
             <ProtectedRoute>
               <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/messages"
+          element={
+            <ProtectedRoute>
+              <MessagesPage />
             </ProtectedRoute>
           }
         />

@@ -64,7 +64,7 @@ interface ActiveTrip {
   assignedAt: string;
 }
 
-// Helper component to load and display tracking map
+// Helper component to load and display tracking map with real-time Pusher updates
 function TripTrackingMapSection({ loadId, driverName, loadNumber, status }: { loadId: string; driverName: string; loadNumber: string; status: string }) {
   const [trackingData, setTrackingData] = useState<any>(null);
   const fetchTracking = useCallback(async () => {
@@ -84,11 +84,24 @@ function TripTrackingMapSection({ loadId, driverName, loadNumber, status }: { lo
       deliveryLocation={trackingData?.deliveryLocation || null}
       driverName={trackingData?.driverName || driverName}
       loadNumber={loadNumber}
+      loadId={loadId}
       status={trackingData?.status || status}
       height={350}
       showRoute={true}
       autoRefresh={true}
       onRefresh={fetchTracking}
+      onRealtimeLocation={(data) => {
+        // Instant update via Pusher — the map moves the truck immediately
+        setTrackingData((prev: any) => {
+          if (!prev) return prev;
+          const newPoint = { lat: data.lat, lng: data.lng, timestamp: data.timestamp, speed: data.speed, accuracy: data.accuracy };
+          return {
+            ...prev,
+            currentLocation: newPoint,
+            locationHistory: [...(prev.locationHistory || []), newPoint],
+          };
+        });
+      }}
     />
   );
 }

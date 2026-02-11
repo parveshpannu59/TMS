@@ -1,8 +1,9 @@
 import { memo } from 'react';
-import { Box, Button, Typography } from '@mui/material';
-import { Add, LocalShipping } from '@mui/icons-material';
+import { Box, Button, Typography, Tooltip } from '@mui/material';
+import { Add, LocalShipping, FileDownload } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@mui/material/styles';
+import { getApiOrigin } from '@/api/client';
 
 type LoadsHeaderProps = {
   onAddLoad: () => void;
@@ -11,6 +12,22 @@ type LoadsHeaderProps = {
 export const LoadsHeader = memo<LoadsHeaderProps>(function LoadsHeader({ onAddLoad }) {
   const { t } = useTranslation();
   const theme = useTheme();
+
+  const handleExportCSV = () => {
+    const token = localStorage.getItem('token');
+    const url = `${getApiOrigin()}/api/loads/export/csv`;
+    const a = document.createElement('a');
+    // Use fetch to include auth header
+    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => res.blob())
+      .then(blob => {
+        a.href = URL.createObjectURL(blob);
+        a.download = `loads-export-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      })
+      .catch(() => alert('Export failed'));
+  };
 
   return (
     <Box
@@ -43,24 +60,41 @@ export const LoadsHeader = memo<LoadsHeaderProps>(function LoadsHeader({ onAddLo
             {t('loads.subtitle', { defaultValue: 'Manage your freight operations and track deliveries' })}
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={onAddLoad}
-          sx={{
-            width: { xs: '100%', sm: 'auto' },
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            minWidth: { sm: 160 },
-            height: 44,
-            boxShadow: theme.shadows[3],
-            '&:hover': {
-              boxShadow: theme.shadows[6],
-              background: 'linear-gradient(135deg, #5568d3 0%, #6a4196 100%)',
-            },
-          }}
-        >
-          {t('loads.addLoad')}
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1, width: { xs: '100%', sm: 'auto' } }}>
+          <Tooltip title="Export as CSV">
+            <Button
+              variant="outlined"
+              startIcon={<FileDownload />}
+              onClick={handleExportCSV}
+              sx={{
+                height: 44,
+                borderRadius: 2,
+                textTransform: 'none',
+                fontWeight: 600,
+              }}
+            >
+              Export
+            </Button>
+          </Tooltip>
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={onAddLoad}
+            sx={{
+              flex: { xs: 1, sm: 'initial' },
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              minWidth: { sm: 160 },
+              height: 44,
+              boxShadow: theme.shadows[3],
+              '&:hover': {
+                boxShadow: theme.shadows[6],
+                background: 'linear-gradient(135deg, #5568d3 0%, #6a4196 100%)',
+              },
+            }}
+          >
+            {t('loads.addLoad')}
+          </Button>
+        </Box>
       </Box>
     </Box>
   );

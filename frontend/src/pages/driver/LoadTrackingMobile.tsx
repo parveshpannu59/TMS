@@ -11,6 +11,7 @@ import { EndTripDialog } from '@/components/driver/EndTripDialog';
 import { LogExpenseDialog } from '@/components/driver/LogExpenseDialog';
 import { ReportDelayDialog } from '@/components/driver/ReportDelayDialog';
 import { SOSButton } from '@/components/driver/SOSButton';
+import { useLoadTracking, type LocationUpdatePayload } from '@/hooks/usePusher';
 import type { Load } from '@/types/all.types';
 import '../../layouts/mobile/mobile.css';
 
@@ -47,7 +48,8 @@ const TRIP_STEPS = [
 ];
 
 const ACTIVE_STATUSES = ['trip_started', 'shipper_check_in', 'shipper_load_in', 'shipper_load_out', 'in_transit', 'receiver_check_in', 'receiver_offload'];
-const TRACKABLE_STATUSES = [...ACTIVE_STATUSES, 'delivered', 'completed'];
+const PRE_TRIP_STATUSES = ['assigned', 'trip_accepted'];
+const TRACKABLE_STATUSES = [...PRE_TRIP_STATUSES, ...ACTIVE_STATUSES, 'delivered', 'completed'];
 
 const formatDate = (d: string | Date | undefined) => {
   if (!d) return '—';
@@ -137,16 +139,41 @@ export default function LoadTrackingMobile() {
     } catch { setTripExpenses(null); }
   }, [load?.id]);
 
-  // Initial fetch + polling every 30s
+  // ─── Pusher Real-time Tracking (must be before polling useEffect) ──
+  const handleRealtimeLocation = useCallback((data: LocationUpdatePayload) => {
+    const newPoint = {
+      lat: data.lat,
+      lng: data.lng,
+      timestamp: data.timestamp,
+      speed: data.speed,
+      accuracy: data.accuracy,
+    };
+    setLocationHistoryData(prev => {
+      if (prev.length > 0 && prev[prev.length - 1].timestamp === data.timestamp) return prev;
+      return [...prev, newPoint];
+    });
+  }, []);
+
+  const { connected: pusherConnected } = useLoadTracking({
+    loadId: id || null,
+    onLocationUpdate: handleRealtimeLocation,
+    onStatusChange: useCallback(() => {
+      fetchLoad();
+    }, [fetchLoad]),
+    enabled: !!id,
+  });
+
+  // Initial fetch + polling (reduced when Pusher is connected — real-time handles most updates)
   useEffect(() => {
     fetchLoad();
     fetchLocationHistory();
+    const pollMs = pusherConnected ? 120000 : 15000;
     const interval = setInterval(() => {
       fetchLoad();
       fetchLocationHistory();
-    }, 30000);
+    }, pollMs);
     return () => clearInterval(interval);
-  }, [fetchLoad, fetchLocationHistory]);
+  }, [fetchLoad, fetchLocationHistory, pusherConnected]);
 
   useEffect(() => { if (load?.id) fetchExpenses(); }, [load?.id, fetchExpenses]);
 
@@ -225,9 +252,9 @@ export default function LoadTrackingMobile() {
           setCurrentCoords(coords);
           if (acc < bestAccuracyRef.current) bestAccuracyRef.current = acc;
 
-          // Send to server: immediately first time, then every 60s (only accurate fixes)
+          // Send to server: immediately first time, then every 10s for real-time Pusher broadcast
           const now = Date.now();
-          if (acc <= GPS_SEND_THRESHOLD && (lastLocationRef.current === 0 || now - lastLocationRef.current >= 60000)) {
+          if (acc <= GPS_SEND_THRESHOLD && (lastLocationRef.current === 0 || now - lastLocationRef.current >= 10000)) {
             lastLocationRef.current = now;
             sendLocationToServer(coords.lat, coords.lng, pos.coords.speed ?? undefined, acc);
           }
@@ -424,10 +451,17 @@ export default function LoadTrackingMobile() {
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
         <div style={{ flex: 1, fontWeight: 700, fontSize: 18, letterSpacing: -0.3 }}>Load #{load.loadNumber}</div>
-        {trackingActive && (
+        {(trackingActive || pusherConnected) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <span className="dm-status-dot live" />
             <span style={{ fontSize: 12, fontWeight: 600, color: ios.green }}>LIVE</span>
+            {pusherConnected && (
+              <span style={{
+                fontSize: 9, fontWeight: 700, color: '#fff',
+                background: ios.green, padding: '1px 6px', borderRadius: 6,
+                letterSpacing: 0.3,
+              }}>RT</span>
+            )}
           </div>
         )}
         {gpsAccuracy !== null && trackingActive && (
@@ -513,35 +547,38 @@ export default function LoadTrackingMobile() {
         )}
       </div>
 
-      {/* ─── Live Map ─── */}
+      {/* ─── Full-screen Uber-style Map ─── */}
       {isTrackable && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, padding: '0 4px' }}>
-            <div style={{ fontWeight: 600, fontSize: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
-              {isActive ? t('driverApp.liveMap') : t('driverApp.tripRoute')}
+        <div style={{ position: 'relative' }}>
+          {/* Map toggle row */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, padding: '0 4px' }}>
+            <div style={{ fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 6 }}>
+              {isActive ? '🗺️ Live Map' : '🗺️ Trip Route'}
               {trackingActive && <span className="dm-status-dot live" />}
             </div>
             <button
               className="dm-chip"
               onClick={() => setShowMap(!showMap)}
-              style={{ fontSize: 13, padding: '5px 12px' }}
+              style={{ fontSize: 12, padding: '4px 10px' }}
             >
               {showMap ? t('driverApp.hide') : t('driverApp.show')}
             </button>
           </div>
           {showMap && (
-            <Suspense fallback={<div style={{ height: 280, display: 'grid', placeItems: 'center', background: 'var(--dm-fill)', borderRadius: 'var(--dm-radius)', color: 'var(--dm-muted)' }}>{t('driverApp.loadingMap')}</div>}>
+            <Suspense fallback={<div style={{ height: 380, display: 'grid', placeItems: 'center', background: 'var(--dm-fill)', borderRadius: 16, color: 'var(--dm-muted)' }}>{t('driverApp.loadingMap')}</div>}>
               <TripTrackingMap
-                currentLocation={currentCoords ? { lat: currentCoords.lat, lng: currentCoords.lng, timestamp: lastTrackedTime?.toISOString() } : null}
+                currentLocation={currentCoords ? { lat: currentCoords.lat, lng: currentCoords.lng, timestamp: lastTrackedTime?.toISOString(), speed: undefined } : null}
                 locationHistory={locationHistoryData}
                 pickupLocation={pickup}
                 deliveryLocation={delivery}
                 driverName="You"
                 loadNumber={load.loadNumber}
+                loadId={id}
                 status={load.status}
-                height={280}
+                height={380}
                 showRoute={true}
                 onRefresh={() => { fetchLocationHistory(); sendLocationNow(); }}
+                onRealtimeLocation={handleRealtimeLocation}
               />
             </Suspense>
           )}

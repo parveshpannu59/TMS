@@ -39,6 +39,61 @@ export class LoadController {
     return ApiResponse.success(res, loads, 'Assigned loads fetched successfully');
   });
 
+  // Export loads as CSV
+  static exportLoadsCsv = asyncHandler(async (req: Request, res: Response) => {
+    const companyId = req.user?.companyId ?? req.user?.id;
+    const { status, dateFrom, dateTo } = req.query;
+
+    const query: any = { companyId };
+    if (status) query.status = status;
+    if (dateFrom || dateTo) {
+      query.pickupDate = {};
+      if (dateFrom) query.pickupDate.$gte = new Date(dateFrom as string);
+      if (dateTo) query.pickupDate.$lte = new Date(dateTo as string);
+    }
+
+    const loads = await Load.find(query)
+      .populate('driverId', 'name email')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const headers = ['Load Number', 'Customer', 'Pickup City', 'Delivery City', 'Status', 'Rate', 'Distance', 'Pickup Date', 'Delivery Date', 'Driver'];
+    const escapeCsv = (val: unknown): string => {
+      if (val == null || val === undefined) return '';
+      const s = String(val);
+      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const formatDate = (d: Date | undefined): string => (d ? new Date(d).toISOString().split('T')[0] : '');
+
+    const rows = loads.map((l: any) => {
+      const pickup = l.pickupLocation || {};
+      const delivery = l.deliveryLocation || {};
+      const driver = l.driverId;
+      const driverName = driver?.name || '';
+      return [
+        escapeCsv(l.loadNumber),
+        escapeCsv(l.customerName),
+        escapeCsv(pickup.city),
+        escapeCsv(delivery.city),
+        escapeCsv(l.status),
+        escapeCsv(l.rate),
+        escapeCsv(l.distance),
+        escapeCsv(formatDate(l.pickupDate)),
+        escapeCsv(formatDate(l.expectedDeliveryDate)),
+        escapeCsv(driverName),
+      ].join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join('\r\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="loads-export-${new Date().toISOString().split('T')[0]}.csv"`);
+    res.send(csv);
+  });
+
   // Get all loads with filtering
   static getLoads = asyncHandler(async (req: Request, res: Response) => {
     const companyId = req.user?.companyId ?? req.user?.id;
@@ -399,6 +454,25 @@ export class LoadController {
           loadId,
           assignment._id.toString()
         );
+
+        // ─── 🔔 Pusher: Instant assignment notification ──────
+        try {
+          const { broadcastAssignment } = require('../services/pusher.service');
+          const pickup = (load as any).pickupLocation;
+          const delivery = (load as any).deliveryLocation;
+          await broadcastAssignment(companyId as string, driverUserId, {
+            assignmentId: assignment._id.toString(),
+            loadId,
+            loadNumber: load.loadNumber,
+            driverId: driverId,
+            driverName: driver.name,
+            pickup: [pickup?.city, pickup?.state].filter(Boolean).join(', ') || 'Pickup',
+            delivery: [delivery?.city, delivery?.state].filter(Boolean).join(', ') || 'Delivery',
+            rate: load.rate,
+            timestamp: new Date().toISOString(),
+            action: 'new',
+          });
+        } catch (pusherErr) { console.warn('Pusher assignment broadcast failed:', pusherErr); }
       } else {
         console.warn(`Driver ${driver.name} not linked to user account - notification not sent`);
       }
@@ -647,6 +721,25 @@ export class LoadController {
           });
         }
       } catch { /* notification failures should not block the main operation */ }
+    }
+
+    // ─── Real-time status broadcast via Pusher ───────────────
+    try {
+      const { broadcastStatusChange } = require('../services/pusher.service');
+      const prevStatus = load.statusHistory.length > 1
+        ? load.statusHistory[load.statusHistory.length - 2]?.status
+        : 'unknown';
+      await broadcastStatusChange(companyId || load.companyId, {
+        loadId: id,
+        loadNumber: load.loadNumber,
+        driverId: load.driverId?.toString() || '',
+        driverName: (req.user as any)?.name || 'System',
+        previousStatus: prevStatus,
+        newStatus: status,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.warn('Pusher status broadcast failed (non-critical):', (err as Error).message);
     }
     
     return ApiResponse.success(res, load, 'Status updated successfully');
@@ -1404,6 +1497,26 @@ export class LoadController {
     if (!load) throw ApiError.notFound('Load not found');
 
     const uploadedUrl = `/uploads/documents/${req.file.filename}`;
+
+    // ─── 📄 Pusher: Document upload notification to owner ────
+    try {
+      const { broadcastDocumentUpload } = require('../services/pusher.service');
+      const companyId = (load as any).companyId?.toString() || req.user?.companyId || req.user?.id;
+      const driverInfo = req.user?.role === 'driver'
+        ? await Driver.findOne({ userId }).select('name').lean()
+        : null;
+      const docType = req.body?.documentType || req.file.originalname || 'document';
+      await broadcastDocumentUpload(companyId, {
+        loadId: id,
+        loadNumber: load.loadNumber,
+        driverId: userId,
+        driverName: driverInfo?.name || 'User',
+        documentType: docType,
+        documentUrl: uploadedUrl,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) { console.warn('Pusher doc upload broadcast failed:', (err as Error).message); }
+
     res.json({
       success: true,
       message: 'Document uploaded successfully',
@@ -1449,9 +1562,10 @@ export class LoadController {
     }
 
     let query: any = { _id: id };
+    let driverDoc: any = null;
     if (req.user?.role === 'driver') {
-      const driver = await Driver.findOne({ userId }).select('_id').lean();
-      if (driver) query.driverId = driver._id.toString();
+      driverDoc = await Driver.findOne({ userId }).select('_id name').lean();
+      if (driverDoc) query.driverId = driverDoc._id.toString();
       else throw ApiError.notFound('Driver profile not found');
     } else {
       query.companyId = req.user?.companyId ?? req.user?.id;
@@ -1471,6 +1585,28 @@ export class LoadController {
     if (!load.locationHistory) load.locationHistory = [];
     load.locationHistory.push(locationPoint as any);
     await load.save();
+
+    // ─── Real-time broadcast via Pusher ─────────────────────
+    try {
+      const { broadcastLocationUpdate } = require('../services/pusher.service');
+      const companyId = load.companyId || req.user?.companyId || req.user?.id || '';
+      await broadcastLocationUpdate(companyId, {
+        loadId: id,
+        loadNumber: load.loadNumber,
+        driverId: driverDoc?._id?.toString() || '',
+        driverName: driverDoc?.name || (req.user as any)?.name || 'Driver',
+        lat: numLat,
+        lng: numLng,
+        speed: speed ?? undefined,
+        accuracy: accuracy ? Number(accuracy) : undefined,
+        heading: heading ?? undefined,
+        timestamp: locationPoint.timestamp.toISOString(),
+        status: load.status,
+      });
+    } catch (err) {
+      // Non-blocking: don't fail the request if Pusher is down
+      console.warn('Pusher broadcast failed (non-critical):', (err as Error).message);
+    }
 
     return ApiResponse.success(res, { updated: true, accuracy: locationPoint.accuracy }, 'Location updated');
   });
@@ -1647,6 +1783,26 @@ export class LoadController {
       repairDescription: repairDesc || undefined,
     });
 
+    // ─── ⛽ Pusher: Expense notification to owner ────────────
+    try {
+      const { broadcastExpense } = require('../services/pusher.service');
+      const driverInfo = await Driver.findOne({ userId }).select('name').lean();
+      await broadcastExpense(companyId, userId, {
+        expenseId: expense._id.toString(),
+        loadId: id,
+        loadNumber: load.loadNumber,
+        driverId: userId,
+        driverName: driverInfo?.name || 'Driver',
+        category,
+        amount: Number(amount),
+        description: description || '',
+        receiptUrl: receiptUrl || '',
+        paidBy: paidBy || 'driver',
+        timestamp: new Date().toISOString(),
+        action: 'logged',
+      });
+    } catch (err) { console.warn('Pusher expense broadcast failed:', (err as Error).message); }
+
     return ApiResponse.success(res, expense, 'Expense logged successfully', 201);
   });
 
@@ -1715,6 +1871,24 @@ export class LoadController {
 
     if (notes) expense.notes = notes;
     await expense.save();
+
+    // ─── ⛽ Pusher: Notify driver about approval/rejection ───
+    try {
+      const { broadcastExpense } = require('../services/pusher.service');
+      const loadDoc = await Load.findById(expense.loadId).select('loadNumber').lean();
+      await broadcastExpense(companyId as string, expense.driverId, {
+        expenseId: expense._id.toString(),
+        loadId: expense.loadId,
+        loadNumber: (loadDoc as any)?.loadNumber || '',
+        driverId: expense.driverId,
+        driverName: '',
+        category: expense.category,
+        amount: expense.amount,
+        paidBy: expense.paidBy,
+        timestamp: new Date().toISOString(),
+        action: action === 'approve' ? 'approved' : 'rejected',
+      });
+    } catch (err) { console.warn('Pusher expense approval broadcast failed:', (err as Error).message); }
 
     return ApiResponse.success(res, expense, `Expense ${action}d successfully`);
   });

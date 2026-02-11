@@ -97,6 +97,24 @@ interface ITripCompletionDetails {
   completedAt: Date;
 }
 
+interface IStop {
+  type: 'pickup' | 'delivery' | 'stop';
+  location: { address: string; city: string; state: string; pincode: string; lat?: number; lng?: number };
+  scheduledDate?: Date;
+  actualDate?: Date;
+  notes?: string;
+  order: number;
+}
+
+interface IAccessorialCharge {
+  type: 'detention' | 'layover' | 'fuel_surcharge' | 'lumper' | 'tarp' | 'overweight' | 'other';
+  description: string;
+  amount: number;
+  approved: boolean;
+  approvedBy?: string;
+  approvedAt?: Date;
+}
+
 interface IShipperCheckInDetails {
   poNumber: string;
   loadNumber: string;
@@ -187,6 +205,25 @@ export interface ILoad extends Document {
   completedAt?: Date;
   cancelledAt?: Date;
   cancellationReason?: string;
+  // Recurring load fields
+  isRecurring?: boolean;
+  recurringPattern?: 'daily' | 'weekly' | 'biweekly' | 'monthly';
+  recurringDays?: number[];        // For weekly: [0=Sun, 1=Mon...6=Sat]
+  recurringEndDate?: Date;
+  parentLoadId?: string;           // Links copies to original recurring load
+  recurringCount?: number;         // How many occurrences
+  nextOccurrence?: Date;
+  // Multi-stop support
+  stops?: IStop[];
+  // Detention time tracking
+  detentionMinutes?: number;
+  detentionChargePerHour?: number;
+  detentionTotal?: number;
+  detentionStartTime?: Date;
+  detentionEndTime?: Date;
+  // Accessorial charges
+  accessorialCharges?: IAccessorialCharge[];
+  totalAccessorialCharges?: number;
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
@@ -300,6 +337,28 @@ const ReceiverOffloadDetailsSchema = new Schema({
   bolAcknowledged: { type: Boolean, required: true },
   podDocument: { type: String }, // URL or path to POD document
   podPhoto: { type: String }, // URL or path to POD photo
+});
+
+const StopSchema = new Schema({
+  type: { type: String, enum: ['pickup', 'delivery', 'stop'], required: true },
+  location: { type: LocationSchema, required: true },
+  scheduledDate: { type: Date },
+  actualDate: { type: Date },
+  notes: { type: String },
+  order: { type: Number, required: true },
+});
+
+const AccessorialChargeSchema = new Schema({
+  type: {
+    type: String,
+    enum: ['detention', 'layover', 'fuel_surcharge', 'lumper', 'tarp', 'overweight', 'other'],
+    required: true,
+  },
+  description: { type: String, required: true },
+  amount: { type: Number, required: true },
+  approved: { type: Boolean, required: true },
+  approvedBy: { type: String },
+  approvedAt: { type: Date },
 });
 
 const loadSchema = new Schema<ILoad>(
@@ -505,6 +564,60 @@ const loadSchema = new Schema<ILoad>(
     cancellationReason: {
       type: String,
     },
+    // ─── Recurring Load Fields ─────────────────────────────
+    isRecurring: {
+      type: Boolean,
+      default: false,
+    },
+    recurringPattern: {
+      type: String,
+      enum: ['daily', 'weekly', 'biweekly', 'monthly'],
+    },
+    recurringDays: {
+      type: [Number],  // 0=Sun, 1=Mon...6=Sat
+      default: [],
+    },
+    recurringEndDate: {
+      type: Date,
+    },
+    parentLoadId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Load',
+    },
+    recurringCount: {
+      type: Number,
+      default: 0,
+    },
+    nextOccurrence: {
+      type: Date,
+    },
+    // Multi-stop support
+    stops: {
+      type: [StopSchema],
+    },
+    // Detention time tracking
+    detentionMinutes: {
+      type: Number,
+    },
+    detentionChargePerHour: {
+      type: Number,
+    },
+    detentionTotal: {
+      type: Number,
+    },
+    detentionStartTime: {
+      type: Date,
+    },
+    detentionEndTime: {
+      type: Date,
+    },
+    // Accessorial charges
+    accessorialCharges: {
+      type: [AccessorialChargeSchema],
+    },
+    totalAccessorialCharges: {
+      type: Number,
+    },
     createdBy: {
       type: String,
       required: true,
@@ -532,6 +645,7 @@ loadSchema.pre('save', async function () {
 loadSchema.index({ status: 1, createdAt: -1 });
 loadSchema.index({ driverId: 1, status: 1 });
 loadSchema.index({ createdBy: 1 });
+loadSchema.index({ isRecurring: 1 });
 // Make loadNumber unique per company, not globally
 loadSchema.index({ companyId: 1, loadNumber: 1 }, { unique: true });
 

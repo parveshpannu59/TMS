@@ -16,6 +16,7 @@ import tripRoutes from './trip.routes';
 import sosRoutes from './sos.routes';
 import settingsRoutes from './settings.route';
 import vehicleDocumentRoutes, { vehicleDocSubRouter } from './vehicleDocument.routes';
+import pusherRoutes from './pusher.routes';
 
 const router = Router();
 
@@ -64,5 +65,6 @@ router.use('/assignments', assignmentRoutes);
 router.use('/trips', tripRoutes);
 router.use('/sos', sosRoutes);
 router.use('/settings', settingsRoutes);
+router.use('/pusher', pusherRoutes);
 
 export default router;

@@ -1,8 +1,9 @@
-import { useEffect, useRef, useMemo, useState } from 'react';
+import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { useLoadTracking, type LocationUpdatePayload } from '@/hooks/usePusher';
 
-// Fix Leaflet default icon issue with bundlers
+// Fix Leaflet default icon issue
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
@@ -10,21 +11,8 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
-interface LocationPoint {
-  lat: number;
-  lng: number;
-  timestamp?: string;
-  speed?: number;
-  accuracy?: number;
-}
-
-interface MapLocation {
-  lat?: number;
-  lng?: number;
-  city?: string;
-  state?: string;
-  address?: string;
-}
+interface LocationPoint { lat: number; lng: number; timestamp?: string; speed?: number; accuracy?: number; }
+interface MapLocation { lat?: number; lng?: number; city?: string; state?: string; address?: string; }
 
 interface TripTrackingMapProps {
   currentLocation: LocationPoint | null;
@@ -33,608 +21,639 @@ interface TripTrackingMapProps {
   deliveryLocation?: MapLocation | null;
   driverName?: string;
   loadNumber?: string;
+  loadId?: string;
   status?: string;
   height?: number | string;
   showRoute?: boolean;
   autoRefresh?: boolean;
   onRefresh?: () => void;
+  onRealtimeLocation?: (data: LocationUpdatePayload) => void;
 }
 
-// ─── Utility Functions ─────────────────────────────────────
-
+// ─── Utils ──────────────────────────────────────────────────
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371; // Earth radius in km
+  const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
-    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function calculateTotalDistance(points: LocationPoint[]): number {
-  let total = 0;
-  for (let i = 1; i < points.length; i++) {
-    total += haversineDistance(points[i - 1].lat, points[i - 1].lng, points[i].lat, points[i].lng);
-  }
-  return total;
+function calcDistance(pts: LocationPoint[]): number {
+  let t = 0;
+  for (let i = 1; i < pts.length; i++) t += haversineDistance(pts[i - 1].lat, pts[i - 1].lng, pts[i].lat, pts[i].lng);
+  return t;
 }
 
-function formatDuration(ms: number): string {
+function fmtDur(ms: number): string {
   if (ms < 0) return '—';
-  const hours = Math.floor(ms / 3600000);
-  const mins = Math.floor((ms % 3600000) / 60000);
-  if (hours === 0) return `${mins}m`;
-  return `${hours}h ${mins}m`;
+  const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
+  return h === 0 ? `${m} min` : `${h}h ${m}m`;
 }
 
-function formatTime(ts: string): string {
-  const d = new Date(ts);
-  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+function fmtTime(ts: string): string {
+  return new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
 }
 
-function formatDateTime(ts: string): string {
-  const d = new Date(ts);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' +
-    d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+function detectStops(pts: LocationPoint[], minMs = 180000, rKm = 0.1) {
+  if (pts.length < 3) return [];
+  const ts = pts.filter(p => p.timestamp);
+  if (ts.length < 3) return [];
+  const stops: { lat: number; lng: number; startTime: string; endTime: string; duration: number }[] = [];
+  let cs = 0;
+  for (let i = 1; i < ts.length; i++) {
+    if (haversineDistance(ts[cs].lat, ts[cs].lng, ts[i].lat, ts[i].lng) > rKm) {
+      const s = new Date(ts[cs].timestamp!).getTime(), e = new Date(ts[i - 1].timestamp!).getTime();
+      if (e - s >= minMs) {
+        let sLat = 0, sLng = 0, c = 0;
+        for (let j = cs; j < i; j++) { sLat += ts[j].lat; sLng += ts[j].lng; c++; }
+        stops.push({ lat: sLat / c, lng: sLng / c, startTime: ts[cs].timestamp!, endTime: ts[i - 1].timestamp!, duration: e - s });
+      }
+      cs = i;
+    }
+  }
+  const s = new Date(ts[cs].timestamp!).getTime(), e = new Date(ts[ts.length - 1].timestamp!).getTime();
+  if (e - s >= minMs && cs < ts.length - 1) {
+    let sLat = 0, sLng = 0, c = 0;
+    for (let j = cs; j < ts.length; j++) { sLat += ts[j].lat; sLng += ts[j].lng; c++; }
+    stops.push({ lat: sLat / c, lng: sLng / c, startTime: ts[cs].timestamp!, endTime: ts[ts.length - 1].timestamp!, duration: e - s });
+  }
+  return stops;
 }
 
-// ─── Custom Icons ───────────────────────────────────────────
+// ─── Uber-style Markers ─────────────────────────────────────
 
-const truckIcon = L.divIcon({
-  html: `<div style="width:40px;height:40px;border-radius:50%;background:#3b82f6;border:3px solid #fff;display:grid;place-items:center;box-shadow:0 3px 12px rgba(59,130,246,0.5);font-size:20px;animation:truckPulse 2s ease-in-out infinite;">🚛</div>`,
-  iconSize: [40, 40],
-  iconAnchor: [20, 20],
+const TRUCK_ICON = L.divIcon({
+  html: `<div class="uber-truck-marker">
+    <div class="uber-truck-inner">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <rect x="1" y="6" width="15" height="10" rx="2" fill="#fff"/>
+        <path d="M16 9h3l3 4v3h-6V9z" fill="#fff"/>
+        <circle cx="6" cy="18" r="2" fill="#111"/>
+        <circle cx="19" cy="18" r="2" fill="#111"/>
+      </svg>
+    </div>
+    <div class="uber-truck-pulse"></div>
+  </div>`,
+  iconSize: [56, 56],
+  iconAnchor: [28, 28],
   className: '',
 });
 
-const pickupIcon = L.divIcon({
-  html: `<div style="display:flex;flex-direction:column;align-items:center;"><div style="width:32px;height:32px;border-radius:50%;background:#ef4444;border:3px solid #fff;display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,0.3);font-size:15px;">📦</div><div style="width:2px;height:8px;background:#ef4444;"></div></div>`,
-  iconSize: [32, 40],
-  iconAnchor: [16, 40],
-  className: '',
-});
-
-const deliveryIcon = L.divIcon({
-  html: `<div style="display:flex;flex-direction:column;align-items:center;"><div style="width:32px;height:32px;border-radius:50%;background:#22c55e;border:3px solid #fff;display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,0.3);font-size:15px;">🏁</div><div style="width:2px;height:8px;background:#22c55e;"></div></div>`,
-  iconSize: [32, 40],
-  iconAnchor: [16, 40],
-  className: '',
-});
-
-const startIcon = L.divIcon({
-  html: `<div style="display:flex;flex-direction:column;align-items:center;"><div style="width:28px;height:28px;border-radius:50%;background:#8b5cf6;border:3px solid #fff;display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,0.3);font-size:12px;font-weight:700;color:#fff;">S</div></div>`,
-  iconSize: [28, 28],
-  iconAnchor: [14, 14],
-  className: '',
-});
-
-function createTimeDot(time: string, index: number, speed?: number) {
+function makeLocIcon(color: string, label: string, isPickup: boolean) {
   return L.divIcon({
-    html: `<div style="display:flex;flex-direction:column;align-items:center;pointer-events:auto;">
-      <div style="width:12px;height:12px;border-radius:50%;background:rgba(59,130,246,0.9);border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.25);"></div>
-      <div style="background:rgba(0,0,0,0.8);color:#fff;font-size:9px;padding:1px 5px;border-radius:4px;margin-top:2px;white-space:nowrap;font-weight:500;line-height:1.3;text-align:center;">
-        ${time}${speed ? `<br/>${(speed * 3.6).toFixed(0)}km/h` : ''}
+    html: `<div style="display:flex;flex-direction:column;align-items:center;">
+      <div style="width:32px;height:32px;border-radius:50%;background:${color};display:grid;place-items:center;
+        box-shadow:0 4px 12px ${color}55;border:3px solid #fff;">
+        <span style="font-size:14px;line-height:1;">${label}</span>
       </div>
+      <div style="width:3px;height:${isPickup ? 12 : 10}px;background:${color};border-radius:0 0 2px 2px;margin-top:-1px;"></div>
+      <div style="width:8px;height:4px;border-radius:50%;background:${color}40;margin-top:1px;"></div>
     </div>`,
-    iconSize: [80, 40],
-    iconAnchor: [40, 6],
+    iconSize: [32, 52],
+    iconAnchor: [16, 52],
     className: '',
   });
 }
 
-function createMajorTimeDot(dateTime: string, speed?: number) {
+const PICKUP_ICON = makeLocIcon('#000', '📦', true);
+const DELIVERY_ICON = makeLocIcon('#22c55e', '📍', false);
+
+function createStopIcon(dur: string) {
   return L.divIcon({
     html: `<div style="display:flex;flex-direction:column;align-items:center;pointer-events:auto;">
-      <div style="width:16px;height:16px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 2px 6px rgba(37,99,235,0.4);"></div>
-      <div style="background:rgba(37,99,235,0.95);color:#fff;font-size:10px;padding:3px 7px;border-radius:6px;margin-top:3px;white-space:nowrap;font-weight:600;line-height:1.3;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.2);">
-        ${dateTime}${speed ? `<br/>⚡ ${(speed * 3.6).toFixed(0)} km/h` : ''}
-      </div>
+      <div style="width:18px;height:18px;border-radius:50%;background:#f59e0b;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.2);display:grid;place-items:center;font-size:8px;">⏸</div>
+      <div style="background:#111;color:#fff;font-size:8px;padding:1px 5px;border-radius:4px;margin-top:2px;white-space:nowrap;font-weight:600;">${dur}</div>
     </div>`,
-    iconSize: [120, 50],
-    iconAnchor: [60, 8],
+    iconSize: [60, 40],
+    iconAnchor: [30, 10],
     className: '',
   });
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  assigned: 'Assigned',
-  trip_accepted: 'Ready to Start',
-  trip_started: 'On Route to Pickup',
-  shipper_check_in: 'Checked In at Shipper',
-  shipper_load_in: 'Loading',
-  shipper_load_out: 'Loaded — En Route',
-  in_transit: 'In Transit',
-  receiver_check_in: 'At Receiver',
-  receiver_offload: 'Offloading',
-  delivered: 'Delivered',
-  completed: 'Completed',
+// ─── Status/Phase Config ────────────────────────────────────
+
+const PRE_TRIP = ['assigned', 'trip_accepted'];
+const ACTIVE_TRIP = ['trip_started', 'shipper_check_in', 'shipper_load_in', 'shipper_load_out', 'in_transit', 'receiver_check_in', 'receiver_offload'];
+const POST_TRIP = ['delivered', 'completed'];
+
+const STATUS_SHORT: Record<string, string> = {
+  assigned: 'Assigned', trip_accepted: 'Ready', trip_started: 'En Route to Pickup',
+  shipper_check_in: 'At Shipper', shipper_load_in: 'Loading', shipper_load_out: 'Loaded',
+  in_transit: 'In Transit', receiver_check_in: 'At Receiver', receiver_offload: 'Offloading',
+  delivered: 'Delivered', completed: 'Completed',
 };
 
-// ─── Component ─────────────────────────────────────────────
+// ─── Map Tile Layers ────────────────────────────────────────
+const TILES = {
+  clean: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  voyager: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+};
+
+// ─── Component ──────────────────────────────────────────────
 
 export default function TripTrackingMap({
-  currentLocation,
-  locationHistory,
-  pickupLocation,
-  deliveryLocation,
-  driverName = 'Driver',
-  loadNumber = '',
-  status = '',
-  height = 350,
-  showRoute = true,
-  autoRefresh = false,
-  onRefresh,
+  currentLocation, locationHistory, pickupLocation, deliveryLocation,
+  driverName = 'Driver', loadNumber = '', loadId = '', status = '',
+  height = 350, showRoute = true, autoRefresh = false, onRefresh, onRealtimeLocation,
 }: TripTrackingMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
-  const routeLineRef = useRef<L.Polyline | null>(null);
+  const routeLayerRef = useRef<L.LayerGroup | null>(null);
   const hasFittedRef = useRef(false);
-  const prevHistoryLenRef = useRef(0);
+  const prevLenRef = useRef(0);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [plannedRoute, setPlannedRoute] = useState<[number, number][] | null>(null);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [routeDistance, setRouteDistance] = useState<string | null>(null);
+  const [routeDuration, setRouteDuration] = useState<string | null>(null);
+  const plannedFetchedRef = useRef(false);
+  const [showStats, setShowStats] = useState(false);
+  const [isCentered, setIsCentered] = useState(true);
 
-  const formatLoc = (loc: MapLocation | null | undefined) => {
-    if (!loc) return 'Unknown';
-    return [loc.address, loc.city, loc.state].filter(Boolean).join(', ') || 'Unknown';
-  };
+  // Pusher
+  const isActive = ACTIVE_TRIP.includes(status);
+  const { connected: pusherConnected, updateCount: realtimeUpdates } = useLoadTracking({
+    loadId: loadId || null,
+    onLocationUpdate: useCallback((d: LocationUpdatePayload) => { if (onRealtimeLocation) onRealtimeLocation(d); }, [onRealtimeLocation]),
+    enabled: !!loadId && isActive,
+  });
 
-  // Calculate trip stats
+  const fmtLoc = (l: MapLocation | null | undefined) => l ? [l.city, l.state].filter(Boolean).join(', ') || l.address || '—' : '—';
+  const phase: 'pre' | 'active' | 'post' = PRE_TRIP.includes(status) ? 'pre' : POST_TRIP.includes(status) ? 'post' : 'active';
+
+  // Fetch planned route from OSRM
+  useEffect(() => {
+    if (plannedFetchedRef.current || !pickupLocation?.lat || !pickupLocation?.lng || !deliveryLocation?.lat || !deliveryLocation?.lng) return;
+    plannedFetchedRef.current = true;
+    setRouteLoading(true);
+    (async () => {
+      try {
+        const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${pickupLocation.lng},${pickupLocation.lat};${deliveryLocation.lng},${deliveryLocation.lat}?overview=full&geometries=geojson`);
+        const d = await r.json();
+        if (d.code === 'Ok' && d.routes?.[0]) {
+          setPlannedRoute(d.routes[0].geometry.coordinates.map((c: number[]) => [c[1], c[0]] as [number, number]));
+          setRouteDistance(`${(d.routes[0].distance / 1000).toFixed(1)} km`);
+          const h = Math.floor(d.routes[0].duration / 3600), m = Math.floor((d.routes[0].duration % 3600) / 60);
+          setRouteDuration(h > 0 ? `${h}h ${m}m` : `${m} min`);
+        }
+      } catch { /* ignore */ } finally { setRouteLoading(false); }
+    })();
+  }, [pickupLocation?.lat, pickupLocation?.lng, deliveryLocation?.lat, deliveryLocation?.lng]);
+
   const tripStats = useMemo(() => {
     if (locationHistory.length < 2) return null;
-    const totalDistance = calculateTotalDistance(locationHistory);
-    const timestamps = locationHistory.filter(p => p.timestamp).map(p => new Date(p.timestamp!).getTime());
-    let travelTime = 0;
-    let avgSpeed = 0;
-    let maxSpeed = 0;
-    let startTime = '';
-    let lastTime = '';
-
-    if (timestamps.length >= 2) {
-      const earliest = Math.min(...timestamps);
-      const latest = Math.max(...timestamps);
-      travelTime = latest - earliest;
-      avgSpeed = travelTime > 0 ? (totalDistance / (travelTime / 3600000)) : 0;
-      startTime = new Date(earliest).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-      lastTime = new Date(latest).toLocaleString('en-US', { hour: '2-digit', minute: '2-digit' });
-    }
-
-    locationHistory.forEach(p => {
-      if (p.speed && p.speed > maxSpeed) maxSpeed = p.speed;
-    });
-
-    return { totalDistance, travelTime, avgSpeed, maxSpeed: maxSpeed * 3.6, startTime, lastTime };
+    const dist = calcDistance(locationHistory);
+    const ts = locationHistory.filter(p => p.timestamp).map(p => new Date(p.timestamp!).getTime());
+    if (ts.length < 2) return { dist, time: 0, avg: 0, max: 0 };
+    const time = Math.max(...ts) - Math.min(...ts);
+    const avg = time > 0 ? dist / (time / 3600000) : 0;
+    let max = 0; locationHistory.forEach(p => { if (p.speed && p.speed * 3.6 > max) max = p.speed * 3.6; });
+    return { dist, time, avg, max };
   }, [locationHistory]);
 
-  // All points for bounds calculation
+  const stops = useMemo(() => (phase !== 'post' && phase !== 'active') ? [] : detectStops(locationHistory), [locationHistory, phase]);
+
   const allPoints = useMemo(() => {
     const pts: [number, number][] = [];
     if (currentLocation) pts.push([currentLocation.lat, currentLocation.lng]);
     locationHistory.forEach(p => pts.push([p.lat, p.lng]));
     if (pickupLocation?.lat && pickupLocation?.lng) pts.push([pickupLocation.lat, pickupLocation.lng]);
     if (deliveryLocation?.lat && deliveryLocation?.lng) pts.push([deliveryLocation.lat, deliveryLocation.lng]);
+    if (plannedRoute) plannedRoute.forEach(p => pts.push(p));
     return pts;
-  }, [currentLocation, locationHistory, pickupLocation, deliveryLocation]);
+  }, [currentLocation, locationHistory, pickupLocation, deliveryLocation, plannedRoute]);
 
-  // Initialize map ONCE
+  // ─── Init Map ─────────────────────────────────────────────
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
-
-    const defaultCenter: [number, number] = [20.5937, 78.9629];
     const map = L.map(mapContainerRef.current, {
-      center: defaultCenter,
-      zoom: 5,
-      zoomControl: true,
+      center: [12.9716, 80.0],
+      zoom: 12,
+      zoomControl: false,
       attributionControl: false,
+      dragging: true,
+      touchZoom: true,
+      scrollWheelZoom: true,
+      doubleClickZoom: true,
+      boxZoom: true,
     });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OSM',
-      maxZoom: 19,
-    }).addTo(map);
+    // Clean Carto Voyager tiles (like Uber)
+    L.tileLayer(TILES.voyager, { maxZoom: 19, attribution: '&copy; CARTO' }).addTo(map);
 
-    L.control.attribution({ prefix: false }).addTo(map);
+    // Zoom control bottom-right (Uber style)
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
 
     mapRef.current = map;
     markersRef.current = L.layerGroup().addTo(map);
+    routeLayerRef.current = L.layerGroup().addTo(map);
 
-    return () => {
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-        markersRef.current = null;
-        routeLineRef.current = null;
-        hasFittedRef.current = false;
-      }
-    };
+    // Track user interaction
+    map.on('dragstart', () => setIsCentered(false));
+
+    return () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; markersRef.current = null; routeLayerRef.current = null; hasFittedRef.current = false; } };
   }, []);
 
-  // Update markers and route when data changes
+  // ─── Draw on map ──────────────────────────────────────────
   useEffect(() => {
-    const map = mapRef.current;
-    const markers = markersRef.current;
-    if (!map || !markers) return;
-
+    const map = mapRef.current, markers = markersRef.current, rl = routeLayerRef.current;
+    if (!map || !markers || !rl) return;
     markers.clearLayers();
-    if (routeLineRef.current) {
-      routeLineRef.current.remove();
-      routeLineRef.current = null;
+    rl.clearLayers();
+
+    // Planned route (Uber-style: dark with glow)
+    if (plannedRoute && plannedRoute.length > 1) {
+      L.polyline(plannedRoute, { color: '#000', weight: 8, opacity: 0.06, lineJoin: 'round', lineCap: 'round' }).addTo(rl as any);
+      L.polyline(plannedRoute, { color: phase === 'pre' ? '#111' : '#94a3b8', weight: 4, opacity: phase === 'pre' ? 0.7 : 0.4, dashArray: phase === 'pre' ? undefined : '10, 8', lineJoin: 'round', lineCap: 'round' }).addTo(rl as any);
     }
 
-    // 1. Pickup marker
-    if (pickupLocation?.lat && pickupLocation?.lng) {
-      const m = L.marker([pickupLocation.lat, pickupLocation.lng], { icon: pickupIcon });
-      m.bindPopup(`
-        <div style="min-width:150px">
-          <div style="font-weight:700;margin-bottom:4px">📦 Pickup Location</div>
-          <div style="font-size:12px;color:#666">${formatLoc(pickupLocation)}</div>
-        </div>
-      `);
-      markers.addLayer(m);
-    }
-
-    // 2. Delivery marker
-    if (deliveryLocation?.lat && deliveryLocation?.lng) {
-      const m = L.marker([deliveryLocation.lat, deliveryLocation.lng], { icon: deliveryIcon });
-      m.bindPopup(`
-        <div style="min-width:150px">
-          <div style="font-weight:700;margin-bottom:4px">🏁 Delivery Location</div>
-          <div style="font-size:12px;color:#666">${formatLoc(deliveryLocation)}</div>
-        </div>
-      `);
-      markers.addLayer(m);
-    }
-
-    // 3. Route polyline and time markers from location history
+    // Actual route (vibrant blue with glow)
     if (showRoute && locationHistory.length >= 1) {
-      const routeCoords = locationHistory.map(p => [p.lat, p.lng] as [number, number]);
-      if (currentLocation) {
-        routeCoords.push([currentLocation.lat, currentLocation.lng]);
-      }
-
-      // Draw gradient-like route segments
-      if (routeCoords.length >= 2) {
-        // Main route line
-        routeLineRef.current = L.polyline(routeCoords, {
-          color: '#3b82f6',
-          weight: 4,
-          opacity: 0.85,
-          lineJoin: 'round',
-          lineCap: 'round',
-        }).addTo(map);
-
-        // Shadow line for depth
-        L.polyline(routeCoords, {
-          color: '#1d4ed8',
-          weight: 7,
-          opacity: 0.15,
-          lineJoin: 'round',
-          lineCap: 'round',
-        }).addTo(map);
-      }
-
-      // Start point marker
-      if (locationHistory.length > 0) {
-        const firstPt = locationHistory[0];
-        const startMarker = L.marker([firstPt.lat, firstPt.lng], { icon: startIcon, zIndexOffset: 500 });
-        const startDt = firstPt.timestamp ? formatDateTime(firstPt.timestamp) : 'Trip Start';
-        startMarker.bindPopup(`
-          <div style="min-width:150px">
-            <div style="font-weight:700;margin-bottom:4px;color:#8b5cf6">🟣 Trip Started</div>
-            <div style="font-size:12px;color:#666">${startDt}</div>
-            <div style="font-size:11px;color:#888;margin-top:2px">${firstPt.lat.toFixed(5)}, ${firstPt.lng.toFixed(5)}</div>
-          </div>
-        `);
-        markers.addLayer(startMarker);
-      }
-
-      // Time-labeled markers at smart intervals
-      const totalPts = locationHistory.length;
-      if (totalPts > 1) {
-        // Determine time span to decide labeling strategy
-        const timestamped = locationHistory.filter(p => p.timestamp);
-        const hasTimestamps = timestamped.length > 1;
-
-        if (hasTimestamps) {
-          const firstTime = new Date(timestamped[0].timestamp!).getTime();
-          const lastTime = new Date(timestamped[timestamped.length - 1].timestamp!).getTime();
-          const spanMs = lastTime - firstTime;
-          const spanHours = spanMs / 3600000;
-
-          // Smart interval: more frequent labels for shorter trips
-          let intervalMs: number;
-          if (spanHours <= 1) intervalMs = 5 * 60000;      // every 5 min
-          else if (spanHours <= 3) intervalMs = 15 * 60000; // every 15 min
-          else if (spanHours <= 8) intervalMs = 30 * 60000; // every 30 min
-          else intervalMs = 60 * 60000;                     // every 1 hour
-
-          // Track which day we're on for multi-day trips
-          let lastLabelTime = firstTime;
-          let lastLabelDate = new Date(firstTime).toDateString();
-          let labelCount = 0;
-          const maxLabels = 25; // prevent clutter
-
-          for (let i = 1; i < timestamped.length && labelCount < maxLabels; i++) {
-            const pt = timestamped[i];
-            const ptTime = new Date(pt.timestamp!).getTime();
-            const ptDate = new Date(pt.timestamp!).toDateString();
-
-            if (ptTime - lastLabelTime >= intervalMs) {
-              const dateChanged = ptDate !== lastLabelDate;
-
-              if (dateChanged || (ptTime - lastLabelTime >= intervalMs * 3)) {
-                // Major label (with date)
-                const label = formatDateTime(pt.timestamp!);
-                const icon = createMajorTimeDot(label, pt.speed);
-                const marker = L.marker([pt.lat, pt.lng], { icon, zIndexOffset: 300 });
-                marker.bindPopup(`
-                  <div style="min-width:160px">
-                    <div style="font-weight:700;font-size:13px;margin-bottom:4px">📍 ${label}</div>
-                    <table style="font-size:11px;color:#555;border-collapse:collapse;width:100%">
-                      <tr><td style="padding:2px 6px 2px 0;color:#888">Coords</td><td>${pt.lat.toFixed(5)}, ${pt.lng.toFixed(5)}</td></tr>
-                      ${pt.speed ? `<tr><td style="padding:2px 6px 2px 0;color:#888">Speed</td><td>${(pt.speed * 3.6).toFixed(0)} km/h</td></tr>` : ''}
-                      ${pt.accuracy ? `<tr><td style="padding:2px 6px 2px 0;color:#888">Accuracy</td><td>${pt.accuracy.toFixed(0)}m</td></tr>` : ''}
-                    </table>
-                  </div>
-                `);
-                markers.addLayer(marker);
-              } else {
-                // Minor label (time only)
-                const timeStr = formatTime(pt.timestamp!);
-                const icon = createTimeDot(timeStr, i, pt.speed);
-                const marker = L.marker([pt.lat, pt.lng], { icon, zIndexOffset: 200 });
-                marker.bindPopup(`
-                  <div style="min-width:140px">
-                    <div style="font-weight:700;font-size:12px;margin-bottom:4px">${formatDateTime(pt.timestamp!)}</div>
-                    <div style="font-size:11px;color:#666">${pt.lat.toFixed(5)}, ${pt.lng.toFixed(5)}</div>
-                    ${pt.speed ? `<div style="font-size:11px;color:#3b82f6">⚡ ${(pt.speed * 3.6).toFixed(0)} km/h</div>` : ''}
-                  </div>
-                `);
-                markers.addLayer(marker);
-              }
-
-              lastLabelTime = ptTime;
-              lastLabelDate = ptDate;
-              labelCount++;
-            }
-          }
-        } else {
-          // No timestamps — show dots at intervals
-          const step = Math.max(1, Math.floor(totalPts / 12));
-          for (let i = step; i < totalPts; i += step) {
-            const p = locationHistory[i];
-            const dot = L.divIcon({
-              html: `<div style="width:10px;height:10px;border-radius:50%;background:rgba(59,130,246,0.7);border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>`,
-              iconSize: [14, 14],
-              iconAnchor: [7, 7],
-              className: '',
-            });
-            const marker = L.marker([p.lat, p.lng], { icon: dot });
-            marker.bindPopup(`<div style="font-size:11px">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</div>`);
-            markers.addLayer(marker);
-          }
-        }
+      const coords = locationHistory.map(p => [p.lat, p.lng] as [number, number]);
+      if (currentLocation) coords.push([currentLocation.lat, currentLocation.lng]);
+      if (coords.length >= 2) {
+        L.polyline(coords, { color: '#4285F4', weight: 12, opacity: 0.1, lineJoin: 'round', lineCap: 'round' }).addTo(rl as any);
+        L.polyline(coords, { color: '#4285F4', weight: 5, opacity: 0.9, lineJoin: 'round', lineCap: 'round' }).addTo(rl as any);
       }
     }
 
-    // 4. Current location (truck) marker
+    // Stop markers
+    stops.forEach(stop => {
+      const dm = Math.round(stop.duration / 60000);
+      const ds = dm >= 60 ? `${Math.floor(dm / 60)}h${dm % 60}m` : `${dm}m`;
+      const m = L.marker([stop.lat, stop.lng], { icon: createStopIcon(ds), zIndexOffset: 400 });
+      m.bindPopup(`<div style="font-size:12px"><b>Stopped ${ds}</b><br/>${fmtTime(stop.startTime)} → ${fmtTime(stop.endTime)}</div>`);
+      markers.addLayer(m);
+    });
+
+    // Pickup
+    if (pickupLocation?.lat && pickupLocation?.lng) {
+      const m = L.marker([pickupLocation.lat, pickupLocation.lng], { icon: PICKUP_ICON, zIndexOffset: 600 });
+      m.bindPopup(`<div style="font-size:13px;font-weight:600">Pickup</div><div style="font-size:11px;color:#666">${fmtLoc(pickupLocation)}</div>`);
+      markers.addLayer(m);
+    }
+
+    // Delivery
+    if (deliveryLocation?.lat && deliveryLocation?.lng) {
+      const m = L.marker([deliveryLocation.lat, deliveryLocation.lng], { icon: DELIVERY_ICON, zIndexOffset: 600 });
+      m.bindPopup(`<div style="font-size:13px;font-weight:600">Delivery</div><div style="font-size:11px;color:#666">${fmtLoc(deliveryLocation)}</div>`);
+      markers.addLayer(m);
+    }
+
+    // Driver marker (Uber style)
     if (currentLocation) {
-      const truckMarker = L.marker(
-        [currentLocation.lat, currentLocation.lng],
-        { icon: truckIcon, zIndexOffset: 1000 }
-      );
-      const popupTime = currentLocation.timestamp
-        ? formatDateTime(currentLocation.timestamp)
-        : 'Just now';
-      truckMarker.bindPopup(`
-        <div style="min-width:180px">
-          <div style="font-weight:700;font-size:14px;margin-bottom:6px">🚛 ${driverName}</div>
-          <table style="font-size:11px;color:#555;border-collapse:collapse;width:100%">
-            <tr><td style="padding:2px 8px 2px 0;color:#888">Load</td><td style="font-weight:600">${loadNumber}</td></tr>
-            <tr><td style="padding:2px 8px 2px 0;color:#888">Status</td><td>${STATUS_LABELS[status] || status.replace(/_/g, ' ')}</td></tr>
-            <tr><td style="padding:2px 8px 2px 0;color:#888">Updated</td><td>${popupTime}</td></tr>
-            <tr><td style="padding:2px 8px 2px 0;color:#888">GPS</td><td>${currentLocation.lat.toFixed(5)}, ${currentLocation.lng.toFixed(5)}</td></tr>
-            ${currentLocation.speed ? `<tr><td style="padding:2px 8px 2px 0;color:#888">Speed</td><td>${(currentLocation.speed * 3.6).toFixed(0)} km/h</td></tr>` : ''}
-          </table>
-        </div>
-      `);
-      markers.addLayer(truckMarker);
+      const tm = L.marker([currentLocation.lat, currentLocation.lng], { icon: TRUCK_ICON, zIndexOffset: 1000 });
+      tm.bindPopup(`<div style="min-width:140px;font-size:12px">
+        <div style="font-weight:700;font-size:14px;margin-bottom:4px">${driverName}</div>
+        <div style="color:#666">Load #${loadNumber}</div>
+        <div style="color:#666">${STATUS_SHORT[status] || status}</div>
+        ${currentLocation.speed ? `<div style="color:#4285F4;font-weight:600;margin-top:4px">${(currentLocation.speed * 3.6).toFixed(0)} km/h</div>` : ''}
+      </div>`);
+      markers.addLayer(tm);
     }
 
-    // 5. Fit bounds
-    const historyGrew = locationHistory.length > prevHistoryLenRef.current + 3;
-    if (allPoints.length > 0 && (!hasFittedRef.current || historyGrew)) {
-      const bounds = L.latLngBounds(allPoints.map(p => L.latLng(p[0], p[1])));
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+    // Fit bounds
+    const grew = locationHistory.length > prevLenRef.current + 3;
+    if (allPoints.length > 0 && (!hasFittedRef.current || grew)) {
+      map.fitBounds(L.latLngBounds(allPoints.map(p => L.latLng(p[0], p[1]))), { padding: [60, 60], maxZoom: 16 });
       hasFittedRef.current = true;
-      prevHistoryLenRef.current = locationHistory.length;
-    } else if (currentLocation && hasFittedRef.current) {
-      map.panTo([currentLocation.lat, currentLocation.lng], { animate: true, duration: 0.5 });
+      prevLenRef.current = locationHistory.length;
+    } else if (currentLocation && hasFittedRef.current && phase === 'active' && isCentered) {
+      map.panTo([currentLocation.lat, currentLocation.lng], { animate: true, duration: 0.8 });
     }
 
     setLastUpdate(new Date());
-  }, [currentLocation, locationHistory, pickupLocation, deliveryLocation, driverName, loadNumber, status, showRoute, allPoints]);
+  }, [currentLocation, locationHistory, pickupLocation, deliveryLocation, driverName, loadNumber, status, showRoute, allPoints, plannedRoute, stops, phase, isCentered]);
 
-  // Auto refresh polling
+  // Auto-refresh
   useEffect(() => {
     if (!autoRefresh || !onRefresh) return;
-    const interval = setInterval(onRefresh, 30000);
-    return () => clearInterval(interval);
+    const id = setInterval(onRefresh, 30000);
+    return () => clearInterval(id);
   }, [autoRefresh, onRefresh]);
 
-  const noData = !currentLocation && locationHistory.length === 0
-    && !(pickupLocation?.lat && pickupLocation?.lng)
-    && !(deliveryLocation?.lat && deliveryLocation?.lng);
+  const noData = !currentLocation && locationHistory.length === 0 && !(pickupLocation?.lat) && !(deliveryLocation?.lat);
 
-  const hasRealTracking = currentLocation || locationHistory.length > 0;
+  // Re-center button
+  const reCenter = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (currentLocation) {
+      map.flyTo([currentLocation.lat, currentLocation.lng], 15, { duration: 0.6 });
+    } else if (allPoints.length > 0) {
+      map.fitBounds(L.latLngBounds(allPoints.map(p => L.latLng(p[0], p[1]))), { padding: [60, 60], maxZoom: 16, animate: true });
+    }
+    setIsCentered(true);
+  }, [currentLocation, allPoints]);
 
   return (
-    <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--dm-border, #e5e7eb)' }}>
-      {/* Map Header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '8px 12px',
-        background: hasRealTracking ? 'rgba(34,197,94,0.08)' : 'rgba(59,130,246,0.06)',
-        borderBottom: '1px solid var(--dm-border, #e5e7eb)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 16 }}>📍</span>
-          <span style={{ fontWeight: 700, fontSize: 13 }}>
-            {hasRealTracking ? 'Live Tracking' : 'Trip Map'}
+    <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', background: '#f8f9fa' }}>
+      {/* ━━━ MAP ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      <div ref={mapContainerRef} style={{ height, width: '100%' }} />
+
+      {/* ━━━ FLOATING TOP PILL (Uber style) ━━━━━━━━━━━━━━━━━━ */}
+      <div className="uber-float-top">
+        <div className="uber-pill">
+          {phase === 'active' && (
+            <div className="uber-live-dot" />
+          )}
+          <span className="uber-pill-label">
+            {STATUS_SHORT[status] || status.replace(/_/g, ' ')}
           </span>
-          {hasRealTracking && (
-            <span style={{
-              width: 8, height: 8, borderRadius: '50%',
-              background: '#22c55e', display: 'inline-block',
-              animation: 'mapPulse 2s infinite',
-            }} />
+          {pusherConnected && phase === 'active' && (
+            <span className="uber-live-badge">LIVE</span>
           )}
-          {locationHistory.length > 0 && (
-            <span style={{
-              fontSize: 10, background: 'rgba(59,130,246,0.12)', color: '#3b82f6',
-              padding: '2px 6px', borderRadius: 4, fontWeight: 600,
-            }}>
-              {locationHistory.length} pts
-            </span>
-          )}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {lastUpdate && (
-            <span style={{ fontSize: 10, color: '#6b7280' }}>
-              {lastUpdate.toLocaleTimeString()}
-            </span>
-          )}
-          {onRefresh && (
-            <button
-              onClick={onRefresh}
-              style={{
-                background: '#3b82f6', color: '#fff', border: 'none',
-                borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-              }}
-            >
-              ↻ Refresh
-            </button>
-          )}
+          {routeLoading && <span className="uber-loading">Loading...</span>}
         </div>
       </div>
 
-      {/* Map Container */}
-      <div ref={mapContainerRef} style={{ height, width: '100%', background: '#e8f0fe' }} />
-
-      {/* No Data Overlay */}
-      {noData && (
-        <div style={{
-          position: 'absolute', top: 40, left: 0, right: 0, bottom: 0,
-          display: 'grid', placeItems: 'center',
-          background: 'rgba(255,255,255,0.9)', zIndex: 400,
-        }}>
-          <div style={{ textAlign: 'center', padding: 20 }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>📡</div>
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>No location data yet</div>
-            <div style={{ fontSize: 12, color: '#6b7280', maxWidth: 250 }}>
-              Location tracking begins when the driver starts the trip and enables GPS access.
-            </div>
+      {/* ━━━ FLOATING ROUTE INFO (top center) ━━━━━━━━━━━━━━━━ */}
+      {plannedRoute && routeDistance && (
+        <div className="uber-route-info">
+          <div className="uber-route-row">
+            <span className="uber-dot" style={{ background: '#000' }} />
+            <span className="uber-route-text">{fmtLoc(pickupLocation)}</span>
+          </div>
+          <div className="uber-route-line" />
+          <div className="uber-route-row">
+            <span className="uber-dot" style={{ background: '#22c55e' }} />
+            <span className="uber-route-text">{fmtLoc(deliveryLocation)}</span>
+          </div>
+          <div className="uber-route-eta">
+            <span style={{ fontWeight: 800, fontSize: 14 }}>{routeDistance}</span>
+            <span style={{ color: '#6b7280', margin: '0 4px' }}>·</span>
+            <span style={{ fontWeight: 600 }}>{routeDuration}</span>
           </div>
         </div>
       )}
 
-      {/* Trip Stats Bar */}
-      {tripStats && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))',
-          gap: 1, padding: 0,
-          borderTop: '1px solid var(--dm-border, #e5e7eb)',
-          background: 'linear-gradient(180deg, rgba(59,130,246,0.04), rgba(255,255,255,1))',
-        }}>
-          <div style={statBoxStyle}>
-            <div style={statLabelStyle}>Distance</div>
-            <div style={statValueStyle}>{tripStats.totalDistance.toFixed(1)} km</div>
+      {/* ━━━ RE-CENTER BUTTON ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      {!isCentered && (
+        <button className="uber-recenter" onClick={reCenter} title="Re-center">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/>
+          </svg>
+        </button>
+      )}
+
+      {/* ━━━ REFRESH BUTTON ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      {onRefresh && (
+        <button className="uber-refresh" onClick={onRefresh}>
+          ↻
+        </button>
+      )}
+
+      {/* ━━━ SPEED INDICATOR (active phase) ━━━━━━━━━━━━━━━━━━━ */}
+      {currentLocation?.speed && phase === 'active' && (
+        <div className="uber-speed">
+          <div className="uber-speed-val">{(currentLocation.speed * 3.6).toFixed(0)}</div>
+          <div className="uber-speed-unit">km/h</div>
+        </div>
+      )}
+
+      {/* ━━━ BOTTOM STATS CARD (glassmorphism) ━━━━━━━━━━━━━━━━ */}
+      {(tripStats || locationHistory.length > 0 || lastUpdate) && (
+        <div className="uber-bottom-card" onClick={() => setShowStats(!showStats)}>
+          <div className="uber-bottom-handle" />
+          <div className="uber-bottom-row">
+            {tripStats ? (
+              <>
+                <div className="uber-stat">
+                  <div className="uber-stat-val">{tripStats.dist.toFixed(1)}<span className="uber-stat-unit"> km</span></div>
+                  <div className="uber-stat-label">Distance</div>
+                </div>
+                <div className="uber-stat-divider" />
+                <div className="uber-stat">
+                  <div className="uber-stat-val">{fmtDur(tripStats.time)}</div>
+                  <div className="uber-stat-label">Duration</div>
+                </div>
+                <div className="uber-stat-divider" />
+                <div className="uber-stat">
+                  <div className="uber-stat-val">{tripStats.avg.toFixed(0)}<span className="uber-stat-unit"> km/h</span></div>
+                  <div className="uber-stat-label">Avg Speed</div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="uber-stat">
+                  <div className="uber-stat-val">{locationHistory.length}</div>
+                  <div className="uber-stat-label">GPS Points</div>
+                </div>
+                <div className="uber-stat-divider" />
+                <div className="uber-stat">
+                  <div className="uber-stat-val">{realtimeUpdates}</div>
+                  <div className="uber-stat-label">Live Updates</div>
+                </div>
+              </>
+            )}
           </div>
-          <div style={statBoxStyle}>
-            <div style={statLabelStyle}>Duration</div>
-            <div style={statValueStyle}>{formatDuration(tripStats.travelTime)}</div>
-          </div>
-          <div style={statBoxStyle}>
-            <div style={statLabelStyle}>Avg Speed</div>
-            <div style={statValueStyle}>{tripStats.avgSpeed.toFixed(0)} km/h</div>
-          </div>
-          {tripStats.maxSpeed > 0 && (
-            <div style={statBoxStyle}>
-              <div style={statLabelStyle}>Max Speed</div>
-              <div style={statValueStyle}>{tripStats.maxSpeed.toFixed(0)} km/h</div>
-            </div>
-          )}
-          {tripStats.startTime && (
-            <div style={{ ...statBoxStyle, gridColumn: 'span 2' }}>
-              <div style={statLabelStyle}>Trip Window</div>
-              <div style={{ ...statValueStyle, fontSize: 11 }}>{tripStats.startTime} → {tripStats.lastTime}</div>
+
+          {/* Expanded stats */}
+          {showStats && tripStats && (
+            <div className="uber-stats-expanded">
+              {tripStats.max > 0 && (
+                <div className="uber-stat-extra">
+                  <span>Max Speed</span><span style={{ fontWeight: 700 }}>{tripStats.max.toFixed(0)} km/h</span>
+                </div>
+              )}
+              {stops.length > 0 && (
+                <div className="uber-stat-extra">
+                  <span>Stops</span><span style={{ fontWeight: 700, color: '#f59e0b' }}>{stops.length}</span>
+                </div>
+              )}
+              {stops.map((s, i) => {
+                const dm = Math.round(s.duration / 60000);
+                return (
+                  <div key={i} className="uber-stat-extra" style={{ fontSize: 11, color: '#9ca3af' }}>
+                    <span>Stop {i + 1}</span>
+                    <span>{fmtTime(s.startTime)} → {fmtTime(s.endTime)} ({dm}m)</span>
+                  </div>
+                );
+              })}
+              <div className="uber-stat-extra" style={{ fontSize: 10, color: '#9ca3af' }}>
+                <span>Last update</span>
+                <span>{lastUpdate?.toLocaleTimeString() || '—'}</span>
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* Legend Footer */}
-      <div style={{
-        display: 'flex', gap: 10, padding: '6px 12px',
-        borderTop: '1px solid var(--dm-border, #e5e7eb)',
-        fontSize: 10, color: '#6b7280', flexWrap: 'wrap',
-        alignItems: 'center',
-        background: 'rgba(255,255,255,0.97)',
-      }}>
-        {currentLocation && <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>🚛 Driver</span>}
-        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>🟣 Start</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>📦 Pickup</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>🏁 Delivery</span>
-        {locationHistory.length > 0 && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-            <span style={{ width: 14, height: 3, background: '#3b82f6', borderRadius: 2, display: 'inline-block' }} />
-            Route ({locationHistory.length})
-          </span>
-        )}
-        {currentLocation && (
-          <span style={{ marginLeft: 'auto', fontWeight: 600, color: '#3b82f6' }}>
-            {currentLocation.lat.toFixed(4)}, {currentLocation.lng.toFixed(4)}
-          </span>
-        )}
-      </div>
+      {/* ━━━ NO DATA ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      {noData && !plannedRoute && (
+        <div className="uber-no-data">
+          <div style={{ fontSize: 40, marginBottom: 8 }}>📡</div>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>Waiting for GPS</div>
+          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>
+            {phase === 'pre' ? 'Route appears when locations have coordinates' : 'Tracking starts when driver begins trip'}
+          </div>
+        </div>
+      )}
 
+      {/* ━━━ STYLES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <style>{`
-        @keyframes mapPulse {
-          0% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.4; transform: scale(1.3); }
-          100% { opacity: 1; transform: scale(1); }
+        /* ── Uber Truck Marker ── */
+        .uber-truck-marker {
+          position: relative; width: 56px; height: 56px;
+          display: grid; place-items: center;
         }
-        @keyframes truckPulse {
-          0% { box-shadow: 0 3px 12px rgba(59,130,246,0.5); }
-          50% { box-shadow: 0 3px 20px rgba(59,130,246,0.8); }
-          100% { box-shadow: 0 3px 12px rgba(59,130,246,0.5); }
+        .uber-truck-inner {
+          width: 40px; height: 40px; border-radius: 50%;
+          background: #111; display: grid; place-items: center;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+          border: 3px solid #fff; z-index: 2; position: relative;
         }
+        .uber-truck-pulse {
+          position: absolute; top: 50%; left: 50%;
+          width: 56px; height: 56px; border-radius: 50%;
+          background: rgba(66,133,244,0.2);
+          transform: translate(-50%, -50%);
+          animation: uberPulse 2s ease-out infinite;
+        }
+        @keyframes uberPulse {
+          0% { transform: translate(-50%,-50%) scale(0.8); opacity: 0.6; }
+          100% { transform: translate(-50%,-50%) scale(1.6); opacity: 0; }
+        }
+
+        /* ── Floating Top Pill ── */
+        .uber-float-top {
+          position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+          z-index: 500; pointer-events: none;
+        }
+        .uber-pill {
+          display: flex; align-items: center; gap: 6px;
+          background: rgba(255,255,255,0.95); backdrop-filter: blur(12px);
+          padding: 6px 14px; border-radius: 20px;
+          box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+          pointer-events: auto;
+        }
+        .uber-live-dot {
+          width: 8px; height: 8px; border-radius: 50%;
+          background: #22c55e; animation: uberDotPulse 1.5s infinite;
+        }
+        @keyframes uberDotPulse {
+          0%,100% { opacity: 1; } 50% { opacity: 0.3; }
+        }
+        .uber-pill-label {
+          font-size: 13px; font-weight: 700; color: #111; letter-spacing: -0.2px;
+        }
+        .uber-live-badge {
+          font-size: 9px; font-weight: 800; color: #fff; background: #22c55e;
+          padding: 1px 6px; border-radius: 4px; letter-spacing: 0.5px;
+        }
+        .uber-loading { font-size: 10px; color: #9ca3af; }
+
+        /* ── Route Info Card ── */
+        .uber-route-info {
+          position: absolute; top: 52px; left: 12px;
+          background: rgba(255,255,255,0.95); backdrop-filter: blur(12px);
+          border-radius: 14px; padding: 10px 14px;
+          box-shadow: 0 2px 16px rgba(0,0,0,0.1);
+          z-index: 500; max-width: 220px;
+        }
+        .uber-route-row {
+          display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: #111;
+        }
+        .uber-dot {
+          width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+        }
+        .uber-route-text {
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .uber-route-line {
+          width: 2px; height: 14px; background: #d1d5db; margin: 2px 0 2px 3px; border-radius: 1px;
+        }
+        .uber-route-eta {
+          margin-top: 8px; padding-top: 8px; border-top: 1px solid #f3f4f6;
+          font-size: 12px; color: #111;
+        }
+
+        /* ── Re-center ── */
+        .uber-recenter {
+          position: absolute; bottom: 100px; right: 12px; z-index: 500;
+          width: 40px; height: 40px; border-radius: 50%;
+          background: #fff; border: none; cursor: pointer;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+          display: grid; place-items: center; color: #4285F4;
+          transition: transform 0.15s;
+        }
+        .uber-recenter:active { transform: scale(0.92); }
+
+        /* ── Refresh ── */
+        .uber-refresh {
+          position: absolute; bottom: 100px; right: 60px; z-index: 500;
+          width: 36px; height: 36px; border-radius: 50%;
+          background: #fff; border: none; cursor: pointer;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+          display: grid; place-items: center; font-size: 16px; color: #6b7280;
+        }
+
+        /* ── Speed ── */
+        .uber-speed {
+          position: absolute; bottom: 150px; left: 12px; z-index: 500;
+          background: #111; color: #fff; border-radius: 12px;
+          padding: 6px 10px; text-align: center;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+          min-width: 50px;
+        }
+        .uber-speed-val { font-size: 18px; font-weight: 800; line-height: 1; }
+        .uber-speed-unit { font-size: 9px; font-weight: 600; opacity: 0.6; margin-top: 1px; }
+
+        /* ── Bottom Card ── */
+        .uber-bottom-card {
+          position: absolute; bottom: 0; left: 0; right: 0; z-index: 500;
+          background: rgba(255,255,255,0.97); backdrop-filter: blur(16px);
+          border-radius: 20px 20px 0 0;
+          padding: 8px 16px 14px;
+          box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+          cursor: pointer; transition: all 0.2s;
+        }
+        .uber-bottom-handle {
+          width: 36px; height: 4px; border-radius: 2px;
+          background: #d1d5db; margin: 0 auto 10px;
+        }
+        .uber-bottom-row {
+          display: flex; align-items: center; justify-content: center; gap: 0;
+        }
+        .uber-stat {
+          flex: 1; text-align: center; padding: 2px 8px;
+        }
+        .uber-stat-val {
+          font-size: 16px; font-weight: 800; color: #111; line-height: 1.2;
+        }
+        .uber-stat-unit { font-size: 11px; font-weight: 500; color: #6b7280; }
+        .uber-stat-label {
+          font-size: 10px; font-weight: 600; color: #9ca3af; text-transform: uppercase;
+          letter-spacing: 0.3px; margin-top: 2px;
+        }
+        .uber-stat-divider {
+          width: 1px; height: 28px; background: #e5e7eb; flex-shrink: 0;
+        }
+        .uber-stats-expanded {
+          margin-top: 10px; padding-top: 10px; border-top: 1px solid #f3f4f6;
+          display: grid; gap: 4px;
+        }
+        .uber-stat-extra {
+          display: flex; justify-content: space-between;
+          font-size: 12px; color: #6b7280; padding: 2px 0;
+        }
+
+        /* ── No Data ── */
+        .uber-no-data {
+          position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+          display: grid; place-items: center; place-content: center;
+          background: rgba(255,255,255,0.9); backdrop-filter: blur(4px);
+          z-index: 400; text-align: center; padding: 20px;
+        }
+
+        /* ── Map overrides ── */
+        .leaflet-control-zoom { border: none !important; border-radius: 12px !important; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important; }
+        .leaflet-control-zoom a { width: 36px !important; height: 36px !important; line-height: 36px !important; font-size: 18px !important; color: #111 !important; background: #fff !important; border: none !important; }
+        .leaflet-control-zoom a:hover { background: #f3f4f6 !important; }
       `}</style>
     </div>
   );
 }
-
-// ─── Stat Box Styles ────────────────────────────────────────
-
-const statBoxStyle: React.CSSProperties = {
-  padding: '8px 10px',
-  textAlign: 'center',
-  borderRight: '1px solid rgba(0,0,0,0.05)',
-};
-
-const statLabelStyle: React.CSSProperties = {
-  fontSize: 9,
-  fontWeight: 600,
-  color: '#6b7280',
-  textTransform: 'uppercase',
-  letterSpacing: 0.5,
-  marginBottom: 2,
-};
-
-const statValueStyle: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 700,
-  color: '#111827',
-};

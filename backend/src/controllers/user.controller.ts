@@ -6,7 +6,9 @@ import { PaginationHelper } from '../utils/pagination';
 
 export class UserController {
   static createUser = asyncHandler(async (req: Request, res: Response) => {
-    const userData = await UserService.createUser(req.body);
+    // Set companyId from the creating user (owner's companyId or owner's own ID)
+    const companyId = (req.user as any)?.companyId || req.user!.id;
+    const userData = await UserService.createUser({ ...req.body, companyId });
     return ApiResponse.created(res, userData, 'User created successfully');
   });
 

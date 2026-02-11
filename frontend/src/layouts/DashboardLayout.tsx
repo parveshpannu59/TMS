@@ -17,6 +17,7 @@ import { useAuth } from '@hooks/useAuth';
 import { getApiOrigin } from '@/api/client';
 import { Sidebar, SIDEBAR_WIDTH } from '@components/common/Sidebar';
 import { NotificationMenu } from '@components/common/NotificationMenu';
+import { usePusherContext } from '@/contexts/PusherContext';
 import { useTranslation } from 'react-i18next';
 
 interface DashboardLayoutProps {
@@ -124,6 +125,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = React.memo(({ chi
           </Typography>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            {/* Real-time connection indicator */}
+            <RealtimeIndicator />
             <NotificationMenu />
             {!isMobile && (
               <Box sx={{ textAlign: 'right', mr: 1 }}>
@@ -264,3 +267,66 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = React.memo(({ chi
 });
 
 DashboardLayout.displayName = 'DashboardLayout';
+
+// ─── Real-time Connection Indicator ─────────────────────────
+function RealtimeIndicator() {
+  const { connected, onlineCount } = usePusherContext();
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 0.5,
+        px: 1.2,
+        py: 0.4,
+        borderRadius: 3,
+        bgcolor: connected ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
+        border: '1px solid',
+        borderColor: connected ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)',
+        cursor: 'default',
+        transition: 'all 0.3s',
+      }}
+      title={connected ? `Real-time connected | ${onlineCount} drivers online` : 'Real-time disconnected'}
+    >
+      <Box
+        sx={{
+          width: 7,
+          height: 7,
+          borderRadius: '50%',
+          bgcolor: connected ? '#22c55e' : '#ef4444',
+          animation: connected ? 'pulse 2s infinite' : 'none',
+          '@keyframes pulse': {
+            '0%': { opacity: 1 },
+            '50%': { opacity: 0.4 },
+            '100%': { opacity: 1 },
+          },
+        }}
+      />
+      <Typography
+        variant="caption"
+        sx={{
+          fontSize: 10,
+          fontWeight: 700,
+          color: connected ? '#22c55e' : '#ef4444',
+          letterSpacing: 0.5,
+          textTransform: 'uppercase',
+        }}
+      >
+        {connected ? 'LIVE' : 'OFF'}
+      </Typography>
+      {connected && onlineCount > 0 && (
+        <Typography
+          variant="caption"
+          sx={{
+            fontSize: 9,
+            fontWeight: 600,
+            color: '#6b7280',
+            ml: 0.3,
+          }}
+        >
+          · {onlineCount} 🟢
+        </Typography>
+      )}
+    </Box>
+  );
+}

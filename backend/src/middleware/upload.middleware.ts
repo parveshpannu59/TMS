@@ -177,3 +177,39 @@ export const uploadLoadImage = multer({
   fileFilter,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 }).single('image');
+
+// Chat attachments upload (images, docs, PDFs)
+const chatDir = path.join(process.cwd(), 'uploads', 'chat');
+if (!fs.existsSync(chatDir)) {
+  fs.mkdirSync(chatDir, { recursive: true });
+}
+
+const chatStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, chatDir),
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname) || '.jpg';
+    cb(null, `chat-${uniqueSuffix}${ext}`);
+  },
+});
+
+const chatFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
+  const allowed = [
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+    'application/pdf',
+    'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/plain', 'text/csv',
+  ];
+  if (file.mimetype && allowed.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('File type not supported. Allowed: images, PDF, Word, Excel, CSV, TXT'));
+  }
+};
+
+export const uploadChatAttachment = multer({
+  storage: chatStorage,
+  fileFilter: chatFilter,
+  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB
+}).single('file');
