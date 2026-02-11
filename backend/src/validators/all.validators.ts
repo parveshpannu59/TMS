@@ -39,7 +39,12 @@ export class LoadValidator {
   static updateLoadStatus(): ValidationChain[] {
     return [
       body('status')
-        .isIn(['created', 'assigned', 'in_transit', 'delivered', 'completed', 'cancelled'])
+        .isIn([
+          'booked', 'rate_confirmed', 'assigned', 'trip_accepted', 'trip_started',
+          'shipper_check_in', 'shipper_load_in', 'shipper_load_out',
+          'in_transit', 'receiver_check_in', 'receiver_offload',
+          'delivered', 'completed', 'cancelled',
+        ])
         .withMessage('Invalid status'),
     ];
   }

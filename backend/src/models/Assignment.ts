@@ -83,7 +83,6 @@ const AssignmentSchema = new Schema(
 
 // Index for finding pending assignments for a driver
 AssignmentSchema.index({ driverId: 1, status: 1 });
-// Index for finding assignments for a load
-AssignmentSchema.index({ loadId: 1 });
+// loadId index already created by `index: true` in field definition
 
 export default mongoose.model<IAssignment>('Assignment', AssignmentSchema);

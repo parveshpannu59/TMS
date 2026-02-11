@@ -56,6 +56,7 @@ const TripManagementDashboard = lazy(() => import('@pages/TripManagementDashboar
 const AccountingPage = lazy(() => import('@pages/AccountingPage'));
 const SettingsPage = lazy(() => import('@pages/SettingsPage'));
 const ActivityHistoryPage = lazy(() => import('@pages/ActivityHistoryPage'));
+const MessagesPage = lazy(() => import('@pages/MessagesPage'));
 const MaintenancePage = lazy(() => import('@pages/MaintenancePage'));
 const ResourcesPage = lazy(() => import('@pages/ResourcesPage'));
 const DriverDashboard = lazy(() => import('@pages/DriverDashboard'));
@@ -65,6 +66,7 @@ const DriverDashboardMobile = lazy(() => import('../pages/driver/DriverDashboard
 const DriverTripsMobile = lazy(() => import('../pages/driver/DriverTripsMobile'));
 const DriverMessagesMobile = lazy(() => import('../pages/driver/DriverMessagesMobile'));
 const DriverLoadDetailMobile = lazy(() => import('../pages/driver/DriverLoadDetailMobile'));
+const LoadTrackingMobile = lazy(() => import('../pages/driver/LoadTrackingMobile'));
 const DriverLoginMobile = lazy(() => import('../pages/driver/DriverLoginMobile'));
 const DriverSettingsMobile = lazy(() => import('../pages/driver/DriverSettingsMobile'));
 import { DriverMobileProvider } from '../contexts/DriverMobileContext';
@@ -178,6 +180,14 @@ export const AppRoutes = () => {
           }
         />
         <Route
+          path="/messages"
+          element={
+            <ProtectedRoute>
+              <MessagesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/history"
           element={
             <ProtectedRoute>
@@ -233,6 +243,7 @@ export const AppRoutes = () => {
           <Route index element={<Navigate to="/driver/mobile/dashboard" replace />} />
           <Route path="dashboard" element={<DriverDashboardMobile />} />
           <Route path="load/:id" element={<DriverLoadDetailMobile />} />
+          <Route path="tracking/:id" element={<LoadTrackingMobile />} />
           <Route path="trips" element={<DriverTripsMobile />} />
           <Route path="messages" element={<DriverMessagesMobile />} />
           <Route path="settings" element={<DriverSettingsMobile />} />

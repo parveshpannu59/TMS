@@ -12,6 +12,7 @@ import {
   LoadsAssignDialog,
   LoadsNotesDialog,
   LoadsCreateEditDialog,
+  LoadDetailsDialog,
 } from '@/components/loads';
 import { useTranslation } from 'react-i18next';
 
@@ -53,6 +54,8 @@ const LoadsPage: React.FC = () => {
   const [selectedDriver, setSelectedDriver] = useState<import('@/api/driver.api').Driver | null>(null);
   const [selectedTruck, setSelectedTruck] = useState<import('@/api/truck.api').Truck | null>(null);
   const [selectedTrailer, setSelectedTrailer] = useState<import('@/api/trailer.api').Trailer | null>(null);
+  const [openDetailsDialog, setOpenDetailsDialog] = useState(false);
+  const [detailsLoad, setDetailsLoad] = useState<Load | null>(null);
 
   const errorState = error ?? apiError;
   const setErrorState = (v: string | null) => {
@@ -96,9 +99,10 @@ const LoadsPage: React.FC = () => {
       const driverId = (selectedDriver as { _id?: string; id?: string })._id ?? (selectedDriver as { _id?: string; id?: string }).id ?? '';
       const truckId = (selectedTruck as { _id?: string; id?: string })._id ?? (selectedTruck as { _id?: string; id?: string }).id ?? '';
       const trailerId = (selectedTrailer as { _id?: string; id?: string })._id ?? (selectedTrailer as { _id?: string; id?: string }).id ?? '';
+      // Close dialog immediately, then assign in background
+      handleCloseAssignDialog();
       await assignLoad(assigningLoad._id, { driverId, truckId, trailerId });
       setSuccess('Load assigned successfully!');
-      handleCloseAssignDialog();
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: unknown) {
       setErrorState(err instanceof Error ? err.message : 'Failed to assign load');
@@ -184,7 +188,10 @@ const LoadsPage: React.FC = () => {
             loads={loads}
             filteredLoads={filteredLoads}
             loading={loading}
-            onView={(load) => handleOpenDialog(load)}
+            onView={(load) => {
+              setDetailsLoad(load);
+              setOpenDetailsDialog(true);
+            }}
             onEdit={(load) => handleOpenDialog(load)}
             onDelete={handleDelete}
             onAssign={handleOpenAssignDialog}
@@ -197,6 +204,10 @@ const LoadsPage: React.FC = () => {
             onConfirmRate={(load) => {
               setConfirmingRateLoad(load);
               setOpenConfirmRateDialog(true);
+            }}
+            onViewTripDetails={(load) => {
+              setDetailsLoad(load);
+              setOpenDetailsDialog(true);
             }}
             onAddLoad={() => handleOpenDialog()}
           />
@@ -251,6 +262,12 @@ const LoadsPage: React.FC = () => {
           />
 
           <LoadsNotesDialog open={openNotesDialog} onClose={() => setOpenNotesDialog(false)} title={notesTitle} notes={selectedNotes} />
+
+          <LoadDetailsDialog
+            open={openDetailsDialog}
+            onClose={() => { setOpenDetailsDialog(false); setDetailsLoad(null); }}
+            load={detailsLoad}
+          />
         </Box>
       </Box>
     </DashboardLayout>

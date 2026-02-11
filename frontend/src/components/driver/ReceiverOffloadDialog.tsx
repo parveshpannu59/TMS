@@ -101,12 +101,24 @@ export const ReceiverOffloadDialog: React.FC<ReceiverOffloadDialogProps> = ({
         return;
       }
 
+      // Capture current GPS for the status history
+      let gps: { latitude?: number; longitude?: number } = {};
+      try {
+        const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+          navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 })
+        );
+        if (pos.coords.accuracy <= 200) {
+          gps = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+        }
+      } catch { /* ignore GPS failure */ }
+
       await loadApi.receiverOffload(load.id, {
         quantity,
         additionalDetails,
         bolAcknowledged: true,
         podDocument: podDocumentUrl,
         podPhoto: podPhotoUrl,
+        ...gps,
       });
 
       onSuccess();

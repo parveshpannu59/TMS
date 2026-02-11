@@ -43,6 +43,6 @@ const InvoiceSchema = new Schema({
 }, { timestamps: true });
 
 InvoiceSchema.index({ companyId: 1, status: 1 });
-InvoiceSchema.index({ invoiceNumber: 1 }, { unique: true });
+// invoiceNumber index already created by `unique: true` in field definition
 
 export default mongoose.model<IInvoice>('Invoice', InvoiceSchema);

@@ -8,8 +8,8 @@ import Assignment from '../models/Assignment';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
 import { ApiError } from '../utils/ApiError';
-import { notifyLoadAssigned } from '../utils/notificationHelper';
-import Notification from '../models/Notification';
+import { notifyLoadAssigned, notifyLoadCompleted, notifyLoadDelayed, createNotification } from '../utils/notificationHelper';
+import Notification, { NotificationType, NotificationPriority } from '../models/Notification';
 import AssignmentService from '../services/assignment.service';
 import Expense from '../models/Expense';
 
@@ -37,6 +37,61 @@ export class LoadController {
       .lean();
     
     return ApiResponse.success(res, loads, 'Assigned loads fetched successfully');
+  });
+
+  // Export loads as CSV
+  static exportLoadsCsv = asyncHandler(async (req: Request, res: Response) => {
+    const companyId = req.user?.companyId ?? req.user?.id;
+    const { status, dateFrom, dateTo } = req.query;
+
+    const query: any = { companyId };
+    if (status) query.status = status;
+    if (dateFrom || dateTo) {
+      query.pickupDate = {};
+      if (dateFrom) query.pickupDate.$gte = new Date(dateFrom as string);
+      if (dateTo) query.pickupDate.$lte = new Date(dateTo as string);
+    }
+
+    const loads = await Load.find(query)
+      .populate('driverId', 'name email')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const headers = ['Load Number', 'Customer', 'Pickup City', 'Delivery City', 'Status', 'Rate', 'Distance', 'Pickup Date', 'Delivery Date', 'Driver'];
+    const escapeCsv = (val: unknown): string => {
+      if (val == null || val === undefined) return '';
+      const s = String(val);
+      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const formatDate = (d: Date | undefined): string => (d ? new Date(d).toISOString().split('T')[0] : '');
+
+    const rows = loads.map((l: any) => {
+      const pickup = l.pickupLocation || {};
+      const delivery = l.deliveryLocation || {};
+      const driver = l.driverId;
+      const driverName = driver?.name || '';
+      return [
+        escapeCsv(l.loadNumber),
+        escapeCsv(l.customerName),
+        escapeCsv(pickup.city),
+        escapeCsv(delivery.city),
+        escapeCsv(l.status),
+        escapeCsv(l.rate),
+        escapeCsv(l.distance),
+        escapeCsv(formatDate(l.pickupDate)),
+        escapeCsv(formatDate(l.expectedDeliveryDate)),
+        escapeCsv(driverName),
+      ].join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join('\r\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="loads-export-${new Date().toISOString().split('T')[0]}.csv"`);
+    res.send(csv);
   });
 
   // Get all loads with filtering
@@ -399,6 +454,25 @@ export class LoadController {
           loadId,
           assignment._id.toString()
         );
+
+        // ─── 🔔 Pusher: Instant assignment notification ──────
+        try {
+          const { broadcastAssignment } = require('../services/pusher.service');
+          const pickup = (load as any).pickupLocation;
+          const delivery = (load as any).deliveryLocation;
+          await broadcastAssignment(companyId as string, driverUserId, {
+            assignmentId: assignment._id.toString(),
+            loadId,
+            loadNumber: load.loadNumber,
+            driverId: driverId,
+            driverName: driver.name,
+            pickup: [pickup?.city, pickup?.state].filter(Boolean).join(', ') || 'Pickup',
+            delivery: [delivery?.city, delivery?.state].filter(Boolean).join(', ') || 'Delivery',
+            rate: load.rate,
+            timestamp: new Date().toISOString(),
+            action: 'new',
+          });
+        } catch (pusherErr) { console.warn('Pusher assignment broadcast failed:', pusherErr); }
       } else {
         console.warn(`Driver ${driver.name} not linked to user account - notification not sent`);
       }
@@ -507,6 +581,30 @@ export class LoadController {
   });
 
   // Update load status
+  // Valid status transitions: each status maps to the statuses it can transition TO
+  static VALID_TRANSITIONS: Record<string, string[]> = {
+    [LoadStatus.BOOKED]: [LoadStatus.RATE_CONFIRMED, LoadStatus.ASSIGNED, LoadStatus.CANCELLED],
+    [LoadStatus.RATE_CONFIRMED]: [LoadStatus.ASSIGNED, LoadStatus.CANCELLED],
+    [LoadStatus.ASSIGNED]: [LoadStatus.TRIP_ACCEPTED, LoadStatus.BOOKED, LoadStatus.CANCELLED],
+    [LoadStatus.TRIP_ACCEPTED]: [LoadStatus.TRIP_STARTED, LoadStatus.ASSIGNED, LoadStatus.CANCELLED],
+    [LoadStatus.TRIP_STARTED]: [LoadStatus.SHIPPER_CHECK_IN, LoadStatus.CANCELLED],
+    [LoadStatus.SHIPPER_CHECK_IN]: [LoadStatus.SHIPPER_LOAD_IN, LoadStatus.CANCELLED],
+    [LoadStatus.SHIPPER_LOAD_IN]: [LoadStatus.SHIPPER_LOAD_OUT, LoadStatus.CANCELLED],
+    [LoadStatus.SHIPPER_LOAD_OUT]: [LoadStatus.IN_TRANSIT, LoadStatus.CANCELLED],
+    [LoadStatus.IN_TRANSIT]: [LoadStatus.RECEIVER_CHECK_IN, LoadStatus.CANCELLED],
+    [LoadStatus.RECEIVER_CHECK_IN]: [LoadStatus.RECEIVER_OFFLOAD, LoadStatus.CANCELLED],
+    [LoadStatus.RECEIVER_OFFLOAD]: [LoadStatus.DELIVERED, LoadStatus.CANCELLED],
+    [LoadStatus.DELIVERED]: [LoadStatus.COMPLETED],
+    [LoadStatus.COMPLETED]: [],
+    [LoadStatus.CANCELLED]: [],
+  };
+
+  static validateTransition(currentStatus: string, newStatus: string): boolean {
+    const allowed = LoadController.VALID_TRANSITIONS[currentStatus];
+    if (!allowed) return false;
+    return allowed.includes(newStatus);
+  }
+
   static updateStatus = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const { status, notes, location } = req.body;
@@ -519,11 +617,18 @@ export class LoadController {
       throw ApiError.notFound('Load not found');
     }
     
-    // Validate status transition
+    // Validate status is a valid enum value
     const validStatuses = Object.values(LoadStatus);
-    
     if (!validStatuses.includes(status as LoadStatus)) {
       throw ApiError.badRequest('Invalid status');
+    }
+
+    // Validate the status transition is allowed
+    if (!LoadController.validateTransition(load.status, status)) {
+      throw ApiError.badRequest(
+        `Cannot transition from "${load.status.replace(/_/g, ' ')}" to "${status.replace(/_/g, ' ')}". ` +
+        `Allowed transitions: ${(LoadController.VALID_TRANSITIONS[load.status] || []).map((s: string) => s.replace(/_/g, ' ')).join(', ') || 'none'}`
+      );
     }
     
     // Update status
@@ -587,6 +692,55 @@ export class LoadController {
     }
     
     await load.save();
+
+    // Send notifications for key status changes
+    const notifCompanyId = companyId || load.companyId;
+    if (notifCompanyId) {
+      try {
+        if (status === LoadStatus.DELIVERED || status === LoadStatus.COMPLETED) {
+          await notifyLoadCompleted(notifCompanyId, load.loadNumber);
+        }
+        if (status === LoadStatus.CANCELLED) {
+          await createNotification({
+            companyId: notifCompanyId,
+            type: NotificationType.WARNING,
+            priority: NotificationPriority.HIGH,
+            title: 'Load Cancelled',
+            message: `Load #${load.loadNumber} has been cancelled${notes ? `: ${notes}` : ''}`,
+            metadata: { loadNumber: load.loadNumber, reason: notes },
+          });
+        }
+        if (status === LoadStatus.TRIP_STARTED) {
+          await createNotification({
+            companyId: notifCompanyId,
+            type: NotificationType.INFO,
+            priority: NotificationPriority.MEDIUM,
+            title: 'Trip Started',
+            message: `Driver has started trip for Load #${load.loadNumber}`,
+            metadata: { loadNumber: load.loadNumber },
+          });
+        }
+      } catch { /* notification failures should not block the main operation */ }
+    }
+
+    // ─── Real-time status broadcast via Pusher ───────────────
+    try {
+      const { broadcastStatusChange } = require('../services/pusher.service');
+      const prevStatus = load.statusHistory.length > 1
+        ? load.statusHistory[load.statusHistory.length - 2]?.status
+        : 'unknown';
+      await broadcastStatusChange(companyId || load.companyId, {
+        loadId: id,
+        loadNumber: load.loadNumber,
+        driverId: load.driverId?.toString() || '',
+        driverName: (req.user as any)?.name || 'System',
+        previousStatus: prevStatus,
+        newStatus: status,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.warn('Pusher status broadcast failed (non-critical):', (err as Error).message);
+    }
     
     return ApiResponse.success(res, load, 'Status updated successfully');
   });
@@ -630,12 +784,12 @@ export class LoadController {
     }
     
     // Validate required fields
-    if (!trackingLink || !pickupAddress || !deliveryAddress || !miles) {
-      throw ApiError.badRequest('Tracking link, pickup address, delivery address, and miles are required');
+    if (!pickupAddress || !deliveryAddress || !miles) {
+      throw ApiError.badRequest('Pickup address, delivery address, and miles are required');
     }
     
     // Update load with broker confirmation details
-    load.trackingLink = trackingLink;
+    if (trackingLink) load.trackingLink = trackingLink;
     load.brokerConfirmedRate = true;
     load.brokerConfirmedAt = new Date();
     load.brokerConfirmationDetails = {
@@ -659,7 +813,7 @@ export class LoadController {
     load.statusHistory.push({
       status: LoadStatus.RATE_CONFIRMED,
       timestamp: new Date(),
-      notes: `Rate confirmed by broker. Tracking link: ${trackingLink}`,
+      notes: `Rate confirmed by broker.${trackingLink ? ` Tracking link: ${trackingLink}` : ''}`,
       updatedBy: userId,
     } as any);
     
@@ -888,17 +1042,27 @@ export class LoadController {
       throw ApiError.badRequest('Starting mileage and photo are required');
     }
     
+    const { latitude, longitude } = req.body;
+    
     load.status = LoadStatus.TRIP_STARTED;
     load.tripStartDetails = {
       startingMileage,
       startingPhoto,
       tripStartedAt: new Date(),
     };
+    
+    // Store start location if provided
+    if (latitude && longitude) {
+      (load as any).tripStartLocation = { latitude, longitude, timestamp: new Date() };
+    }
+    
     load.statusHistory.push({
       status: LoadStatus.TRIP_STARTED,
       timestamp: new Date(),
       notes: `Trip started. Starting mileage: ${startingMileage}`,
       updatedBy: userId,
+      lat: latitude || undefined,
+      lng: longitude || undefined,
     } as any);
     
     await load.save();
@@ -938,22 +1102,33 @@ export class LoadController {
       throw ApiError.forbidden('Only the assigned driver can perform this action');
     }
     
-    if (!poNumber || !loadNumber || !referenceNumber) {
-      throw ApiError.badRequest('PO number, load number, and reference number are required');
+    // At least one identifier should be provided (PO, load number, or reference)
+    if (!poNumber && !loadNumber && !referenceNumber) {
+      throw ApiError.badRequest('At least one identifier (PO number, load number, or reference number) is required');
     }
+    
+    const { latitude, longitude } = req.body;
     
     load.status = LoadStatus.SHIPPER_CHECK_IN;
     load.shipperCheckInDetails = {
-      poNumber,
-      loadNumber,
-      referenceNumber,
+      poNumber: poNumber || '',
+      loadNumber: loadNumber || load.loadNumber || '',
+      referenceNumber: referenceNumber || '',
       checkInAt: new Date(),
     };
+    
+    // Store check-in location if provided
+    if (latitude && longitude) {
+      (load as any).shipperCheckInLocation = { latitude, longitude, timestamp: new Date() };
+    }
+    
     load.statusHistory.push({
       status: LoadStatus.SHIPPER_CHECK_IN,
       timestamp: new Date(),
-      notes: `Checked in at shipper. PO: ${poNumber}, Ref: ${referenceNumber}`,
+      notes: `Checked in at shipper.${poNumber ? ` PO: ${poNumber}` : ''}${referenceNumber ? ` Ref: ${referenceNumber}` : ''}`,
       updatedBy: userId,
+      lat: latitude || undefined,
+      lng: longitude || undefined,
     } as any);
     
     await load.save();
@@ -993,6 +1168,8 @@ export class LoadController {
       throw ApiError.forbidden('Only the assigned driver can perform this action');
     }
     
+    const { latitude, longitude } = req.body;
+
     load.status = LoadStatus.SHIPPER_LOAD_IN;
     load.shipperLoadInDetails = {
       confirmationDetails,
@@ -1003,6 +1180,8 @@ export class LoadController {
       timestamp: new Date(),
       notes: 'Load in confirmed at shipper location',
       updatedBy: userId,
+      lat: latitude || undefined,
+      lng: longitude || undefined,
     } as any);
     
     await load.save();
@@ -1046,6 +1225,8 @@ export class LoadController {
       throw ApiError.badRequest('BOL document is required');
     }
     
+    const { latitude, longitude } = req.body;
+
     load.status = LoadStatus.SHIPPER_LOAD_OUT;
     load.shipperLoadOutDetails = {
       loadOutAt: new Date(),
@@ -1058,6 +1239,8 @@ export class LoadController {
       timestamp: new Date(),
       notes: 'Load out confirmed. BOL uploaded',
       updatedBy: userId,
+      lat: latitude || undefined,
+      lng: longitude || undefined,
     } as any);
     
     await load.save();
@@ -1099,6 +1282,8 @@ export class LoadController {
       throw ApiError.forbidden('Only the assigned driver can perform this action');
     }
     
+    const { latitude, longitude } = req.body;
+
     load.status = LoadStatus.RECEIVER_CHECK_IN;
     load.receiverCheckInDetails = {
       checkInAt: new Date(),
@@ -1109,6 +1294,8 @@ export class LoadController {
       timestamp: new Date(),
       notes: 'Checked in at receiver location',
       updatedBy: userId,
+      lat: latitude || undefined,
+      lng: longitude || undefined,
     } as any);
     
     await load.save();
@@ -1162,11 +1349,15 @@ export class LoadController {
     if (podDocument) load.documents.pod = podDocument;
     if (podPhoto) load.documents.pod = podPhoto;
     
+    const { latitude, longitude } = req.body;
+
     load.statusHistory.push({
       status: LoadStatus.RECEIVER_OFFLOAD,
       timestamp: new Date(),
       notes: 'Load offloaded at receiver. POD received',
       updatedBy: userId,
+      lat: latitude || undefined,
+      lng: longitude || undefined,
     } as any);
     
     await load.save();
@@ -1247,11 +1438,15 @@ export class LoadController {
     load.completedAt = new Date();
     load.actualDeliveryDate = new Date();
     
+    const { latitude, longitude } = req.body;
+
     load.statusHistory.push({
       status: LoadStatus.COMPLETED,
       timestamp: new Date(),
       notes: `Trip completed. Total miles: ${totalMiles}, Payment: $${totalPayment}, Expenses: $${totalExpenses}`,
       updatedBy: userId,
+      lat: latitude || undefined,
+      lng: longitude || undefined,
     } as any);
     
     // Free up resources
@@ -1302,6 +1497,26 @@ export class LoadController {
     if (!load) throw ApiError.notFound('Load not found');
 
     const uploadedUrl = `/uploads/documents/${req.file.filename}`;
+
+    // ─── 📄 Pusher: Document upload notification to owner ────
+    try {
+      const { broadcastDocumentUpload } = require('../services/pusher.service');
+      const companyId = (load as any).companyId?.toString() || req.user?.companyId || req.user?.id;
+      const driverInfo = req.user?.role === 'driver'
+        ? await Driver.findOne({ userId }).select('name').lean()
+        : null;
+      const docType = req.body?.documentType || req.file.originalname || 'document';
+      await broadcastDocumentUpload(companyId, {
+        loadId: id,
+        loadNumber: load.loadNumber,
+        driverId: userId,
+        driverName: driverInfo?.name || 'User',
+        documentType: docType,
+        documentUrl: uploadedUrl,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) { console.warn('Pusher doc upload broadcast failed:', (err as Error).message); }
+
     res.json({
       success: true,
       message: 'Document uploaded successfully',
@@ -1334,12 +1549,72 @@ export class LoadController {
   // Driver updates location during active trip (live tracking)
   static updateLocation = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { lat, lng, speed, heading } = req.body;
+    const { lat, lng, speed, heading, accuracy } = req.body;
     const userId = req.user!.id;
 
-    if (!lat || !lng) {
+    if (lat === undefined || lat === null || lng === undefined || lng === null) {
       throw ApiError.badRequest('Latitude and longitude are required');
     }
+    const numLat = Number(lat);
+    const numLng = Number(lng);
+    if (isNaN(numLat) || isNaN(numLng) || numLat < -90 || numLat > 90 || numLng < -180 || numLng > 180) {
+      throw ApiError.badRequest('Invalid coordinates. Latitude: -90 to 90, Longitude: -180 to 180');
+    }
+
+    let query: any = { _id: id };
+    let driverDoc: any = null;
+    if (req.user?.role === 'driver') {
+      driverDoc = await Driver.findOne({ userId }).select('_id name').lean();
+      if (driverDoc) query.driverId = driverDoc._id.toString();
+      else throw ApiError.notFound('Driver profile not found');
+    } else {
+      query.companyId = req.user?.companyId ?? req.user?.id;
+    }
+
+    const load = await Load.findOne(query);
+    if (!load) throw ApiError.notFound('Load not found');
+
+    const locationPoint = {
+      lat: numLat, lng: numLng,
+      timestamp: new Date(),
+      speed: speed ?? undefined,
+      heading: heading ?? undefined,
+      accuracy: accuracy ? Number(accuracy) : undefined,
+    };
+    load.currentLocation = locationPoint as any;
+    if (!load.locationHistory) load.locationHistory = [];
+    load.locationHistory.push(locationPoint as any);
+    await load.save();
+
+    // ─── Real-time broadcast via Pusher ─────────────────────
+    try {
+      const { broadcastLocationUpdate } = require('../services/pusher.service');
+      const companyId = load.companyId || req.user?.companyId || req.user?.id || '';
+      await broadcastLocationUpdate(companyId, {
+        loadId: id,
+        loadNumber: load.loadNumber,
+        driverId: driverDoc?._id?.toString() || '',
+        driverName: driverDoc?.name || (req.user as any)?.name || 'Driver',
+        lat: numLat,
+        lng: numLng,
+        speed: speed ?? undefined,
+        accuracy: accuracy ? Number(accuracy) : undefined,
+        heading: heading ?? undefined,
+        timestamp: locationPoint.timestamp.toISOString(),
+        status: load.status,
+      });
+    } catch (err) {
+      // Non-blocking: don't fail the request if Pusher is down
+      console.warn('Pusher broadcast failed (non-critical):', (err as Error).message);
+    }
+
+    return ApiResponse.success(res, { updated: true, accuracy: locationPoint.accuracy }, 'Location updated');
+  });
+
+  // Get location tracking data for a load (owner/dispatcher/driver)
+  static getLocationHistory = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const userId = req.user!.id;
 
     let query: any = { _id: id };
     if (req.user?.role === 'driver') {
@@ -1350,16 +1625,47 @@ export class LoadController {
       query.companyId = req.user?.companyId ?? req.user?.id;
     }
 
-    const load = await Load.findOne(query);
+    const load = await Load.findOne(query)
+      .select('currentLocation locationHistory pickupLocation deliveryLocation status loadNumber driverId statusHistory tripStartDetails tripCompletionDetails createdAt')
+      .lean();
     if (!load) throw ApiError.notFound('Load not found');
 
-    const locationPoint = { lat: Number(lat), lng: Number(lng), timestamp: new Date(), speed, heading };
-    load.currentLocation = locationPoint as any;
-    if (!load.locationHistory) load.locationHistory = [];
-    load.locationHistory.push(locationPoint as any);
-    await load.save();
+    // Get driver name
+    let driverName = 'Driver';
+    if (load.driverId) {
+      const driver = await Driver.findById(load.driverId).select('name').lean();
+      if (driver) driverName = (driver as any).name || 'Driver';
+    }
 
-    return ApiResponse.success(res, { updated: true }, 'Location updated');
+    // Calculate trip distance
+    let totalDistanceKm = 0;
+    const history = load.locationHistory || [];
+    for (let i = 1; i < history.length; i++) {
+      const p1 = history[i - 1];
+      const p2 = history[i];
+      const R = 6371;
+      const dLat = ((p2.lat - p1.lat) * Math.PI) / 180;
+      const dLng = ((p2.lng - p1.lng) * Math.PI) / 180;
+      const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos((p1.lat * Math.PI) / 180) * Math.cos((p2.lat * Math.PI) / 180) *
+        Math.sin(dLng / 2) ** 2;
+      totalDistanceKm += R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    return ApiResponse.success(res, {
+      currentLocation: load.currentLocation || null,
+      locationHistory: history,
+      pickupLocation: load.pickupLocation || null,
+      deliveryLocation: load.deliveryLocation || null,
+      status: load.status,
+      loadNumber: load.loadNumber,
+      driverName,
+      statusHistory: load.statusHistory || [],
+      tripStartDetails: load.tripStartDetails || null,
+      tripCompletionDetails: load.tripCompletionDetails || null,
+      totalDistanceKm: Math.round(totalDistanceKm * 10) / 10,
+      totalPoints: history.length,
+    }, 'Location history retrieved');
   });
 
   // Driver reports delay
@@ -1392,6 +1698,14 @@ export class LoadController {
       updatedBy: userId,
     } as any);
     await load.save();
+
+    // Notify owner/dispatcher about the delay
+    try {
+      const companyId = load.companyId || req.user?.companyId || req.user?.id;
+      if (companyId) {
+        await notifyLoadDelayed(companyId, load.loadNumber, reason.trim());
+      }
+    } catch { /* don't block for notification failure */ }
 
     return ApiResponse.success(res, { reported: true }, 'Delay reported successfully');
   });
@@ -1426,6 +1740,22 @@ export class LoadController {
     const companyId = (load as any).companyId?.toString();
     if (!companyId) throw ApiError.badRequest('Load has no company');
 
+    // Extract additional fields
+    const { paidBy, fuelQuantity, fuelStation, odometerBefore, odometerAfter,
+            odometerBeforePhoto, odometerAfterPhoto, repairStartTime, repairEndTime,
+            repairDescription: repairDesc } = req.body;
+
+    // Calculate downtime hours for repair
+    let repairDowntimeHours: number | undefined;
+    if (repairStartTime && repairEndTime) {
+      const start = new Date(repairStartTime);
+      const end = new Date(repairEndTime);
+      repairDowntimeHours = parseFloat(((end.getTime() - start.getTime()) / 3600000).toFixed(1));
+    }
+
+    // Determine reimbursement status
+    const reimbursementStatus = paidBy === 'driver' ? 'pending' : 'not_applicable';
+
     const expense = await Expense.create({
       loadId: String(id),
       driverId: userId,
@@ -1434,11 +1764,44 @@ export class LoadController {
       type: type || 'on_the_way',
       amount: Number(amount),
       date: date ? new Date(date) : new Date(),
-      location: location || undefined,
+      location: location || fuelStation || undefined,
       description: description || undefined,
       receiptUrl: receiptUrl || undefined,
       status: 'pending',
+      paidBy: paidBy || 'driver',
+      reimbursementStatus,
+      reimbursementAmount: paidBy === 'driver' ? Number(amount) : undefined,
+      fuelQuantity: fuelQuantity ? Number(fuelQuantity) : undefined,
+      fuelStation: fuelStation || undefined,
+      odometerBefore: odometerBefore ? Number(odometerBefore) : undefined,
+      odometerAfter: odometerAfter ? Number(odometerAfter) : undefined,
+      odometerBeforePhoto: odometerBeforePhoto || undefined,
+      odometerAfterPhoto: odometerAfterPhoto || undefined,
+      repairStartTime: repairStartTime ? new Date(repairStartTime) : undefined,
+      repairEndTime: repairEndTime ? new Date(repairEndTime) : undefined,
+      repairDowntimeHours,
+      repairDescription: repairDesc || undefined,
     });
+
+    // ─── ⛽ Pusher: Expense notification to owner ────────────
+    try {
+      const { broadcastExpense } = require('../services/pusher.service');
+      const driverInfo = await Driver.findOne({ userId }).select('name').lean();
+      await broadcastExpense(companyId, userId, {
+        expenseId: expense._id.toString(),
+        loadId: id,
+        loadNumber: load.loadNumber,
+        driverId: userId,
+        driverName: driverInfo?.name || 'Driver',
+        category,
+        amount: Number(amount),
+        description: description || '',
+        receiptUrl: receiptUrl || '',
+        paidBy: paidBy || 'driver',
+        timestamp: new Date().toISOString(),
+        action: 'logged',
+      });
+    } catch (err) { console.warn('Pusher expense broadcast failed:', (err as Error).message); }
 
     return ApiResponse.success(res, expense, 'Expense logged successfully', 201);
   });
@@ -1473,6 +1836,106 @@ export class LoadController {
     );
 
     return ApiResponse.success(res, { expenses, summary }, 'Expenses retrieved');
+  });
+
+  // ─── Expense Approval & Reimbursement ─────────────────────────
+
+  // Owner/Dispatcher approves or rejects an expense
+  static approveExpense = asyncHandler(async (req: Request, res: Response) => {
+    const { expenseId } = req.params;
+    const { action, reimbursementAmount, notes } = req.body; // action: 'approve' | 'reject'
+    const companyId = req.user?.companyId ?? req.user?.id;
+    const userId = req.user!.id;
+
+    if (!['approve', 'reject'].includes(action)) {
+      throw ApiError.badRequest('Action must be "approve" or "reject"');
+    }
+
+    const expense = await Expense.findOne({ _id: expenseId, companyId });
+    if (!expense) throw ApiError.notFound('Expense not found');
+
+    if (expense.status !== 'pending') {
+      throw ApiError.badRequest(`Expense is already ${expense.status}`);
+    }
+
+    expense.status = action === 'approve' ? 'approved' : 'rejected';
+    (expense as any).approvedBy = userId;
+    (expense as any).approvedAt = new Date();
+
+    if (action === 'approve' && expense.paidBy === 'driver') {
+      expense.reimbursementStatus = 'approved';
+      expense.reimbursementAmount = reimbursementAmount || expense.amount;
+    } else if (action === 'reject') {
+      expense.reimbursementStatus = 'rejected';
+    }
+
+    if (notes) expense.notes = notes;
+    await expense.save();
+
+    // ─── ⛽ Pusher: Notify driver about approval/rejection ───
+    try {
+      const { broadcastExpense } = require('../services/pusher.service');
+      const loadDoc = await Load.findById(expense.loadId).select('loadNumber').lean();
+      await broadcastExpense(companyId as string, expense.driverId, {
+        expenseId: expense._id.toString(),
+        loadId: expense.loadId,
+        loadNumber: (loadDoc as any)?.loadNumber || '',
+        driverId: expense.driverId,
+        driverName: '',
+        category: expense.category,
+        amount: expense.amount,
+        paidBy: expense.paidBy,
+        timestamp: new Date().toISOString(),
+        action: action === 'approve' ? 'approved' : 'rejected',
+      });
+    } catch (err) { console.warn('Pusher expense approval broadcast failed:', (err as Error).message); }
+
+    return ApiResponse.success(res, expense, `Expense ${action}d successfully`);
+  });
+
+  // Mark an approved expense as paid (reimbursed)
+  static markExpenseReimbursed = asyncHandler(async (req: Request, res: Response) => {
+    const { expenseId } = req.params;
+    const companyId = req.user?.companyId ?? req.user?.id;
+
+    const expense = await Expense.findOne({ _id: expenseId, companyId });
+    if (!expense) throw ApiError.notFound('Expense not found');
+
+    if (expense.status !== 'approved') {
+      throw ApiError.badRequest('Can only reimburse approved expenses');
+    }
+    if (expense.reimbursementStatus !== 'approved' && expense.reimbursementStatus !== 'pending') {
+      throw ApiError.badRequest(`Expense reimbursement is already ${expense.reimbursementStatus}`);
+    }
+
+    expense.reimbursementStatus = 'paid';
+    expense.reimbursementDate = new Date();
+    await expense.save();
+
+    return ApiResponse.success(res, expense, 'Expense marked as reimbursed');
+  });
+
+  // Get all pending expenses for a company (for owner/dispatcher review)
+  static getPendingExpenses = asyncHandler(async (req: Request, res: Response) => {
+    const companyId = req.user?.companyId ?? req.user?.id;
+
+    const expenses = await Expense.find({
+      companyId,
+      status: 'pending',
+    }).sort({ date: -1 }).populate('loadId', 'loadNumber').lean();
+
+    const summary = expenses.reduce(
+      (acc, e: any) => {
+        acc.total += e.amount || 0;
+        acc.count += 1;
+        const cat = e.category || 'other';
+        acc.byCategory[cat] = (acc.byCategory[cat] || 0) + (e.amount || 0);
+        return acc;
+      },
+      { total: 0, count: 0, byCategory: {} as Record<string, number> }
+    );
+
+    return ApiResponse.success(res, { expenses, summary }, 'Pending expenses retrieved');
   });
 
   // SOS/Emergency notification

@@ -15,6 +15,11 @@ import {
   Divider,
   useMediaQuery,
   useTheme,
+  FormControlLabel,
+  Switch,
+  Chip,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -39,7 +44,7 @@ const CreateLoadDialog: React.FC<CreateLoadDialogProps> = ({ open, onClose, onSu
   const [availableDrivers, setAvailableDrivers] = useState<any[]>([]);
   const [availableTrucks, setAvailableTrucks] = useState<any[]>([]);
 
-  const [formData, setFormData] = useState<CreateLoadData & { notes?: string }>({
+  const [formData, setFormData] = useState<CreateLoadData & { notes?: string; isRecurring?: boolean; recurringPattern?: string; recurringDays?: number[]; recurringEndDate?: string; recurringCount?: number }>({
     customerName: '',
     customerContact: '',
     customerEmail: '',
@@ -149,7 +154,7 @@ const CreateLoadDialog: React.FC<CreateLoadDialogProps> = ({ open, onClose, onSu
 
       // Ensure pincodes are strings with exactly 6 digits
       // Also convert empty strings to undefined for driverId and truckId
-      const submitData = {
+      const submitData: any = {
         ...formData,
         driverId: formData.driverId && formData.driverId.trim() !== '' ? formData.driverId : undefined,
         truckId: formData.truckId && formData.truckId.trim() !== '' ? formData.truckId : undefined,
@@ -162,6 +167,15 @@ const CreateLoadDialog: React.FC<CreateLoadDialogProps> = ({ open, onClose, onSu
           pincode: deliveryPincode,
         },
       };
+
+      // Include recurring fields if enabled
+      if (!formData.isRecurring) {
+        delete submitData.isRecurring;
+        delete submitData.recurringPattern;
+        delete submitData.recurringDays;
+        delete submitData.recurringEndDate;
+        delete submitData.recurringCount;
+      }
 
       await loadApi.createLoad(submitData);
       onSuccess();
@@ -436,6 +450,117 @@ const CreateLoadDialog: React.FC<CreateLoadDialogProps> = ({ open, onClose, onSu
                 ))}
               </TextField>
             </Grid>
+
+            {/* ─── Recurring Load (Optional) ─── */}
+            <Grid item xs={12}>
+              <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ mt: 2 }}>
+                Recurring Load
+                <Chip label="Optional" size="small" sx={{ ml: 1, fontSize: 10, height: 20 }} />
+              </Typography>
+              <Divider sx={{ mb: 1 }} />
+            </Grid>
+
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formData.isRecurring || false}
+                    onChange={(e) => handleChange('isRecurring', e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography fontSize={14} fontWeight={600}>Make this a recurring load</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Automatically create duplicate loads on a schedule
+                    </Typography>
+                  </Box>
+                }
+              />
+            </Grid>
+
+            {formData.isRecurring && (
+              <>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    select
+                    label="Repeat Pattern"
+                    value={formData.recurringPattern || ''}
+                    onChange={(e) => handleChange('recurringPattern', e.target.value)}
+                    required
+                  >
+                    <MenuItem value="daily">Daily</MenuItem>
+                    <MenuItem value="weekly">Weekly</MenuItem>
+                    <MenuItem value="biweekly">Bi-weekly (Every 2 weeks)</MenuItem>
+                    <MenuItem value="monthly">Monthly</MenuItem>
+                  </TextField>
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Number of Occurrences"
+                    value={formData.recurringCount || ''}
+                    onChange={(e) => handleChange('recurringCount', parseInt(e.target.value) || 0)}
+                    helperText="How many times to repeat (0 = until end date)"
+                    inputProps={{ min: 0, max: 52 }}
+                  />
+                </Grid>
+
+                {formData.recurringPattern === 'weekly' && (
+                  <Grid item xs={12}>
+                    <Typography fontSize={13} fontWeight={600} sx={{ mb: 1 }}>
+                      Repeat on days:
+                    </Typography>
+                    <ToggleButtonGroup
+                      value={formData.recurringDays || []}
+                      onChange={(_e, newDays) => handleChange('recurringDays', newDays)}
+                      size="small"
+                      sx={{ flexWrap: 'wrap', gap: 0.5 }}
+                    >
+                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, idx) => (
+                        <ToggleButton
+                          key={idx}
+                          value={idx}
+                          sx={{
+                            px: 1.5, py: 0.5, fontSize: 12, fontWeight: 600,
+                            borderRadius: '20px !important',
+                            '&.Mui-selected': {
+                              bgcolor: 'primary.main', color: '#fff',
+                              '&:hover': { bgcolor: 'primary.dark' },
+                            },
+                          }}
+                        >
+                          {day}
+                        </ToggleButton>
+                      ))}
+                    </ToggleButtonGroup>
+                  </Grid>
+                )}
+
+                <Grid item xs={12} sm={6}>
+                  <DatePicker
+                    label="Recurring End Date"
+                    value={formData.recurringEndDate ? new Date(formData.recurringEndDate) : null}
+                    onChange={(date: Date | null) => handleChange('recurringEndDate', date?.toISOString() || '')}
+                    slotProps={{ textField: { fullWidth: true, helperText: 'When should the recurring schedule stop?' } }}
+                  />
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Alert severity="info" sx={{ fontSize: 13 }}>
+                    This will create the first load now. Future occurrences will be auto-generated based on the schedule you set.
+                    {formData.recurringPattern === 'daily' && ' A new load will be created every day.'}
+                    {formData.recurringPattern === 'weekly' && ` A new load will be created every week${formData.recurringDays?.length ? ' on selected days' : ''}.`}
+                    {formData.recurringPattern === 'biweekly' && ' A new load will be created every 2 weeks.'}
+                    {formData.recurringPattern === 'monthly' && ' A new load will be created every month.'}
+                  </Alert>
+                </Grid>
+              </>
+            )}
 
             {/* Cargo Details */}
             <Grid item xs={12}>

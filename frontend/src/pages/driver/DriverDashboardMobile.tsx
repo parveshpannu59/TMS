@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { loadApi } from '@/api/all.api';
 import { StartTripDialog } from '@/components/driver/StartTripDialog';
 import { DriverFormDialog } from '@/components/driver/DriverFormDialog';
@@ -20,16 +21,35 @@ function vibrate(pattern: number | number[]) {
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  trip_started: 'Trip Started',
-  shipper_check_in: 'Shipper Check-in',
-  shipper_load_in: 'Load In',
-  shipper_load_out: 'Load Out',
+  assigned: 'Assigned',
+  trip_accepted: 'Ready to Start',
+  trip_started: 'On Route to First Stop',
+  shipper_check_in: 'At Shipper',
+  shipper_load_in: 'Loading',
+  shipper_load_out: 'Loaded',
   in_transit: 'In Transit',
-  receiver_check_in: 'Receiver Check-in',
-  receiver_offload: 'Offloaded',
+  receiver_check_in: 'At Receiver',
+  receiver_offload: 'Offloading',
+  delivered: 'Delivered',
+  completed: 'Completed',
+};
+
+const STATUS_COLOR: Record<string, string> = {
+  assigned: '#007aff',
+  trip_accepted: '#34c759',
+  trip_started: '#34c759',
+  shipper_check_in: '#5ac8fa',
+  shipper_load_in: '#5ac8fa',
+  shipper_load_out: '#af52de',
+  in_transit: '#ff9500',
+  receiver_check_in: '#ff2d55',
+  receiver_offload: '#af52de',
+  delivered: '#34c759',
+  completed: '#34c759',
 };
 
 export default function DriverDashboardMobile() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [online, setOnline] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
@@ -80,6 +100,7 @@ export default function DriverDashboardMobile() {
   ) || null;
 
   const displayLoad = activeLoad || acceptedLoad;
+  const completedLoads = loads.filter(l => ['completed', 'delivered'].includes(l.status));
 
   useEffect(() => {
     fetchLoads();
@@ -90,7 +111,6 @@ export default function DriverDashboardMobile() {
   // Live GPS tracking when trip is started (active load)
   useEffect(() => {
     if (!activeLoad?.id) return;
-
     const sendLocation = () => {
       if (!navigator.geolocation) return;
       const loadId = activeLoad.id || (activeLoad as any)._id;
@@ -109,7 +129,6 @@ export default function DriverDashboardMobile() {
         { enableHighAccuracy: true, maximumAge: 60000, timeout: 10000 }
       );
     };
-
     sendLocation();
     const interval = setInterval(sendLocation, 90000);
     return () => clearInterval(interval);
@@ -171,283 +190,351 @@ export default function DriverDashboardMobile() {
     const hasForm = !!(displayLoad as any).driverFormDetails;
     if (['assigned', 'trip_accepted'].includes(s)) {
       if (!hasForm)
-        return { label: 'Fill Trip Form', fn: () => { vibrate(30); setDriverFormDialogOpen(true); } };
-      return { label: 'Start Trip', fn: () => { vibrate(30); setStartTripDialogOpen(true); } };
+        return { label: t('driverApp.fillTripForm'), fn: () => { vibrate(30); setDriverFormDialogOpen(true); } };
+      return { label: t('driverApp.startTrip'), fn: () => { vibrate(30); setStartTripDialogOpen(true); } };
     }
     if (s === 'trip_started')
-      return { label: 'Shipper Check-in', fn: () => { vibrate(30); setShipperCheckInDialogOpen(true); } };
+      return { label: t('driverApp.arrivedAtPickup'), fn: () => { vibrate(30); setShipperCheckInDialogOpen(true); } };
     if (s === 'shipper_check_in')
-      return { label: 'Load In', fn: handleLoadIn };
+      return { label: t('driverApp.confirmLoaded'), fn: handleLoadIn };
     if (s === 'shipper_load_in')
-      return { label: 'Load Out (BOL)', fn: () => { vibrate(30); setLoadOutDialogOpen(true); } };
+      return { label: t('driverApp.uploadBolDepart'), fn: () => { vibrate(30); setLoadOutDialogOpen(true); } };
     if (['shipper_load_out', 'in_transit'].includes(s))
-      return { label: 'Receiver Check-in', fn: handleReceiverCheckIn };
+      return { label: t('driverApp.arrivedAtDelivery'), fn: handleReceiverCheckIn };
     if (s === 'receiver_check_in')
-      return { label: 'Offload (POD)', fn: () => { vibrate(30); setReceiverOffloadDialogOpen(true); } };
+      return { label: t('driverApp.uploadPodOffload'), fn: () => { vibrate(30); setReceiverOffloadDialogOpen(true); } };
     if (s === 'receiver_offload')
-      return { label: 'End Trip', fn: handleOpenEndTrip };
+      return { label: t('driverApp.endTrip'), fn: handleOpenEndTrip };
     return null;
   }, [displayLoad, handleLoadIn, handleReceiverCheckIn, handleOpenEndTrip]);
 
   const primaryAction = useMemo(() => {
     if (nextAction) return { label: nextAction.label, onClick: nextAction.fn };
-    if (!displayLoad) return { label: 'Start Trip', onClick: () => { vibrate(30); setToast('No trip assigned'); } };
-    return { label: 'Refresh', onClick: () => fetchLoads() };
-  }, [nextAction, displayLoad, fetchLoads]);
+    if (!displayLoad) return { label: t('driverApp.viewAll'), onClick: () => navigate('/driver/mobile/trips') };
+    return { label: t('common.retry'), onClick: () => fetchLoads() };
+  }, [nextAction, displayLoad, fetchLoads, navigate]);
 
-  const pickupCity = displayLoad?.pickupLocation?.city || displayLoad?.pickupLocation?.state
-    ? `${displayLoad?.pickupLocation?.city || ''}, ${displayLoad?.pickupLocation?.state || ''}`.trim()
-    : '—';
-  const deliveryCity = displayLoad?.deliveryLocation?.city || displayLoad?.deliveryLocation?.state
-    ? `${displayLoad?.deliveryLocation?.city || ''}, ${displayLoad?.deliveryLocation?.state || ''}`.trim()
-    : '—';
+  const formatLocation = (loc: any) => {
+    if (!loc) return '—';
+    const parts = [loc.city, loc.state].filter(Boolean);
+    return parts.length ? parts.join(', ') : loc.address || '—';
+  };
+
+  const pickupCity = formatLocation(displayLoad?.pickupLocation);
+  const deliveryCity = formatLocation(displayLoad?.deliveryLocation);
+
+  // ─── iOS-Style Colors ─────────────────
+  const ios = {
+    blue: '#007aff',
+    green: '#34c759',
+    orange: '#ff9500',
+    red: '#ff3b30',
+    purple: '#af52de',
+    teal: '#5ac8fa',
+    gray: '#8e8e93',
+  };
 
   return (
-    <div className="dm-content" style={{ display: 'grid', gap: 12 }}>
+    <div className="dm-content" style={{ display: 'grid', gap: 14 }}>
       {error && (
-        <div className="dm-card" style={{ padding: 12, background: 'rgba(255,100,100,0.15)', color: '#ff7676' }}>
+        <div className="dm-card" style={{ padding: 14, background: 'rgba(255,59,48,0.08)', color: ios.red, fontSize: 14, fontWeight: 500 }}>
           {error}
         </div>
       )}
 
-      {acceptedLoad && (
-        <div className="dm-card" style={{ display: 'grid', gap: 12, border: '2px solid rgba(52,211,153,0.4)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--dm-muted)' }}>ACCEPTED TRIP</span>
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={(e) => { e.stopPropagation(); navigate(`/driver/mobile/load/${acceptedLoad.id || (acceptedLoad as any)._id}`); }}
-              onKeyDown={(e) => e.key === 'Enter' && navigate(`/driver/mobile/load/${acceptedLoad.id || (acceptedLoad as any)._id}`)}
-              style={{ fontSize: 12, color: 'var(--dm-accent)', cursor: 'pointer' }}
-            >
-              View details →
-            </span>
-            <span className="dm-chip" style={{ background: 'rgba(52,211,153,0.2)', color: '#34d399' }}>Ready to Start</span>
-          </div>
-          <div>
-            <div style={{ fontSize: 12, color: 'var(--dm-muted)' }}>Load #</div>
-            <div style={{ fontWeight: 800, fontSize: 20 }}>{acceptedLoad.loadNumber}</div>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--dm-muted)' }}>Pickup</div>
-              <div style={{ fontWeight: 600, fontSize: 13 }}>{pickupCity || '—'}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--dm-muted)' }}>Delivery</div>
-              <div style={{ fontWeight: 600, fontSize: 13 }}>{deliveryCity || '—'}</div>
-            </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--dm-muted)' }}>Rate</div>
-              <div style={{ fontWeight: 800, fontSize: 18, color: '#34d399' }}>₹{(acceptedLoad.rate || 0).toLocaleString()}</div>
-            </div>
-            <button
-              className="dm-btn"
-              onClick={() => {
-                vibrate(30);
-                if ((acceptedLoad as any).driverFormDetails) {
-                  setStartTripDialogOpen(true);
-                } else {
-                  setDriverFormDialogOpen(true);
-                }
-              }}
-              style={{ background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' }}
-            >
-              {(acceptedLoad as any).driverFormDetails ? 'Start Trip' : 'Fill Trip Form'}
-            </button>
-          </div>
-        </div>
-      )}
-
+      {/* ═══ Active Trip Hero Card ═══ */}
       {activeLoad && (
-        <div className="dm-card" style={{ display: 'grid', gap: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ fontWeight: 700 }}>Active Trip</div>
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={(e) => { e.stopPropagation(); navigate(`/driver/mobile/load/${activeLoad.id || (activeLoad as any)._id}`); }}
-              onKeyDown={(e) => e.key === 'Enter' && navigate(`/driver/mobile/load/${activeLoad.id || (activeLoad as any)._id}`)}
-              style={{ fontSize: 12, color: 'var(--dm-accent)', cursor: 'pointer' }}
-            >
-              View details →
-            </span>
-            <span className="dm-chip">{STATUS_LABELS[activeLoad.status] || activeLoad.status}</span>
-          </div>
-          <div>
-            <div style={{ fontSize: 12, color: 'var(--dm-muted)' }}>Load #{activeLoad.loadNumber}</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
-              <div>
-                <div style={{ fontSize: 11, color: 'var(--dm-muted)' }}>Pickup</div>
-                <div style={{ fontWeight: 600, fontSize: 13 }}>{pickupCity || '—'}</div>
+        <div
+          className="dm-card"
+          style={{
+            padding: 0, overflow: 'hidden', cursor: 'pointer',
+            background: 'linear-gradient(135deg, #007aff 0%, #5856d6 100%)',
+            color: '#fff',
+          }}
+          onClick={() => navigate(`/driver/mobile/tracking/${activeLoad.id || (activeLoad as any)._id}`)}
+        >
+          <div style={{ padding: '20px 18px 16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, opacity: 0.7 }}>{t('driverApp.activeTrip')}</span>
+                {trackingActive && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff', animation: 'ios-pulse 2s infinite' }} />
+                    {t('driverApp.live')}
+                  </span>
+                )}
               </div>
-              <div>
-                <div style={{ fontSize: 11, color: 'var(--dm-muted)' }}>Delivery</div>
-                <div style={{ fontWeight: 600, fontSize: 13 }}>{deliveryCity || '—'}</div>
+              <span style={{
+                padding: '4px 10px', borderRadius: 20,
+                background: 'rgba(255,255,255,0.2)',
+                backdropFilter: 'blur(10px)',
+                fontSize: 12, fontWeight: 600,
+              }}>
+                {STATUS_LABELS[activeLoad.status] || activeLoad.status}
+              </span>
+            </div>
+
+            <div style={{ fontSize: 13, opacity: 0.7, marginBottom: 2 }}>Load #{activeLoad.loadNumber}</div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '12px 0' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 2 }}>{t('driverApp.from')}</div>
+                <div style={{ fontWeight: 700, fontSize: 16 }}>{pickupCity}</div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', opacity: 0.5 }}>
+                <svg width="28" height="14" viewBox="0 0 28 14" fill="none">
+                  <line x1="0" y1="7" x2="24" y2="7" stroke="white" strokeWidth="1.5" strokeDasharray="3 2"/>
+                  <path d="M22 3L27 7L22 11" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+              <div style={{ flex: 1, textAlign: 'right' }}>
+                <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 2 }}>{t('driverApp.to')}</div>
+                <div style={{ fontWeight: 700, fontSize: 16 }}>{deliveryCity}</div>
               </div>
             </div>
           </div>
-          <div style={{ height: 100, background: '#0b1220', border: '1px solid var(--dm-border)', borderRadius: 12, display: 'grid', placeItems: 'center', color: 'var(--dm-muted)', position: 'relative' }}>
-            <div>
-              <div style={{ fontSize: 13 }}>Map preview</div>
-              {trackingActive && (
-                <div style={{ fontSize: 11, color: '#22c55e', marginTop: 4 }}>● Live tracking active</div>
-              )}
+
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '12px 18px',
+            background: 'rgba(0,0,0,0.12)',
+          }}>
+            <div style={{ fontWeight: 800, fontSize: 22 }}>${(activeLoad.rate || 0).toLocaleString()}</div>
+            <div style={{ fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+              {t('driverApp.openTracking')}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
             </div>
           </div>
-          <div className="dm-row">
-            <div className="dm-card" style={{ padding: 10 }}>
-              <div style={{ fontSize: 12, color: 'var(--dm-muted)' }}>Time</div>
-              <div style={{ fontWeight: 700 }}>—</div>
-            </div>
-            <div className="dm-card" style={{ padding: 10 }}>
-              <div style={{ fontSize: 12, color: 'var(--dm-muted)' }}>Earnings</div>
-              <div style={{ fontWeight: 700 }}>₹{(activeLoad.rate || 0).toLocaleString()}</div>
-            </div>
-          </div>
-          {nextAction && (
-            <button className="dm-btn" onClick={primaryAction.onClick} style={{ background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' }}>
-              {nextAction.label}
-            </button>
-          )}
         </div>
       )}
 
-      <div className="dm-card" style={{ display: 'grid', gap: 10 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontWeight: 800, letterSpacing: 0.3 }}>Today</div>
-          <button className="dm-chip" onClick={() => { setOnline((v) => !v); vibrate(15); setToast(online ? 'Offline' : 'Online'); }}>
-            {online ? 'Online' : 'Offline'}
-          </button>
-        </div>
-        <div className="dm-row">
-          <div className="dm-card" style={{ padding: 12 }}>
-            <div style={{ fontSize: 12, color: 'var(--dm-muted)' }}>Next Stop</div>
-            <div style={{ fontWeight: 700 }}>{displayLoad ? (deliveryCity || '—') : '—'}</div>
+      {/* ═══ Accepted Trip Card ═══ */}
+      {acceptedLoad && !activeLoad && (
+        <div className="dm-card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{
+            padding: '6px 18px',
+            background: `${ios.green}12`,
+            borderBottom: `0.5px solid ${ios.green}20`,
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: ios.green }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: ios.green, textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('driverApp.readyToStart')}</span>
           </div>
-          <div className="dm-card" style={{ padding: 12 }}>
-            <div style={{ fontSize: 12, color: 'var(--dm-muted)' }}>ETA</div>
-            <div style={{ fontWeight: 700 }}>{displayLoad?.expectedDeliveryDate ? new Date(displayLoad.expectedDeliveryDate).toLocaleDateString() : '—'}</div>
+          <div style={{ padding: '16px 18px', display: 'grid', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 13, color: 'var(--dm-muted)' }}>{t('driverApp.load')}</div>
+              <div style={{ fontWeight: 700, fontSize: 22, letterSpacing: -0.5 }}>#{acceptedLoad.loadNumber}</div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--dm-muted)', marginBottom: 2 }}>{t('driverApp.pickup')}</div>
+                <div style={{ fontWeight: 600, fontSize: 15 }}>{formatLocation(acceptedLoad.pickupLocation)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--dm-muted)', marginBottom: 2 }}>{t('driverApp.delivery')}</div>
+                <div style={{ fontWeight: 600, fontSize: 15 }}>{formatLocation(acceptedLoad.deliveryLocation)}</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4 }}>
+              <div style={{ fontWeight: 800, fontSize: 24, color: ios.green }}>${(acceptedLoad.rate || 0).toLocaleString()}</div>
+              <button
+                className="dm-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  vibrate(30);
+                  if ((acceptedLoad as any).driverFormDetails) setStartTripDialogOpen(true);
+                  else setDriverFormDialogOpen(true);
+                }}
+                style={{
+                  width: 'auto', padding: '12px 28px',
+                  background: ios.green, borderRadius: 50,
+                  fontSize: 16,
+                }}
+              >
+                {(acceptedLoad as any).driverFormDetails ? t('driverApp.startTrip') : t('driverApp.fillTripForm')}
+              </button>
+            </div>
           </div>
         </div>
-        <div className="dm-row">
-          <button className="dm-btn" onClick={primaryAction.onClick}>{primaryAction.label}</button>
+      )}
+
+      {/* ═══ Quick Actions ═══ */}
+      {activeLoad && (
+        <div style={{ display: 'grid', gap: 10 }}>
           <button
-            className="dm-btn secondary"
-            onClick={() => {
-              vibrate(25);
-              const canScanPOD = activeLoad && ['receiver_check_in', 'receiver_offload'].includes(activeLoad.status);
-              if (canScanPOD) {
-                setScanPodPhoto(null);
-                scanPodInputRef.current?.click();
-              } else {
-                setToast(displayLoad ? 'Complete receiver check-in first' : 'No load at offload stage');
-              }
+            className="dm-btn"
+            onClick={primaryAction.onClick}
+            style={{
+              background: ios.green,
+              borderRadius: 50,
+              fontSize: 17,
+              padding: '16px 24px',
+              fontWeight: 700,
+              boxShadow: `0 4px 16px ${ios.green}40`,
             }}
           >
-            Scan POD
+            {primaryAction.label}
           </button>
-          <input
-            ref={scanPodInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            style={{ display: 'none' }}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                setScanPodPhoto(file);
-                setReceiverOffloadDialogOpen(true);
-              }
-              e.target.value = '';
-            }}
-          />
-        </div>
-      </div>
-
-      <div className="dm-row">
-        <div className="dm-card" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 12, color: 'var(--dm-muted)' }}>Earnings Today</div>
-          <div style={{ fontWeight: 800, fontSize: 22 }}>₹0</div>
-        </div>
-        <div className="dm-card" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 12, color: 'var(--dm-muted)' }}>Trips</div>
-          <div style={{ fontWeight: 800, fontSize: 22 }}>0</div>
-        </div>
-        <div className="dm-card" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 12, color: 'var(--dm-muted)' }}>On-time</div>
-          <div style={{ fontWeight: 800, fontSize: 22 }}>100%</div>
-        </div>
-      </div>
-
-      {!loading && !acceptedLoad && !activeLoad && (
-        <div className="dm-card" style={{ textAlign: 'center', padding: 24, color: 'var(--dm-muted)' }}>
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>No active trip</div>
-          <div style={{ fontSize: 13 }}>Accept an assignment from the notifications to see your trip here.</div>
-        </div>
-      )}
-
-      {activeLoad && (
-        <div className="dm-card" style={{ display: 'grid', gap: 10 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ fontWeight: 700 }}>Trip Expenses</div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--dm-accent)' }}>
-              ₹{tripExpenses?.summary?.total?.toLocaleString() || '0'}
-            </div>
+          <div className="dm-row" style={{ gap: 8 }}>
+            <button
+              className="dm-btn ghost"
+              onClick={() => navigate(`/driver/mobile/tracking/${activeLoad.id || (activeLoad as any)._id}`)}
+              style={{ borderRadius: 12, fontSize: 14 }}
+            >
+              {t('driverApp.liveTracking')}
+            </button>
+            <button
+              className="dm-btn ghost"
+              onClick={() => { vibrate(20); setReportDelayOpen(true); }}
+              style={{ borderRadius: 12, fontSize: 14 }}
+            >
+              {t('driverApp.reportDelay')}
+            </button>
           </div>
-          {(tripExpenses?.expenses?.length ?? 0) > 0 ? (
-            <div style={{ display: 'grid', gap: 6 }}>
-              {tripExpenses?.expenses?.slice(0, 5).map((e: any) => (
-                <div key={e._id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                  <span style={{ textTransform: 'capitalize' }}>{e.category}</span>
-                  <span>₹{e.amount?.toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div style={{ fontSize: 12, color: 'var(--dm-muted)' }}>Log fuel, toll, etc. as you go</div>
-          )}
-          <div className="dm-row">
-            <button className="dm-chip" onClick={() => { setLogExpenseCategory('fuel'); setLogExpenseOpen(true); vibrate(20); }}>Log Fuel</button>
-            <button className="dm-chip" onClick={() => { setLogExpenseCategory('toll'); setLogExpenseOpen(true); vibrate(20); }}>Log Toll</button>
-            <button className="dm-chip" onClick={() => { setLogExpenseCategory('other'); setLogExpenseOpen(true); vibrate(20); }}>Other</button>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            {[
+              { icon: '⛽', label: t('driverApp.fuel'), cat: 'fuel' },
+              { icon: '🛣', label: t('driverApp.toll'), cat: 'toll' },
+              { icon: '🔧', label: t('driverApp.repair'), cat: 'repair' },
+            ].map(({ icon, label, cat }) => (
+              <button
+                key={cat}
+                className="dm-card"
+                onClick={() => { setLogExpenseCategory(cat); setLogExpenseOpen(true); vibrate(20); }}
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  padding: '14px 8px', cursor: 'pointer', border: 'none', textAlign: 'center',
+                }}
+              >
+                <span style={{ fontSize: 22 }}>{icon}</span>
+                <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--dm-muted)' }}>{label}</span>
+              </button>
+            ))}
           </div>
         </div>
       )}
 
-      <div className="dm-card" style={{ display: 'grid', gap: 10 }}>
-        <div style={{ fontWeight: 700 }}>Shortcuts</div>
-        <div className="dm-row">
-          <button className="dm-chip" onClick={() => setToast('Calling dispatch…')}>Call Dispatch</button>
+      {/* ═══ Today Overview ═══ */}
+      <div className="dm-card" style={{ display: 'grid', gap: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontWeight: 700, fontSize: 20, letterSpacing: -0.3 }}>{t('driverApp.overview')}</div>
           <button
             className="dm-chip"
-            onClick={() => {
-              vibrate(20);
-              if (displayLoad) {
-                setReportDelayOpen(true);
-              } else {
-                setToast('No active load');
-              }
+            onClick={() => { setOnline((v) => !v); vibrate(15); setToast(online ? t('driverApp.offDuty') : t('driverApp.onDuty')); }}
+            style={{
+              background: online ? `${ios.green}15` : 'var(--dm-fill)',
+              color: online ? ios.green : 'var(--dm-muted)',
+              fontWeight: 600, fontSize: 13,
             }}
           >
-            Report Delay
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: online ? ios.green : ios.gray, display: 'inline-block', marginRight: 6 }} />
+            {online ? t('driverApp.onDuty') : t('driverApp.offDuty')}
           </button>
         </div>
+
+        {displayLoad && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ background: 'var(--dm-fill)', borderRadius: 12, padding: 14 }}>
+              <div style={{ fontSize: 12, color: 'var(--dm-muted)', marginBottom: 4 }}>{t('driverApp.nextStop')}</div>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>{deliveryCity}</div>
+            </div>
+            <div style={{ background: 'var(--dm-fill)', borderRadius: 12, padding: 14 }}>
+              <div style={{ fontSize: 12, color: 'var(--dm-muted)', marginBottom: 4 }}>{t('driverApp.eta')}</div>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>{displayLoad?.expectedDeliveryDate ? new Date(displayLoad.expectedDeliveryDate).toLocaleDateString() : '—'}</div>
+            </div>
+          </div>
+        )}
+
+        {!displayLoad && !loading && (
+          <button className="dm-btn ghost" onClick={() => navigate('/driver/mobile/trips')} style={{ borderRadius: 12 }}>
+            {t('driverApp.viewMyLoads')}
+          </button>
+        )}
       </div>
 
+      {/* ═══ Stats Grid ═══ */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+        {[
+          { label: t('driverApp.active'), value: loads.filter(l => !['completed', 'delivered', 'cancelled'].includes(l.status)).length, color: ios.blue },
+          { label: t('driverApp.delivered'), value: completedLoads.length, color: ios.green },
+          { label: t('driverApp.expenses'), value: `$${tripExpenses?.summary?.total || 0}`, color: ios.orange },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="dm-card" style={{ textAlign: 'center', padding: 14 }}>
+            <div style={{ fontSize: 12, color: 'var(--dm-muted)', marginBottom: 4 }}>{label}</div>
+            <div style={{ fontWeight: 800, fontSize: 24, color, letterSpacing: -0.5 }}>{value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ═══ Trip Expenses ═══ */}
+      {activeLoad && tripExpenses && (tripExpenses.expenses?.length ?? 0) > 0 && (
+        <div className="dm-card" style={{ display: 'grid', gap: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontWeight: 600, fontSize: 17 }}>{t('driverApp.tripExpenses')}</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: ios.blue }}>
+              ${tripExpenses?.summary?.total?.toLocaleString() || '0'}
+            </div>
+          </div>
+          <div className="dm-inset-group">
+            {tripExpenses.expenses.slice(0, 5).map((e: any) => (
+              <div key={e._id} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', fontSize: 15 }}>
+                <span style={{ textTransform: 'capitalize', color: 'var(--dm-text-secondary)' }}>{e.category}</span>
+                <span style={{ fontWeight: 600 }}>${e.amount?.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Recent Deliveries ═══ */}
+      {completedLoads.length > 0 && (
+        <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ fontWeight: 600, fontSize: 17, padding: '0 4px' }}>{t('driverApp.recentDeliveries')}</div>
+          <div className="dm-inset-group">
+            {completedLoads.slice(0, 4).map((load) => (
+              <div
+                key={load.id || (load as any)._id}
+                style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '14px 16px', cursor: 'pointer',
+                }}
+                onClick={() => navigate(`/driver/mobile/tracking/${load.id || (load as any)._id}`)}
+              >
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 15 }}>#{load.loadNumber}</div>
+                  <div style={{ fontSize: 13, color: 'var(--dm-muted)', marginTop: 2 }}>
+                    {formatLocation(load.pickupLocation)} → {formatLocation(load.deliveryLocation)}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontWeight: 700, color: ios.green, fontSize: 15 }}>${(load.rate || 0).toLocaleString()}</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--dm-muted)" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </div>
+              </div>
+            ))}
+          </div>
+          <button className="dm-btn ghost" onClick={() => navigate('/driver/mobile/trips')} style={{ borderRadius: 12, fontSize: 14, marginTop: 4 }}>
+            {t('driverApp.viewAll')}
+          </button>
+        </div>
+      )}
+
+      {/* ═══ Empty State ═══ */}
+      {!loading && !acceptedLoad && !activeLoad && completedLoads.length === 0 && (
+        <div className="dm-card" style={{ textAlign: 'center', padding: '40px 20px' }}>
+          <div style={{ fontSize: 48, marginBottom: 12, opacity: 0.6 }}>🚛</div>
+          <div style={{ fontWeight: 600, fontSize: 17, marginBottom: 6 }}>{t('driverApp.noActiveTrips')}</div>
+          <div style={{ fontSize: 14, color: 'var(--dm-muted)', lineHeight: 1.5 }}>{t('driverApp.noActiveTripsDesc')}</div>
+        </div>
+      )}
+
+      {/* ═══ Invisible Logic (Dialogs, SOS, Toast) ═══ */}
       {displayLoad && (
         <ReportDelayDialog
           open={reportDelayOpen}
           onClose={() => setReportDelayOpen(false)}
           load={ensureLoadId(displayLoad)}
-          onSuccess={() => {
-            setReportDelayOpen(false);
-            fetchLoads();
-            setToast('Delay reported');
-          }}
+          onSuccess={() => { setReportDelayOpen(false); fetchLoads(); setToast('Delay reported'); }}
         />
       )}
 
@@ -467,9 +554,22 @@ export default function DriverDashboardMobile() {
         />
       )}
 
+      {/* iOS Toast */}
       {toast && (
-        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 90, display: 'grid', placeItems: 'center', pointerEvents: 'none' }}>
-          <div style={{ background: 'rgba(0,0,0,0.85)', color: '#fff', padding: '10px 14px', borderRadius: 999, fontSize: 13 }}>{toast}</div>
+        <div style={{
+          position: 'fixed', left: 16, right: 16, bottom: 100,
+          display: 'grid', placeItems: 'center',
+          pointerEvents: 'none', zIndex: 999,
+          animation: 'ios-fadeUp 0.25s ease',
+        }}>
+          <div style={{
+            background: 'var(--dm-text)', color: 'var(--dm-bg)',
+            padding: '12px 20px', borderRadius: 50,
+            fontSize: 15, fontWeight: 500,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+          }}>
+            {toast}
+          </div>
         </div>
       )}
 
@@ -479,18 +579,14 @@ export default function DriverDashboardMobile() {
             open={driverFormDialogOpen}
             onClose={() => setDriverFormDialogOpen(false)}
             load={ensureLoadId(acceptedLoad)}
-            onSuccess={() => {
-              setDriverFormDialogOpen(false);
-              fetchLoads();
-              setToast('Trip form submitted!');
-            }}
+            onSuccess={() => { setDriverFormDialogOpen(false); fetchLoads(); setToast('Trip form submitted!'); }}
           />
-        <StartTripDialog
-          open={startTripDialogOpen}
-          onClose={() => setStartTripDialogOpen(false)}
-          load={ensureLoadId(acceptedLoad)}
-          onSuccess={() => { setStartTripDialogOpen(false); fetchLoads(); setToast('Trip started!'); }}
-        />
+          <StartTripDialog
+            open={startTripDialogOpen}
+            onClose={() => setStartTripDialogOpen(false)}
+            load={ensureLoadId(acceptedLoad)}
+            onSuccess={() => { setStartTripDialogOpen(false); fetchLoads(); setToast('Trip started!'); }}
+          />
         </>
       )}
 
@@ -531,6 +627,19 @@ export default function DriverDashboardMobile() {
           />
         </>
       )}
+
+      <input
+        ref={scanPodInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) { setScanPodPhoto(file); setReceiverOffloadDialogOpen(true); }
+          e.target.value = '';
+        }}
+      />
     </div>
   );
 }

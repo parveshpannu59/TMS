@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Drawer,
@@ -28,11 +28,14 @@ import {
   History,
   Settings,
   HelpOutline,
+  Chat,
 } from '@mui/icons-material';
-import { Link } from '@mui/material';
+import { Link, Badge } from '@mui/material';
 import { useAuth } from '@hooks/useAuth';
 import { UserRole } from '../../types/user.types';
 import { useTranslation } from 'react-i18next';
+import { messageApi } from '@/api/message.api';
+import { usePusherContext } from '@/contexts/PusherContext';
 
 const DRAWER_WIDTH = 260;
 
@@ -106,6 +109,12 @@ const getMenuItems = (t: (key: string) => string): MenuItem[] => [
     roles: [UserRole.OWNER, UserRole.DISPATCHER],
   },
   {
+    text: 'Messages',
+    icon: <Chat />,
+    path: '/messages',
+    roles: [UserRole.OWNER, UserRole.DISPATCHER],
+  },
+  {
     text: t('navigation.activityHistory'),
     icon: <History />,
     path: '/history',
@@ -127,12 +136,43 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = React.memo(
-  ({ mobileOpen = false, desktopOpen = true, onMobileClose, onDesktopClose }) => {
+  ({ mobileOpen = false, desktopOpen = true, onMobileClose, onDesktopClose: _onDesktopClose }) => {
     const navigate = useNavigate();
     const location = useLocation();
     const { user } = useAuth();
     const theme = useTheme();
     const { t } = useTranslation();
+    const { subscribe } = usePusherContext();
+
+    // Unread message count for badge
+    const [msgUnread, setMsgUnread] = useState(0);
+    const fetchUnread = useCallback(() => {
+      messageApi.getUnreadCount().then(res => setMsgUnread(res.count || 0)).catch(() => {});
+    }, []);
+
+    useEffect(() => {
+      fetchUnread();
+      const id = setInterval(fetchUnread, 30000);
+      return () => clearInterval(id);
+    }, [fetchUnread]);
+
+    // Refresh on Pusher message event
+    useEffect(() => {
+      const unsub = subscribe('message-new', () => fetchUnread());
+      return unsub;
+    }, [subscribe, fetchUnread]);
+
+    // Refresh when messages are read (from chat component)
+    useEffect(() => {
+      const handler = () => fetchUnread();
+      window.addEventListener('messages-read', handler);
+      return () => window.removeEventListener('messages-read', handler);
+    }, [fetchUnread]);
+
+    // Also refresh badge on route changes (especially navigating to/from messages)
+    useEffect(() => {
+      fetchUnread();
+    }, [location.pathname, fetchUnread]);
 
     const filteredMenuItems = useMemo(() => {
       if (!user) return [];
@@ -234,13 +274,27 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(
                         transition: 'color 0.2s ease',
                       }}
                     >
-                      {item.icon}
+                      {item.path === '/messages' && msgUnread > 0 ? (
+                        <Badge
+                          badgeContent={msgUnread > 99 ? '99+' : msgUnread}
+                          color="error"
+                          sx={{
+                            '& .MuiBadge-badge': {
+                              fontSize: 10, fontWeight: 800,
+                              minWidth: 18, height: 18,
+                              borderRadius: 9,
+                            },
+                          }}
+                        >
+                          {item.icon}
+                        </Badge>
+                      ) : item.icon}
                     </ListItemIcon>
                     <ListItemText 
                       primary={item.text}
                       primaryTypographyProps={{
                         fontSize: '0.9375rem',
-                        fontWeight: isSelected ? 600 : 500,
+                        fontWeight: isSelected ? 600 : (item.path === '/messages' && msgUnread > 0 ? 700 : 500),
                       }}
                     />
                   </ListItemButton>

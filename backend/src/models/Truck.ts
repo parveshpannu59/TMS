@@ -37,7 +37,7 @@ const TruckSchema = new Schema({
 // Indexes for optimized queries
 TruckSchema.index({ companyId: 1, unitNumber: 1 }, { unique: true }); // Unique unit number per company
 TruckSchema.index({ companyId: 1, status: 1 }); // Filter by company and status
-TruckSchema.index({ vin: 1 }, { unique: true }); // Unique VIN lookup
+// vin index already created by `unique: true` in field definition
 TruckSchema.index({ currentDriverId: 1 }); // Find truck by driver
 TruckSchema.index({ currentLoadId: 1 }); // Find truck by load
 

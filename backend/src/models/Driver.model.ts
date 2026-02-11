@@ -42,6 +42,9 @@ export interface IDriver extends Document {
   };
   notes?: string;
   createdBy: string;
+  // Real-time presence tracking
+  isOnline?: boolean;
+  lastSeen?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -174,6 +177,15 @@ const driverSchema = new Schema<IDriver>(
       type: String,
       required: true,
     },
+    // Real-time presence tracking
+    isOnline: {
+      type: Boolean,
+      default: false,
+    },
+    lastSeen: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -188,8 +200,7 @@ const driverSchema = new Schema<IDriver>(
   }
 );
 
-driverSchema.index({ phone: 1 });
-driverSchema.index({ licenseNumber: 1 });
+// phone and licenseNumber indexes already created by `unique: true` in field definition
 driverSchema.index({ status: 1 });
 driverSchema.index({ createdBy: 1 });
 driverSchema.index({ userId: 1 }, { sparse: true }); // Sparse index allows multiple null values

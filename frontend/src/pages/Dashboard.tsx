@@ -1,334 +1,46 @@
-// import React, { useMemo } from 'react';
-// import {
-//   Box,
-//   Typography,
-//   Grid,
-//   Card,
-//   CardContent,
-//   LinearProgress,
-//   Chip,
-//   Avatar,
-//   useTheme,
-//   alpha,
-// } from '@mui/material';
-// import {
-//   LocalShipping,
-//   People,
-//   Assignment,
-//   CheckCircle,
-//   TrendingUp,
-//   Schedule,
-//   Warning,
-// } from '@mui/icons-material';
-// import { DashboardLayout } from '@layouts/DashboardLayout';
-// import { useAuth } from '@hooks/useAuth';
-
-// interface StatCardProps {
-//   title: string;
-//   value: string | number;
-//   icon: React.ReactNode;
-//   color: string;
-//   trend?: number;
-//   subtitle?: string;
-// }
-
-// const StatCard: React.FC<StatCardProps> = React.memo(({ title, value, icon, color, trend, subtitle }) => {
-//   const theme = useTheme();
-//   const colorMap: Record<string, string> = {
-//     primary: theme.palette.primary.main,
-//     success: theme.palette.success.main,
-//     info: theme.palette.info.main,
-//     warning: theme.palette.warning.main,
-//     error: theme.palette.error.main,
-//   };
-
-//   const bgColor = colorMap[color] || theme.palette.primary.main;
-
-//   return (
-//     <Card
-//       sx={{
-//         height: '100%',
-//         position: 'relative',
-//         overflow: 'hidden',
-//         transition: 'all 0.3s ease',
-//         '&:hover': {
-//           transform: 'translateY(-4px)',
-//           boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
-//         },
-//         '&::before': {
-//           content: '""',
-//           position: 'absolute',
-//           top: 0,
-//           left: 0,
-//           right: 0,
-//           height: '4px',
-//           background: `linear-gradient(90deg, ${bgColor} 0%, ${alpha(bgColor, 0.5)} 100%)`,
-//         },
-//       }}
-//     >
-//       <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
-//         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
-//           <Box sx={{ flex: 1 }}>
-//             <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5, fontSize: '0.8125rem', fontWeight: 500 }}>
-//               {title}
-//             </Typography>
-//             <Typography variant="h4" fontWeight={700} sx={{ mb: 0.5, lineHeight: 1.2 }}>
-//               {value}
-//             </Typography>
-//             {subtitle && (
-//               <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-//                 {subtitle}
-//               </Typography>
-//             )}
-//           </Box>
-//           <Avatar
-//             sx={{
-//               width: 48,
-//               height: 48,
-//               bgcolor: alpha(bgColor, 0.1),
-//               color: bgColor,
-//             }}
-//           >
-//             {icon}
-//           </Avatar>
-//         </Box>
-//         {trend !== undefined && (
-//           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1.5 }}>
-//             <TrendingUp sx={{ fontSize: 14, color: theme.palette.success.main }} />
-//             <Typography variant="caption" sx={{ color: theme.palette.success.main, fontWeight: 600 }}>
-//               {trend > 0 ? '+' : ''}{trend}%
-//             </Typography>
-//             <Typography variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
-//               vs last month
-//             </Typography>
-//           </Box>
-//         )}
-//       </CardContent>
-//     </Card>
-//   );
-// });
-
-// StatCard.displayName = 'StatCard';
-
-// const DashboardComponent: React.FC = React.memo(() => {
-//   const { user } = useAuth();
-//   const theme = useTheme();
-
-//   const stats = useMemo(
-//     () => [
-//       { 
-//         title: 'Active Loads', 
-//         value: 12, 
-//         icon: <Assignment sx={{ fontSize: 24 }} />, 
-//         color: 'primary',
-//         trend: 12,
-//         subtitle: '8 in transit'
-//       },
-//       { 
-//         title: 'Total Drivers', 
-//         value: 8, 
-//         icon: <People sx={{ fontSize: 24 }} />, 
-//         color: 'success',
-//         trend: 5,
-//         subtitle: '6 available'
-//       },
-//       { 
-//         title: 'Total Trucks', 
-//         value: 10, 
-//         icon: <LocalShipping sx={{ fontSize: 24 }} />, 
-//         color: 'info',
-//         trend: 8,
-//         subtitle: '9 operational'
-//       },
-//       { 
-//         title: 'Completed Today', 
-//         value: 5, 
-//         icon: <CheckCircle sx={{ fontSize: 24 }} />, 
-//         color: 'warning',
-//         subtitle: 'On track for 12'
-//       },
-//     ],
-//     []
-//   );
-
-//   const quickActions = useMemo(
-//     () => [
-//       { label: 'Pending Loads', value: 3, color: theme.palette.warning.main },
-//       { label: 'In Transit', value: 8, color: theme.palette.info.main },
-//       { label: 'Delayed', value: 1, color: theme.palette.error.main },
-//     ],
-//     [theme]
-//   );
-
-//   return (
-//     <DashboardLayout>
-//       <Box sx={{ maxWidth: '100%', height: 'calc(100vh - 120px)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-//         {/* Header - Compact */}
-//         <Box sx={{ mb: 3 }}>
-//           <Typography variant="h5" fontWeight={700} sx={{ mb: 0.5 }}>
-//             Welcome back, {user?.name?.split(' ')[0]}! 👋
-//           </Typography>
-//           <Typography variant="body2" color="text.secondary">
-//             Here's your fleet overview for today
-//           </Typography>
-//         </Box>
-
-//         {/* Stats Grid - Compact */}
-//         <Grid container spacing={2} sx={{ mb: 3 }}>
-//           {stats.map((stat) => (
-//             <Grid item xs={12} sm={6} lg={3} key={stat.title}>
-//               <StatCard {...stat} />
-//             </Grid>
-//           ))}
-//         </Grid>
-
-//         {/* Bottom Section - Compact Grid */}
-//         <Grid container spacing={2} sx={{ flex: 1, minHeight: 0 }}>
-//           {/* Quick Actions */}
-//           <Grid item xs={12} md={4}>
-//             <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-//               <CardContent sx={{ flex: 1, p: 2.5, '&:last-child': { pb: 2.5 } }}>
-//                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-//                   <Schedule sx={{ fontSize: 20, color: theme.palette.primary.main }} />
-//                   <Typography variant="h6" fontWeight={600}>
-//                     Load Status
-//                   </Typography>
-//                 </Box>
-//                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-//                   {quickActions.map((action) => (
-//                     <Box key={action.label}>
-//                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-//                         <Typography variant="body2" fontWeight={500}>
-//                           {action.label}
-//                         </Typography>
-//                         <Chip
-//                           label={action.value}
-//                           size="small"
-//                           sx={{
-//                             bgcolor: alpha(action.color, 0.1),
-//                             color: action.color,
-//                             fontWeight: 600,
-//                             height: 24,
-//                           }}
-//                         />
-//                       </Box>
-//                       <LinearProgress
-//                         variant="determinate"
-//                         value={(action.value / 12) * 100}
-//                         sx={{
-//                           height: 6,
-//                           borderRadius: 3,
-//                           bgcolor: alpha(action.color, 0.1),
-//                           '& .MuiLinearProgress-bar': {
-//                             bgcolor: action.color,
-//                             borderRadius: 3,
-//                           },
-//                         }}
-//                       />
-//                     </Box>
-//                   ))}
-//                 </Box>
-//               </CardContent>
-//             </Card>
-//           </Grid>
-
-//           {/* Recent Activity */}
-//           <Grid item xs={12} md={8}>
-//             <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-//               <CardContent sx={{ flex: 1, p: 2.5, '&:last-child': { pb: 2.5 } }}>
-//                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-//                   <TrendingUp sx={{ fontSize: 20, color: theme.palette.success.main }} />
-//                   <Typography variant="h6" fontWeight={600}>
-//                     Recent Activity
-//                   </Typography>
-//                 </Box>
-//                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-//                   {[
-//                     { text: 'Load #1234 delivered successfully', time: '2 hours ago', status: 'success' },
-//                     { text: 'Driver John checked in at warehouse', time: '4 hours ago', status: 'info' },
-//                     { text: 'New load assigned to Truck #05', time: '6 hours ago', status: 'primary' },
-//                     { text: 'Maintenance scheduled for Truck #08', time: '1 day ago', status: 'warning' },
-//                   ].map((activity, index) => (
-//                     <Box
-//                       key={index}
-//                       sx={{
-//                         display: 'flex',
-//                         alignItems: 'flex-start',
-//                         gap: 1.5,
-//                         p: 1.5,
-//                         borderRadius: 2,
-//                         bgcolor: alpha(theme.palette.primary.main, 0.02),
-//                         transition: 'all 0.2s ease',
-//                         '&:hover': {
-//                           bgcolor: alpha(theme.palette.primary.main, 0.05),
-//                         },
-//                       }}
-//                     >
-//                       <Box
-//                         sx={{
-//                           width: 8,
-//                           height: 8,
-//                           borderRadius: '50%',
-//                           bgcolor: theme.palette[activity.status as keyof typeof theme.palette]?.main || theme.palette.primary.main,
-//                           mt: 0.75,
-//                           flexShrink: 0,
-//                         }}
-//                       />
-//                       <Box sx={{ flex: 1, minWidth: 0 }}>
-//                         <Typography variant="body2" fontWeight={500} sx={{ mb: 0.25 }}>
-//                           {activity.text}
-//                         </Typography>
-//                         <Typography variant="caption" color="text.secondary">
-//                           {activity.time}
-//                         </Typography>
-//                       </Box>
-//                     </Box>
-//                   ))}
-//                 </Box>
-//               </CardContent>
-//             </Card>
-//           </Grid>
-//         </Grid>
-//       </Box>
-//     </DashboardLayout>
-//   );
-// });
-
-// DashboardComponent.displayName = 'Dashboard';
-
-// export default DashboardComponent;
 import { Suspense, useMemo, useCallback, useState } from 'react';
-import { 
-  Box, 
-  Grid, 
-  Typography, 
-  Select, 
-  MenuItem, 
-  Button,
+import {
+  Box,
+  Grid,
+  Typography,
+  Select,
+  MenuItem,
   IconButton,
-  Toolbar,
   Alert,
   Skeleton,
-  Card,
-  CardContent,
-  Chip,
+  alpha,
   useTheme,
-  useMediaQuery,
-  Divider,
+  Chip,
+  LinearProgress,
+  Button,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import SettingsIcon from '@mui/icons-material/Settings';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import PeopleIcon from '@mui/icons-material/People';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
-import ReceiptIcon from '@mui/icons-material/Receipt';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import RouteIcon from '@mui/icons-material/Route';
-import DescriptionIcon from '@mui/icons-material/Description';
+import ReceiptIcon from '@mui/icons-material/Receipt';
 import PendingActionsIcon from '@mui/icons-material/PendingActions';
+import DescriptionIcon from '@mui/icons-material/Description';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import TrendingDownIcon from '@mui/icons-material/TrendingDown';
+import SpeedIcon from '@mui/icons-material/Speed';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  Tooltip,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
 import { useDashboard } from '../hooks/useDashboard';
 import { useDashboardLayout } from '../hooks/useDashboardLayout';
@@ -341,11 +53,432 @@ import { useAuth } from '../hooks/useAuth';
 import { DashboardLayout } from '@layouts/DashboardLayout';
 import { useTranslation } from 'react-i18next';
 
+// ─── Mini Donut Component ──────────────────────────
+const MiniDonut = ({
+  data,
+  size = 100,
+  innerRadius = 30,
+  outerRadius = 45,
+  centerLabel,
+  centerValue,
+}: {
+  data: { name: string; value: number; color: string }[];
+  size?: number;
+  innerRadius?: number;
+  outerRadius?: number;
+  centerLabel?: string;
+  centerValue?: string | number;
+}) => {
+  const theme = useTheme();
+  return (
+    <Box sx={{ width: size, height: size, position: 'relative' }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={data}
+            cx="50%"
+            cy="50%"
+            innerRadius={innerRadius}
+            outerRadius={outerRadius}
+            paddingAngle={3}
+            dataKey="value"
+            strokeWidth={0}
+          >
+            {data.map((entry, i) => (
+              <Cell key={i} fill={entry.color} />
+            ))}
+          </Pie>
+        </PieChart>
+      </ResponsiveContainer>
+      {centerValue !== undefined && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            textAlign: 'center',
+          }}
+        >
+          <Typography variant="body2" fontWeight={800} sx={{ lineHeight: 1, fontSize: '0.9rem' }}>
+            {centerValue}
+          </Typography>
+          {centerLabel && (
+            <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.55rem' }}>
+              {centerLabel}
+            </Typography>
+          )}
+        </Box>
+      )}
+    </Box>
+  );
+};
+
+// ─── Revenue/Expense Bar Comparison ──────────────────────────
+const FinancialComparisonBar = ({
+  revenue,
+  expenses,
+  profit,
+  margin,
+}: {
+  revenue: number;
+  expenses: number;
+  profit: number;
+  margin: number;
+}) => {
+  const theme = useTheme();
+  const maxVal = Math.max(revenue, expenses) || 1;
+
+  return (
+    <Box
+      sx={{
+        borderRadius: 3,
+        p: 3,
+        background: theme.palette.mode === 'dark'
+          ? alpha(theme.palette.background.paper, 0.6)
+          : '#fff',
+        border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        height: '100%',
+      }}
+    >
+      <Box display="flex" alignItems="center" gap={1} mb={3}>
+        <Box
+          sx={{
+            background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+            borderRadius: 2,
+            p: 0.8,
+            display: 'flex',
+            color: 'white',
+          }}
+        >
+          <TrendingUpIcon sx={{ fontSize: 18 }} />
+        </Box>
+        <Typography variant="subtitle1" fontWeight={700}>
+          Financial Overview
+        </Typography>
+      </Box>
+
+      {/* Revenue */}
+      <Box mb={2.5}>
+        <Box display="flex" justifyContent="space-between" mb={0.5}>
+          <Typography variant="body2" fontWeight={500} color="text.secondary">
+            Revenue
+          </Typography>
+          <Typography variant="body2" fontWeight={700} sx={{ color: '#22c55e' }}>
+            ${revenue.toLocaleString()}
+          </Typography>
+        </Box>
+        <Box sx={{ height: 10, borderRadius: 5, bgcolor: alpha('#22c55e', 0.1), overflow: 'hidden' }}>
+          <Box
+            sx={{
+              height: '100%',
+              width: `${(revenue / maxVal) * 100}%`,
+              borderRadius: 5,
+              background: 'linear-gradient(90deg, #22c55e, #4ade80)',
+              transition: 'width 1s ease',
+            }}
+          />
+        </Box>
+      </Box>
+
+      {/* Expenses */}
+      <Box mb={2.5}>
+        <Box display="flex" justifyContent="space-between" mb={0.5}>
+          <Typography variant="body2" fontWeight={500} color="text.secondary">
+            Expenses
+          </Typography>
+          <Typography variant="body2" fontWeight={700} sx={{ color: '#ef4444' }}>
+            ${expenses.toLocaleString()}
+          </Typography>
+        </Box>
+        <Box sx={{ height: 10, borderRadius: 5, bgcolor: alpha('#ef4444', 0.1), overflow: 'hidden' }}>
+          <Box
+            sx={{
+              height: '100%',
+              width: `${(expenses / maxVal) * 100}%`,
+              borderRadius: 5,
+              background: 'linear-gradient(90deg, #ef4444, #f87171)',
+              transition: 'width 1s ease',
+            }}
+          />
+        </Box>
+      </Box>
+
+      {/* Profit summary */}
+      <Box
+        sx={{
+          borderRadius: 2,
+          p: 2,
+          bgcolor: profit >= 0 ? alpha('#22c55e', 0.06) : alpha('#ef4444', 0.06),
+          border: `1px solid ${profit >= 0 ? alpha('#22c55e', 0.15) : alpha('#ef4444', 0.15)}`,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <Box>
+          <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.65rem' }}>
+            Net Profit
+          </Typography>
+          <Typography variant="h5" fontWeight={800} sx={{ color: profit >= 0 ? '#22c55e' : '#ef4444' }}>
+            ${Math.abs(profit).toLocaleString()}
+          </Typography>
+        </Box>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.5,
+            bgcolor: profit >= 0 ? alpha('#22c55e', 0.12) : alpha('#ef4444', 0.12),
+            borderRadius: 1.5,
+            px: 1.2,
+            py: 0.4,
+          }}
+        >
+          {profit >= 0 ? (
+            <TrendingUpIcon sx={{ fontSize: 16, color: '#22c55e' }} />
+          ) : (
+            <TrendingDownIcon sx={{ fontSize: 16, color: '#ef4444' }} />
+          )}
+          <Typography
+            variant="body2"
+            fontWeight={700}
+            sx={{ color: profit >= 0 ? '#22c55e' : '#ef4444', fontSize: '0.82rem' }}
+          >
+            {margin.toFixed(1)}%
+          </Typography>
+        </Box>
+      </Box>
+    </Box>
+  );
+};
+
+// ─── Invoice Donut Card ──────────────────────────
+const InvoiceDonutCard = ({
+  invoices,
+}: {
+  invoices: {
+    total: number;
+    paid: number;
+    unpaid: number;
+    overdue: number;
+    totalAmount: number;
+    paidAmount: number;
+    unpaidAmount: number;
+  };
+}) => {
+  const theme = useTheme();
+  const donutData = [
+    { name: 'Paid', value: invoices.paid || 0, color: '#22c55e' },
+    { name: 'Unpaid', value: invoices.unpaid || 0, color: '#f59e0b' },
+    { name: 'Overdue', value: invoices.overdue || 0, color: '#ef4444' },
+  ].filter((d) => d.value > 0);
+
+  // If all zero, show a placeholder
+  if (donutData.length === 0) {
+    donutData.push({ name: 'No Data', value: 1, color: alpha('#94a3b8', 0.2) });
+  }
+
+  const stats = [
+    { label: 'Total', value: invoices.total, amount: invoices.totalAmount, color: '#3b82f6', icon: <ReceiptIcon sx={{ fontSize: 16 }} /> },
+    { label: 'Paid', value: invoices.paid, amount: invoices.paidAmount, color: '#22c55e', icon: <CheckCircleIcon sx={{ fontSize: 16 }} /> },
+    { label: 'Unpaid', value: invoices.unpaid, amount: invoices.unpaidAmount, color: '#f59e0b', icon: <PendingActionsIcon sx={{ fontSize: 16 }} /> },
+    { label: 'Overdue', value: invoices.overdue, amount: 0, color: '#ef4444', icon: <DescriptionIcon sx={{ fontSize: 16 }} /> },
+  ];
+
+  return (
+    <Box
+      sx={{
+        borderRadius: 3,
+        p: 3,
+        height: '100%',
+        background: theme.palette.mode === 'dark'
+          ? alpha(theme.palette.background.paper, 0.6)
+          : '#fff',
+        border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+      }}
+    >
+      <Box display="flex" alignItems="center" gap={1} mb={2.5}>
+        <Box
+          sx={{
+            background: 'linear-gradient(135deg, #8b5cf6, #a855f7)',
+            borderRadius: 2,
+            p: 0.8,
+            display: 'flex',
+            color: 'white',
+          }}
+        >
+          <ReceiptIcon sx={{ fontSize: 18 }} />
+        </Box>
+        <Typography variant="subtitle1" fontWeight={700}>
+          Invoices
+        </Typography>
+      </Box>
+
+      <Box display="flex" alignItems="center" gap={3}>
+        <MiniDonut
+          data={donutData}
+          size={110}
+          innerRadius={35}
+          outerRadius={50}
+          centerValue={invoices.total}
+          centerLabel="Total"
+        />
+
+        <Box flex={1}>
+          {stats.map((s) => (
+            <Box key={s.label} display="flex" alignItems="center" justifyContent="space-between" py={0.6}>
+              <Box display="flex" alignItems="center" gap={0.8}>
+                <Box sx={{ color: s.color, display: 'flex' }}>{s.icon}</Box>
+                <Typography variant="body2" fontWeight={500} sx={{ fontSize: '0.8rem' }}>
+                  {s.label}
+                </Typography>
+              </Box>
+              <Box textAlign="right">
+                <Typography variant="body2" fontWeight={700} sx={{ fontSize: '0.82rem' }}>
+                  {s.value}
+                </Typography>
+                {s.amount > 0 && (
+                  <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.65rem' }}>
+                    ${s.amount.toLocaleString()}
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+          ))}
+        </Box>
+      </Box>
+    </Box>
+  );
+};
+
+// ─── Operational Metrics with Mini Donuts ──────────────────────────
+const OperationalMetricsCard = ({
+  metrics,
+}: {
+  metrics: {
+    totalLoads: number;
+    assignedDrivers: number;
+    completedLoads: number;
+    totalDistanceMiles: number;
+    totalDistanceKm: string;
+  };
+}) => {
+  const theme = useTheme();
+  const completionRate = metrics.totalLoads > 0
+    ? Math.round((metrics.completedLoads / metrics.totalLoads) * 100)
+    : 0;
+
+  const items = [
+    {
+      label: 'Total Loads',
+      value: metrics.totalLoads,
+      icon: <LocalShippingIcon sx={{ fontSize: 22 }} />,
+      color: '#3b82f6',
+      donut: [
+        { name: 'Completed', value: metrics.completedLoads, color: '#22c55e' },
+        { name: 'Active', value: Math.max(metrics.totalLoads - metrics.completedLoads, 0), color: alpha('#3b82f6', 0.2) },
+      ],
+    },
+    {
+      label: 'Active Drivers',
+      value: metrics.assignedDrivers,
+      icon: <PeopleIcon sx={{ fontSize: 22 }} />,
+      color: '#8b5cf6',
+      donut: null,
+    },
+    {
+      label: 'Completed',
+      value: metrics.completedLoads,
+      subtitle: `${completionRate}% rate`,
+      icon: <CheckCircleIcon sx={{ fontSize: 22 }} />,
+      color: '#22c55e',
+      donut: null,
+    },
+    {
+      label: 'Distance',
+      value: `${metrics.totalDistanceMiles.toFixed(0)} mi`,
+      subtitle: `${metrics.totalDistanceKm} km`,
+      icon: <RouteIcon sx={{ fontSize: 22 }} />,
+      color: '#06b6d4',
+      donut: null,
+    },
+  ];
+
+  return (
+    <Box
+      sx={{
+        borderRadius: 3,
+        p: 3,
+        background: theme.palette.mode === 'dark'
+          ? alpha(theme.palette.background.paper, 0.6)
+          : '#fff',
+        border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+      }}
+    >
+      <Box display="flex" alignItems="center" gap={1} mb={2.5}>
+        <Box
+          sx={{
+            background: 'linear-gradient(135deg, #06b6d4, #0891b2)',
+            borderRadius: 2,
+            p: 0.8,
+            display: 'flex',
+            color: 'white',
+          }}
+        >
+          <SpeedIcon sx={{ fontSize: 18 }} />
+        </Box>
+        <Typography variant="subtitle1" fontWeight={700}>
+          Operations
+        </Typography>
+      </Box>
+
+      <Grid container spacing={2}>
+        {items.map((item) => (
+          <Grid item xs={6} sm={3} key={item.label}>
+            <Box
+              sx={{
+                textAlign: 'center',
+                p: 1.5,
+                borderRadius: 2,
+                bgcolor: alpha(item.color, 0.04),
+                border: `1px solid ${alpha(item.color, 0.08)}`,
+                transition: 'all 0.2s',
+                '&:hover': {
+                  bgcolor: alpha(item.color, 0.08),
+                  transform: 'translateY(-2px)',
+                },
+              }}
+            >
+              <Box sx={{ color: item.color, mb: 0.5, display: 'flex', justifyContent: 'center' }}>
+                {item.icon}
+              </Box>
+              <Typography variant="h5" fontWeight={800}>
+                {item.value}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" fontWeight={500}>
+                {item.label}
+              </Typography>
+              {(item as any).subtitle && (
+                <Typography variant="caption" display="block" color="text.disabled" sx={{ fontSize: '0.65rem' }}>
+                  {(item as any).subtitle}
+                </Typography>
+              )}
+            </Box>
+          </Grid>
+        ))}
+      </Grid>
+    </Box>
+  );
+};
+
+// ─── Main Dashboard ──────────────────────────
 const Dashboard = () => {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
-  const [dateRange, setDateRange] = useState('today');
+  const [dateRange, setDateRange] = useState('month');
   const { data, loading, error, refetch } = useDashboard(dateRange);
   const { resetLayout, loading: layoutLoading } = useDashboardLayout();
   const { user } = useAuth();
@@ -358,15 +491,8 @@ const Dashboard = () => {
     setTimeout(() => setSuccessMessage(null), 3000);
   }, [refetch, t]);
 
-  const handleResetLayout = useCallback(async () => {
-    await resetLayout();
-    setSuccessMessage(t('dashboard.layoutReset'));
-    setTimeout(() => setSuccessMessage(null), 3000);
-  }, [resetLayout, t]);
-
   const kpiWidgets = useMemo(() => {
     if (!data) return [];
-    
     return [
       {
         id: 'kpi-loads',
@@ -375,7 +501,7 @@ const Dashboard = () => {
         subtitle: `${data.kpis.runningLateCount} ${t('dashboard.runningLate')}`,
         trend: data.kpis.trends.loads,
         icon: <LocalShippingIcon />,
-        color: 'primary.main'
+        color: 'primary.main',
       },
       {
         id: 'kpi-drivers',
@@ -384,7 +510,7 @@ const Dashboard = () => {
         subtitle: `${data.kpis.availableDrivers} ${t('dashboard.available')}`,
         trend: data.kpis.trends.drivers,
         icon: <PeopleIcon />,
-        color: 'success.main'
+        color: 'success.main',
       },
       {
         id: 'kpi-completed',
@@ -392,99 +518,26 @@ const Dashboard = () => {
         value: data.kpis.completedToday,
         subtitle: t('dashboard.onTrackFor', { count: data.kpis.onTrack }),
         icon: <CheckCircleIcon />,
-        color: 'warning.main'
-      }
+        color: 'warning.main',
+      },
     ];
   }, [data, t]);
-
-  // Financial metrics widgets
-  const financialWidgets = useMemo(() => {
-    if (!data?.financialMetrics) return [];
-    
-    const fm = data.financialMetrics;
-    return [
-      {
-        id: 'revenue',
-        title: t('dashboard.totalRevenue'),
-        value: `$${fm.totalRevenue.toLocaleString()}`,
-        subtitle: t('dashboard.completedLoads'),
-        icon: <AttachMoneyIcon />,
-        color: 'success.main',
-        trend: undefined
-      },
-      {
-        id: 'profit',
-        title: t('dashboard.totalProfit'),
-        value: `$${fm.totalProfit.toLocaleString()}`,
-        subtitle: `${fm.profitMargin.toFixed(2)}% ${t('dashboard.margin')}`,
-        icon: <AccountBalanceIcon />,
-        color: fm.totalProfit >= 0 ? 'success.main' : 'error.main',
-        trend: undefined
-      },
-      {
-        id: 'distance',
-        title: t('dashboard.distanceTraveled'),
-        value: `${fm.totalDistanceMiles.toFixed(0)} mi`,
-        subtitle: `${fm.totalDistanceKm.toFixed(2)} km`,
-        icon: <RouteIcon />,
-        color: 'info.main',
-        trend: undefined
-      }
-    ];
-  }, [data]);
-
-  // Invoices widgets
-  const invoiceWidgets = useMemo(() => {
-    if (!data?.invoices) return [];
-    
-    const inv = data.invoices;
-    return [
-      {
-        id: 'total-invoices',
-        title: t('dashboard.totalInvoices'),
-        value: inv.total,
-        subtitle: `$${inv.totalAmount.toLocaleString()}`,
-        icon: <ReceiptIcon />,
-        color: 'primary.main'
-      },
-      {
-        id: 'paid-invoices',
-        title: t('dashboard.paid'),
-        value: inv.paid,
-        subtitle: `$${inv.paidAmount.toLocaleString()}`,
-        icon: <CheckCircleIcon />,
-        color: 'success.main'
-      },
-      {
-        id: 'unpaid-invoices',
-        title: t('dashboard.unpaid'),
-        value: inv.unpaid,
-        subtitle: `$${inv.unpaidAmount.toLocaleString()}`,
-        icon: <PendingActionsIcon />,
-        color: 'warning.main'
-      },
-      {
-        id: 'overdue-invoices',
-        title: t('dashboard.overdue'),
-        value: inv.overdue,
-        subtitle: t('dashboard.requiresAttention'),
-        icon: <DescriptionIcon />,
-        color: 'error.main'
-      }
-    ];
-  }, [data, t]);
-
-  // Operational metrics
-  const operationalMetrics = data?.operationalMetrics;
 
   if (loading || layoutLoading) {
     return (
       <Box sx={{ p: 3 }}>
         <Skeleton variant="text" width={300} height={40} sx={{ mb: 3 }} />
-        <Grid container spacing={3}>
+        <Grid container spacing={2.5}>
           {[1, 2, 3, 4].map((i) => (
             <Grid item xs={12} sm={6} md={3} key={i}>
-              <Skeleton variant="rectangular" height={120} />
+              <Skeleton variant="rounded" height={130} sx={{ borderRadius: 3 }} />
+            </Grid>
+          ))}
+        </Grid>
+        <Grid container spacing={2.5} mt={1}>
+          {[1, 2].map((i) => (
+            <Grid item xs={12} md={6} key={i}>
+              <Skeleton variant="rounded" height={280} sx={{ borderRadius: 3 }} />
             </Grid>
           ))}
         </Grid>
@@ -495,11 +548,14 @@ const Dashboard = () => {
   if (error) {
     return (
       <Box sx={{ p: 3 }}>
-        <Alert severity="error" action={
-          <Button size="small" onClick={handleRefresh}>
-            {t('common.retry')}
-          </Button>
-        }>
+        <Alert
+          severity="error"
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              {t('common.retry')}
+            </Button>
+          }
+        >
           {error}
         </Alert>
       </Box>
@@ -508,195 +564,167 @@ const Dashboard = () => {
 
   if (!data) return null;
 
+  const fm = data.financialMetrics;
+  const inv = data.invoices;
+  const ops = data.operationalMetrics;
+
+  const dateRangeLabel =
+    dateRange === 'today'
+      ? t('dashboard.today')
+      : dateRange === 'week'
+      ? t('dashboard.thisWeek')
+      : t('dashboard.thisMonth');
+
   return (
     <DashboardLayout>
-      <Box sx={{ p: 3 }}>
-      {/* Header */}
-      <Box mb={{ xs: 2, sm: 3 }}>
-        <Typography 
-          variant={isMobile ? 'h5' : 'h4'} 
-          gutterBottom 
-          fontWeight={700}
-          sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}
+      <Box
+        sx={{
+          p: { xs: 2, sm: 3 },
+          bgcolor: theme.palette.mode === 'dark' ? 'background.default' : alpha('#f8fafc', 1),
+          minHeight: '100vh',
+        }}
+      >
+        {/* ─── Header ──────────────────────────── */}
+        <Box
+          display="flex"
+          flexDirection={{ xs: 'column', sm: 'row' }}
+          justifyContent="space-between"
+          alignItems={{ xs: 'flex-start', sm: 'center' }}
+          mb={3}
+          gap={2}
         >
-          {t('dashboard.welcomeBack', { name: user?.name })} 👋
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {t('dashboard.fleetOverview', { 
-            period: dateRange === 'today' ? t('dashboard.today') : 
-                    dateRange === 'week' ? t('dashboard.thisWeek') : 
-                    dateRange === 'month' ? t('dashboard.thisMonth') : 
-                    t('dashboard.today')
-          })}
-        </Typography>
-      </Box>
+          <Box>
+            <Typography
+              variant="h5"
+              fontWeight={800}
+              sx={{
+                background: 'linear-gradient(135deg, #1e293b, #475569)',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: theme.palette.mode === 'dark' ? 'unset' : 'transparent',
+                fontSize: { xs: '1.4rem', sm: '1.6rem' },
+              }}
+            >
+              {t('dashboard.welcomeBack', { name: user?.name?.split(' ')[0] || 'Owner' })}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3 }}>
+              {t('dashboard.fleetOverview', { period: dateRangeLabel })}
+            </Typography>
+          </Box>
 
-      {/* Toolbar */}
-      <Toolbar sx={{ px: 0, mb: 2, minHeight: '48px !important' }}>
-        <Select
-          id="dashboard-date-range"
-          value={dateRange}
-          onChange={(e) => setDateRange(e.target.value)}
-          size="small"
-          sx={{ minWidth: 120 }}
-          displayEmpty
-          inputProps={{ 'aria-label': 'Date range' }}
-        >
-          <MenuItem value="today">{t('dashboard.today')}</MenuItem>
-          <MenuItem value="week">{t('dashboard.thisWeek')}</MenuItem>
-          <MenuItem value="month">{t('dashboard.thisMonth')}</MenuItem>
-        </Select>
-        
-        <Box flexGrow={1} />
-        
-        <IconButton 
-          onClick={handleRefresh} 
-          size="small" 
-          sx={{ mr: 1 }}
-          title="Refresh"
-        >
-          <RefreshIcon />
-        </IconButton>
-        <IconButton 
-          onClick={handleResetLayout} 
-          size="small"
-          title="Reset Layout"
-        >
-          <SettingsIcon />
-        </IconButton>
-      </Toolbar>
+          <Box display="flex" alignItems="center" gap={1}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                bgcolor: alpha('#3b82f6', 0.06),
+                borderRadius: 2,
+                px: 0.5,
+                border: `1px solid ${alpha('#3b82f6', 0.12)}`,
+              }}
+            >
+              <CalendarTodayIcon sx={{ fontSize: 16, color: '#3b82f6', ml: 1 }} />
+              <Select
+                value={dateRange}
+                onChange={(e) => setDateRange(e.target.value)}
+                size="small"
+                variant="standard"
+                disableUnderline
+                sx={{
+                  fontWeight: 600,
+                  fontSize: '0.82rem',
+                  '& .MuiSelect-select': { py: 0.8, pl: 0.5 },
+                }}
+              >
+                <MenuItem value="today">{t('dashboard.today')}</MenuItem>
+                <MenuItem value="week">{t('dashboard.thisWeek')}</MenuItem>
+                <MenuItem value="month">{t('dashboard.thisMonth')}</MenuItem>
+              </Select>
+            </Box>
+            <IconButton
+              onClick={handleRefresh}
+              size="small"
+              sx={{
+                bgcolor: alpha('#3b82f6', 0.06),
+                border: `1px solid ${alpha('#3b82f6', 0.12)}`,
+                '&:hover': { bgcolor: alpha('#3b82f6', 0.12) },
+              }}
+            >
+              <RefreshIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Box>
+        </Box>
 
-      {/* Success Message */}
-      {successMessage && (
-        <Alert severity="success" onClose={() => setSuccessMessage(null)} sx={{ mb: 2 }}>
-          {successMessage}
-        </Alert>
-      )}
+        {successMessage && (
+          <Alert severity="success" onClose={() => setSuccessMessage(null)} sx={{ mb: 2, borderRadius: 2 }}>
+            {successMessage}
+          </Alert>
+        )}
 
-      {/* KPI Cards - Operational */}
-      <Grid container spacing={{ xs: 2, sm: 3 }} mb={3}>
-        {kpiWidgets.map((widget) => (
-          <Grid item xs={12} sm={6} md={3} key={widget.id}>
-            <Suspense fallback={<Skeleton variant="rectangular" height={120} />}>
-              <KPICard {...widget} />
+        {/* ─── KPI Row ──────────────────────────── */}
+        <Grid container spacing={2.5} mb={3}>
+          {kpiWidgets.map((widget) => (
+            <Grid item xs={12} sm={6} md={3} key={widget.id}>
+              <Suspense fallback={<Skeleton variant="rounded" height={130} sx={{ borderRadius: 3 }} />}>
+                <KPICard {...widget} />
+              </Suspense>
+            </Grid>
+          ))}
+          <Grid item xs={12} sm={6} md={3}>
+            <Suspense fallback={<Skeleton variant="rounded" height={130} sx={{ borderRadius: 3 }} />}>
+              <VehicleStatsCard />
             </Suspense>
           </Grid>
-        ))}
-        {/* Unified Vehicles Card */}
-        <Grid item xs={12} sm={6} md={3}>
-          <Suspense fallback={<Skeleton variant="rectangular" height={120} />}>
-            <VehicleStatsCard />
-          </Suspense>
         </Grid>
-      </Grid>
 
-      {/* Financial Metrics */}
-      {data?.financialMetrics && (
-        <Grid container spacing={{ xs: 2, sm: 3 }} mb={3}>
-          <Grid item xs={12}>
-            <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
-              {t('dashboard.financialOverview')}
-            </Typography>
-          </Grid>
-          {financialWidgets.map((widget) => (
-            <Grid item xs={12} sm={6} md={4} key={widget.id}>
-              <Suspense fallback={<Skeleton variant="rectangular" height={120} />}>
-                <KPICard {...widget} />
-              </Suspense>
-            </Grid>
-          ))}
-        </Grid>
-      )}
-
-      {/* Invoices Summary */}
-      {data?.invoices && (
-        <Grid container spacing={{ xs: 2, sm: 3 }} mb={3}>
-          <Grid item xs={12}>
-            <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
-              {t('dashboard.invoicesSummary')}
-            </Typography>
-          </Grid>
-          {invoiceWidgets.map((widget) => (
-            <Grid item xs={12} sm={6} md={3} key={widget.id}>
-              <Suspense fallback={<Skeleton variant="rectangular" height={120} />}>
-                <KPICard {...widget} />
-              </Suspense>
-            </Grid>
-          ))}
-        </Grid>
-      )}
-
-      {/* Operational Metrics */}
-      {operationalMetrics && (
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
-              {t('dashboard.operationalMetrics')}
-            </Typography>
-            <Grid container spacing={{ xs: 2, sm: 3 }}>
-              <Grid item xs={6} sm={3}>
-                <Typography variant="caption" color="text.secondary">
-                  {t('dashboard.totalLoads')}
-                </Typography>
-                <Typography variant="h5" fontWeight={700}>
-                  {operationalMetrics.totalLoads}
-                </Typography>
-              </Grid>
-              <Grid item xs={6} sm={3}>
-                <Typography variant="caption" color="text.secondary">
-                  {t('dashboard.assignedDrivers')}
-                </Typography>
-                <Typography variant="h5" fontWeight={700}>
-                  {operationalMetrics.assignedDrivers}
-                </Typography>
-              </Grid>
-              <Grid item xs={6} sm={3}>
-                <Typography variant="caption" color="text.secondary">
-                  {t('dashboard.completedLoads')}
-                </Typography>
-                <Typography variant="h5" fontWeight={700}>
-                  {operationalMetrics.completedLoads}
-                </Typography>
-              </Grid>
-              <Grid item xs={6} sm={3}>
-                <Typography variant="caption" color="text.secondary">
-                  {t('dashboard.totalDistance')}
-                </Typography>
-                <Typography variant="h5" fontWeight={700}>
-                  {operationalMetrics.totalDistanceMiles.toFixed(0)} mi
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {operationalMetrics.totalDistanceKm} km
-                </Typography>
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
-      )}
-
-        {/* Main Content Grid */}
-        <Grid container spacing={{ xs: 2, sm: 3 }}>
-          {/* Load Status Chart */}
+        {/* ─── Financial + Invoice Row ──────────────────────────── */}
+        <Grid container spacing={2.5} mb={3}>
+          {/* Financial Comparison */}
           <Grid item xs={12} md={6}>
-            <Suspense fallback={<Skeleton variant="rectangular" height={250} />}>
+            {fm && (
+              <FinancialComparisonBar
+                revenue={fm.totalRevenue}
+                expenses={fm.totalExpenses}
+                profit={fm.totalProfit}
+                margin={fm.profitMargin}
+              />
+            )}
+          </Grid>
+
+          {/* Invoice Donut */}
+          <Grid item xs={12} md={6}>
+            {inv && <InvoiceDonutCard invoices={inv} />}
+          </Grid>
+        </Grid>
+
+        {/* ─── Operational Metrics ──────────────────────────── */}
+        {ops && (
+          <Box mb={3}>
+            <OperationalMetricsCard metrics={ops} />
+          </Box>
+        )}
+
+        {/* ─── Load Status + Recent Activity ──────────────────────────── */}
+        <Grid container spacing={2.5} mb={3}>
+          <Grid item xs={12} md={6}>
+            <Suspense fallback={<Skeleton variant="rounded" height={300} sx={{ borderRadius: 3 }} />}>
               <LoadStatusChart data={data.loadStatus} />
             </Suspense>
           </Grid>
-
-          {/* Recent Activity */}
           <Grid item xs={12} md={6}>
-            <Suspense fallback={<Skeleton variant="rectangular" height={250} />}>
+            <Suspense fallback={<Skeleton variant="rounded" height={300} sx={{ borderRadius: 3 }} />}>
               <RecentActivity activities={data.recentActivity} />
             </Suspense>
           </Grid>
-
-          {/* Critical Trips */}
-          <Grid item xs={12}>
-            <Suspense fallback={<Skeleton variant="rectangular" height={300} />}>
-              <CriticalTrips trips={data.criticalTrips} />
-            </Suspense>
-          </Grid>
         </Grid>
+
+        {/* ─── Critical Trips ──────────────────────────── */}
+        <Box mb={3}>
+          <Suspense fallback={<Skeleton variant="rounded" height={200} sx={{ borderRadius: 3 }} />}>
+            <CriticalTrips trips={data.criticalTrips} />
+          </Suspense>
+        </Box>
       </Box>
     </DashboardLayout>
   );

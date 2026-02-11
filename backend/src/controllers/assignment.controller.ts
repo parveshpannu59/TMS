@@ -79,6 +79,25 @@ export class AssignmentController {
     }
 
     const assignment = await AssignmentService.acceptAssignment(id, driver._id.toString());
+
+    // ─── 🔔 Pusher: Notify owner that driver accepted ───────
+    try {
+      const { broadcastAssignment } = require('../services/pusher.service');
+      const companyId = req.user?.companyId || driver.createdBy;
+      const loadDoc = assignment.loadId as any;
+      await broadcastAssignment(companyId as string, userId as string, {
+        assignmentId: id,
+        loadId: loadDoc?._id?.toString() || '',
+        loadNumber: loadDoc?.loadNumber || '',
+        driverId: driver._id.toString(),
+        driverName: driver.name,
+        pickup: '',
+        delivery: '',
+        timestamp: new Date().toISOString(),
+        action: 'accepted',
+      });
+    } catch (err) { console.warn('Pusher accept broadcast failed:', (err as Error).message); }
+
     return ApiResponse.success(res, assignment, 'Assignment accepted successfully');
   });
 
@@ -100,6 +119,26 @@ export class AssignmentController {
     }
 
     const assignment = await AssignmentService.rejectAssignment(id, driver._id.toString(), reason);
+
+    // ─── 🔔 Pusher: Notify owner that driver rejected ───────
+    try {
+      const { broadcastAssignment } = require('../services/pusher.service');
+      const companyId = req.user?.companyId || driver.createdBy;
+      const loadDoc = assignment.loadId as any;
+      await broadcastAssignment(companyId as string, userId as string, {
+        assignmentId: id,
+        loadId: loadDoc?._id?.toString() || '',
+        loadNumber: loadDoc?.loadNumber || '',
+        driverId: driver._id.toString(),
+        driverName: driver.name,
+        pickup: '',
+        delivery: '',
+        timestamp: new Date().toISOString(),
+        action: 'rejected',
+        reason,
+      });
+    } catch (err) { console.warn('Pusher reject broadcast failed:', (err as Error).message); }
+
     return ApiResponse.success(res, assignment, 'Assignment rejected successfully');
   });
 

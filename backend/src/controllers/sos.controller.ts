@@ -74,6 +74,24 @@ export class SOSController {
 
     await Promise.all(notificationPromises);
 
+    // ─── 🚨 Pusher: Instant SOS alert to all owners ─────────
+    try {
+      const { broadcastSOS } = require('../services/pusher.service');
+      const companyIdStr = (user.companyId as any)?.toString() || user._id.toString();
+      await broadcastSOS(companyIdStr, {
+        sosId: sos._id?.toString() || '',
+        loadId: loadId || '',
+        driverId: driver._id.toString(),
+        driverName: driver.name,
+        driverPhone: (driver as any).phone || '',
+        message: message || 'Emergency!',
+        location: location || 'Unknown',
+        emergencyType: (req.body as any).emergencyType,
+        timestamp: new Date().toISOString(),
+        action: 'alert',
+      });
+    } catch (err) { console.warn('Pusher SOS broadcast failed:', (err as Error).message); }
+
     return ApiResponse.success(res, sos, 'SOS emergency alert sent successfully', 201);
   });
 

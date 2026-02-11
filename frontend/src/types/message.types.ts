@@ -1,3 +1,10 @@
+export interface MessageAttachment {
+  url: string;
+  type: string;
+  name: string;
+  size: number;
+}
+
 export interface Message {
   id: string;
   fromUserId: string;
@@ -5,12 +12,7 @@ export interface Message {
   loadId?: string;
   message: string;
   messageType: 'text' | 'image' | 'file' | 'location' | 'emergency';
-  attachments?: Array<{
-    url: string;
-    type: string;
-    name: string;
-    size: number;
-  }>;
+  attachments?: MessageAttachment[];
   read: boolean;
   readAt?: string;
   encrypted: boolean;
@@ -20,9 +22,13 @@ export interface Message {
 
 export interface Conversation {
   otherUserId: string;
+  otherUserName?: string;
+  otherUserRole?: string;
+  otherUserAvatar?: string;
   loadId?: string;
   lastMessage: Message;
   unreadCount: number;
+  messageCount?: number;
 }
 
 export interface SendMessageData {
@@ -30,10 +36,5 @@ export interface SendMessageData {
   loadId?: string;
   message: string;
   messageType?: 'text' | 'image' | 'file' | 'location' | 'emergency';
-  attachments?: Array<{
-    url: string;
-    type: string;
-    name: string;
-    size: number;
-  }>;
+  attachments?: MessageAttachment[];
 }

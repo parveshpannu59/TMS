@@ -50,12 +50,12 @@ const NotificationSchema = new Schema<INotificationDocument>(
       type: Schema.Types.ObjectId,
       ref: 'Company',
       required: true,
-      index: true,
+      // indexed via compound indexes below
     },
     userId: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      index: true,
+      // indexed via compound indexes below
     },
     type: {
       type: String,
@@ -92,7 +92,7 @@ const NotificationSchema = new Schema<INotificationDocument>(
     },
     expiresAt: {
       type: Date,
-      index: true,
+      // index created explicitly below with TTL options
     },
     readAt: {
       type: Date,

@@ -17,8 +17,17 @@ import {
   alpha,
   useTheme,
   CircularProgress,
+  IconButton,
+  Tooltip,
+  Stack,
+  Snackbar,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
 } from '@mui/material';
-import { DataGrid, GridColDef } from '@mui/x-data-grid';
+import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import {
   AccountBalance,
   TrendingUp,
@@ -28,9 +37,14 @@ import {
   CheckCircle,
   Description,
   Download,
+  ThumbUp,
+  ThumbDown,
+  Payments,
+  HourglassEmpty,
 } from '@mui/icons-material';
 import { DashboardLayout } from '@layouts/DashboardLayout';
 import { dashboardApi, type AccountantDashboardData } from '@/api/dashboardApi';
+import { loadApi } from '@/api/all.api';
 import { getApiOrigin } from '@/api/client';
 import { useAuth } from '@hooks/useAuth';
 import { useMediaQuery } from '@mui/material';
@@ -59,6 +73,166 @@ interface AccountingSummary {
   invoicesPaid: number;
   invoicesPending: number;
   invoicesSubmitted: number;
+}
+
+// ─── Pending Expense Approvals Sub-Component ─────────────────
+function PendingExpenseApprovals({ onApproved }: { onApproved?: () => void }) {
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [summary, setSummary] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState('');
+  const [rejectDialog, setRejectDialog] = useState<{ open: boolean; id: string }>({ open: false, id: '' });
+  const [rejectNotes, setRejectNotes] = useState('');
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  const fetchPending = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await loadApi.getPendingExpenses();
+      setExpenses(data.expenses || []);
+      setSummary(data.summary || null);
+    } catch {
+      // silently fail
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchPending(); }, [fetchPending]);
+
+  const handleApprove = async (id: string) => {
+    setActionLoading(id);
+    try {
+      await loadApi.approveExpense(id, { action: 'approve' });
+      setToast('Expense approved');
+      fetchPending();
+      onApproved?.();
+    } catch { setToast('Failed to approve'); }
+    setActionLoading(null);
+  };
+
+  const handleReject = async () => {
+    if (!rejectDialog.id) return;
+    setActionLoading(rejectDialog.id);
+    try {
+      await loadApi.approveExpense(rejectDialog.id, { action: 'reject', notes: rejectNotes });
+      setToast('Expense rejected');
+      setRejectDialog({ open: false, id: '' });
+      setRejectNotes('');
+      fetchPending();
+      onApproved?.();
+    } catch { setToast('Failed to reject'); }
+    setActionLoading(null);
+  };
+
+  const handleReimburse = async (id: string) => {
+    setActionLoading(id);
+    try {
+      await loadApi.markExpenseReimbursed(id);
+      setToast('Expense marked as reimbursed');
+      fetchPending();
+    } catch { setToast('Failed to mark as reimbursed'); }
+    setActionLoading(null);
+  };
+
+  const columns: GridColDef[] = [
+    {
+      field: 'loadNumber', headerName: 'Load #', flex: 0.8, minWidth: 100,
+      renderCell: (params: GridRenderCellParams) => (params.row.loadId as any)?.loadNumber || '-',
+    },
+    {
+      field: 'category', headerName: 'Category', flex: 1, minWidth: 100,
+      renderCell: (params: GridRenderCellParams) => (
+        <Chip label={(params.value as string || '').replace('_', ' ').toUpperCase()} size="small" variant="outlined" />
+      ),
+    },
+    {
+      field: 'amount', headerName: 'Amount', flex: 0.8, minWidth: 90,
+      renderCell: (params: GridRenderCellParams) => `$${Number(params.value).toLocaleString()}`,
+    },
+    { field: 'description', headerName: 'Description', flex: 1.5, minWidth: 120 },
+    {
+      field: 'date', headerName: 'Date', flex: 0.8, minWidth: 100,
+      renderCell: (params: GridRenderCellParams) => params.value ? new Date(params.value as string).toLocaleDateString() : '-',
+    },
+    {
+      field: 'paidBy', headerName: 'Paid By', flex: 0.7, minWidth: 80,
+      renderCell: (params: GridRenderCellParams) => (
+        <Chip label={(params.value as string || 'driver').toUpperCase()} size="small" color={params.value === 'driver' ? 'warning' : 'default'} />
+      ),
+    },
+    {
+      field: 'actions', headerName: 'Actions', flex: 1.2, minWidth: 150, sortable: false,
+      renderCell: (params: GridRenderCellParams) => (
+        <Stack direction="row" spacing={0.5}>
+          <Tooltip title="Approve">
+            <IconButton size="small" color="success" onClick={() => handleApprove(params.row._id)}
+              disabled={actionLoading === params.row._id}>
+              <ThumbUp fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Reject">
+            <IconButton size="small" color="error" onClick={() => setRejectDialog({ open: true, id: params.row._id })}
+              disabled={actionLoading === params.row._id}>
+              <ThumbDown fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+      ),
+    },
+  ];
+
+  return (
+    <Box>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+        <Typography variant="h6">
+          <HourglassEmpty sx={{ verticalAlign: 'middle', mr: 1 }} />
+          Pending Expense Approvals
+          {summary?.count ? (
+            <Chip label={summary.count} color="warning" size="small" sx={{ ml: 1 }} />
+          ) : null}
+        </Typography>
+        {summary?.total ? (
+          <Chip label={`Total: $${summary.total.toLocaleString()}`} color="primary" />
+        ) : null}
+      </Stack>
+
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
+      ) : expenses.length === 0 ? (
+        <Alert severity="success">No pending expenses to review</Alert>
+      ) : (
+        <Box sx={{ height: 400 }}>
+          <DataGrid
+            rows={expenses}
+            columns={columns}
+            getRowId={(row) => row._id}
+            pageSizeOptions={[10, 25]}
+            initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
+            disableRowSelectionOnClick
+            density="compact"
+          />
+        </Box>
+      )}
+
+      {/* Reject Dialog */}
+      <Dialog open={rejectDialog.open} onClose={() => setRejectDialog({ open: false, id: '' })} maxWidth="sm" fullWidth>
+        <DialogTitle>Reject Expense</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus fullWidth multiline rows={3} label="Reason for rejection" value={rejectNotes}
+            onChange={(e) => setRejectNotes(e.target.value)} sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRejectDialog({ open: false, id: '' })}>Cancel</Button>
+          <Button variant="contained" color="error" onClick={handleReject} disabled={!!actionLoading}>Reject</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar open={!!toast} autoHideDuration={3000} onClose={() => setToast('')} message={toast} />
+    </Box>
+  );
 }
 
 const AccountingPage: React.FC = () => {
@@ -396,7 +570,7 @@ const AccountingPage: React.FC = () => {
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                   {t('accounting.expenseEntries', { count: data.expenses.count })}
                 </Typography>
-                <Grid container spacing={2}>
+                <Grid container spacing={2} sx={{ mb: 3 }}>
                   {Object.entries(data.expenses.byCategory).map(([category, amount]) => (
                     <Grid item xs={12} sm={6} md={3} key={category}>
                       <Card>
@@ -412,8 +586,11 @@ const AccountingPage: React.FC = () => {
                 </Grid>
               </Box>
             ) : (
-              <Alert severity="info">{t('accounting.noExpenseData', { defaultValue: 'No expense data available' })}</Alert>
+              <Alert severity="info" sx={{ mb: 2 }}>{t('accounting.noExpenseData', { defaultValue: 'No expense data available' })}</Alert>
             )}
+
+            {/* Pending Expense Approvals */}
+            <PendingExpenseApprovals onApproved={() => fetchData()} />
           </TabPanel>
 
           <TabPanel value={tabValue} index={2}>

@@ -8,6 +8,7 @@ interface CreateUserData {
   password: string;
   role: UserRole;
   phone?: string;
+  companyId?: string;
 }
 
 interface UpdateUserData {
@@ -24,7 +25,7 @@ interface ChangePasswordData {
 
 export class UserService {
   static async createUser(userData: CreateUserData) {
-    const { name, email, password, role, phone } = userData;
+    const { name, email, password, role, phone, companyId } = userData;
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -38,6 +39,7 @@ export class UserService {
       role,
       phone,
       status: 'active',
+      ...(companyId ? { companyId } : {}),
     });
 
     return {

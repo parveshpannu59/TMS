@@ -9,6 +9,8 @@ import {
   Assignment,
   PendingActions,
   CheckCircle,
+  Description,
+  Info,
 } from '@mui/icons-material';
 import { GridActionsCellItem } from '@mui/x-data-grid';
 import type { Load } from '@/api/load.api';
@@ -36,11 +38,13 @@ type ColumnFactoryParams = {
   onUnassign: (load: Load) => void;
   onOpenNotes: (notes: string, title: string) => void;
   onConfirmRate?: (load: Load) => void;
+  onViewTripDetails?: (load: Load) => void;
 };
 
 export function getLoadsGridColumns(params: ColumnFactoryParams & { t: (key: string, opts?: { defaultValue?: string }) => string }): GridColDef[] {
   const { t, onView, onEdit, onDelete, onAssign, onUnassign, onOpenNotes } = params;
   const onConfirmRate = params.onConfirmRate ?? null;
+  const onViewTripDetails = params.onViewTripDetails ?? null;
 
   return [
     {
@@ -98,11 +102,16 @@ export function getLoadsGridColumns(params: ColumnFactoryParams & { t: (key: str
       renderCell: (p) => (p.value ? new Date(p.value).toLocaleDateString() : '-'),
     },
     {
-      field: 'deliveryDate',
+      field: 'expectedDeliveryDate',
       headerName: t('loads.deliveryDate'),
       flex: 0.8,
       minWidth: 100,
-      renderCell: (p) => (p.value ? new Date(p.value).toLocaleDateString() : '-'),
+      renderCell: (p) => {
+        const actual = p.row?.actualDeliveryDate;
+        const expected = p.row?.expectedDeliveryDate;
+        const date = actual || expected;
+        return date ? new Date(date).toLocaleDateString() : '-';
+      },
     },
     {
       field: 'status',
@@ -146,6 +155,27 @@ export function getLoadsGridColumns(params: ColumnFactoryParams & { t: (key: str
       minWidth: 110,
     },
     {
+      field: 'documents',
+      headerName: 'Docs',
+      flex: 0.5,
+      minWidth: 70,
+      renderCell: (p) => {
+        const docs = p.row?.documents;
+        const hasDoc = docs?.bol || docs?.pod || (docs?.others?.length > 0);
+        const count = (docs?.bol ? 1 : 0) + (docs?.pod ? 1 : 0) + (docs?.others?.length || 0);
+        return (
+          <Typography
+            variant="body2"
+            color={hasDoc ? 'success.main' : 'text.disabled'}
+            sx={{ display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.8rem' }}
+          >
+            <Description fontSize="small" />
+            {hasDoc ? count : 0}
+          </Typography>
+        );
+      },
+    },
+    {
       field: 'notes',
       headerName: t('common.notes'),
       flex: 1.5,
@@ -183,6 +213,12 @@ export function getLoadsGridColumns(params: ColumnFactoryParams & { t: (key: str
         const actions: React.ReactNode[] = [
           <GridActionsCellItem key={`${rowId}-view`} icon={<Visibility />} label={t('common.view')} onClick={() => onView(row)} />,
         ];
+        // Trip Details action for loads with active/completed trips
+        if (onViewTripDetails && ['assigned', 'trip_accepted', 'trip_started', 'shipper_check_in', 'shipper_load_in', 'shipper_load_out', 'in_transit', 'receiver_check_in', 'receiver_offload', 'delivered', 'completed'].includes(row.status)) {
+          actions.push(
+            <GridActionsCellItem key={`${rowId}-tripDetails`} icon={<Info />} label="Trip Details" onClick={() => onViewTripDetails(row)} />
+          );
+        }
         if (row.status === 'booked' && onConfirmRate) {
           actions.push(
             <GridActionsCellItem
@@ -223,6 +259,6 @@ export function useLoadsGridColumns(params: ColumnFactoryParams): GridColDef[] {
   const { t } = useTranslation();
   return useMemo(
     () => getLoadsGridColumns({ ...params, t }),
-    [t, params.onView, params.onEdit, params.onDelete, params.onAssign, params.onUnassign, params.onOpenNotes, params.onConfirmRate]
+    [t, params.onView, params.onEdit, params.onDelete, params.onAssign, params.onUnassign, params.onOpenNotes, params.onConfirmRate, params.onViewTripDetails]
   );
 }

@@ -10,6 +10,70 @@ import { TripStatus } from '../models/Trip';
 
 export class TripController {
   /**
+   * Export trips as CSV
+   */
+  static exportTripsCsv = asyncHandler(async (req: Request, res: Response) => {
+    const companyId = req.user?.companyId ?? req.user?.id;
+    const { status, dateFrom, dateTo } = req.query;
+
+    const loadIds = await Load.find({ companyId }).distinct('_id');
+    const query: any = { loadId: { $in: loadIds } };
+    if (status) query.status = status;
+    if (dateFrom || dateTo) {
+      query.startedAt = {};
+      if (dateFrom) query.startedAt.$gte = new Date(dateFrom as string);
+      if (dateTo) query.startedAt.$lte = new Date(dateTo as string);
+    }
+
+    const trips = await Trip.find(query)
+      .populate({
+        path: 'loadId',
+        select: 'loadNumber pickupLocation deliveryLocation',
+      })
+      .populate({
+        path: 'driverId',
+        select: 'name',
+      })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const headers = ['Load Number', 'Driver', 'Pickup City', 'Delivery City', 'Status', 'Rate Per Mile', 'Total Miles', 'Total Earnings', 'Start Date', 'End Date'];
+    const escapeCsv = (val: unknown): string => {
+      if (val == null || val === undefined) return '';
+      const s = String(val);
+      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const formatDate = (d: Date | undefined): string => (d ? new Date(d).toISOString().split('T')[0] : '');
+
+    const rows = trips.map((t: any) => {
+      const load = t.loadId || {};
+      const driver = t.driverId || {};
+      const pickup = load.pickupLocation || {};
+      const delivery = load.deliveryLocation || {};
+      return [
+        escapeCsv(load.loadNumber),
+        escapeCsv(driver.name),
+        escapeCsv(pickup.city),
+        escapeCsv(delivery.city),
+        escapeCsv(t.status),
+        escapeCsv(t.ratePerMile),
+        escapeCsv(t.totalMiles),
+        escapeCsv(t.totalEarnings),
+        escapeCsv(formatDate(t.startedAt)),
+        escapeCsv(formatDate(t.completedAt)),
+      ].join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join('\r\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="trips-export-${new Date().toISOString().split('T')[0]}.csv"`);
+    res.send(csv);
+  });
+  /**
    * Start a new trip
    */
   static startTrip = asyncHandler(async (req: Request, res: Response) => {

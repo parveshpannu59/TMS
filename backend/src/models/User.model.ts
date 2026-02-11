@@ -98,7 +98,7 @@ userSchema.methods.comparePassword = async function (
 };
 
 // Indexes for optimized queries
-userSchema.index({ email: 1 }, { unique: true }); // Unique email lookup
+// email index already created by `unique: true` in field definition
 userSchema.index({ role: 1, status: 1 }); // Filter by role and status
 userSchema.index({ companyId: 1, role: 1 }); // Company users by role
 userSchema.index({ companyId: 1, createdAt: -1 }); // Sort by creation date
