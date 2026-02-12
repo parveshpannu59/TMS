@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Card } from '@mui/material';
-import { DataGrid } from '@mui/x-data-grid';
+import { DataGrid, GridPaginationModel } from '@mui/x-data-grid';
 import { Assignment } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -12,6 +12,10 @@ type LoadsDataGridProps = {
   loads: Load[];
   filteredLoads: Load[];
   loading: boolean;
+  // Server-side pagination
+  totalRows: number;
+  paginationModel: { page: number; pageSize: number };
+  onPaginationModelChange: (model: { page: number; pageSize: number }) => void;
   onView: (load: Load) => void;
   onEdit: (load: Load) => void;
   onDelete: (id: string) => void;
@@ -29,6 +33,9 @@ export const LoadsDataGrid = memo<LoadsDataGridProps>(function LoadsDataGrid({
   loads,
   filteredLoads,
   loading,
+  totalRows,
+  paginationModel,
+  onPaginationModelChange,
   onView,
   onEdit,
   onDelete,
@@ -61,7 +68,7 @@ export const LoadsDataGrid = memo<LoadsDataGridProps>(function LoadsDataGrid({
       sx={{
         width: '100%',
         minHeight: 900,
-        height: filteredLoads.length > 10 ? filteredLoads.length * 52 + 150 : 900,
+        height: 900,
         border: '1px solid',
         borderColor: 'divider',
         borderRadius: 2,
@@ -74,17 +81,17 @@ export const LoadsDataGrid = memo<LoadsDataGridProps>(function LoadsDataGrid({
       {!loading && filteredLoads.length === 0 ? (
         <EmptyState
           icon={<Assignment />}
-          title={loads.length === 0 ? 'No Loads Yet' : 'No Results Found'}
+          title={loads.length === 0 && totalRows === 0 ? 'No Loads Yet' : 'No Results Found'}
           description={
-            loads.length === 0
+            loads.length === 0 && totalRows === 0
               ? t('loads.noLoadsDescription', {
                   defaultValue:
                     'Get started by creating your first load. Add origin, destination, and trip details to begin managing your freight.',
                 })
               : t('common.tryAdjustingFilters')
           }
-          actionLabel={loads.length === 0 ? 'Create First Load' : undefined}
-          onAction={loads.length === 0 ? onAddLoad : undefined}
+          actionLabel={loads.length === 0 && totalRows === 0 ? 'Create First Load' : undefined}
+          onAction={loads.length === 0 && totalRows === 0 ? onAddLoad : undefined}
         />
       ) : (
         <DataGrid
@@ -92,8 +99,12 @@ export const LoadsDataGrid = memo<LoadsDataGridProps>(function LoadsDataGrid({
           columns={columns}
           loading={loading}
           getRowId={(row) => row._id}
+          // ── Server-side pagination ──
+          paginationMode="server"
+          rowCount={totalRows}
+          paginationModel={paginationModel}
+          onPaginationModelChange={(model: GridPaginationModel) => onPaginationModelChange(model)}
           pageSizeOptions={[10, 25, 50, 100]}
-          initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
           disableRowSelectionOnClick
           autoHeight={false}
           sx={{

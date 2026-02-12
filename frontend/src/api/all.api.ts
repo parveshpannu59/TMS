@@ -29,10 +29,10 @@ export const loadApi = {
     return Array.isArray((data as any).loads) ? (data as any).loads : [];
   },
 
-  // Get loads assigned to current driver
-  getMyAssignedLoads: async (): Promise<Load[]> => {
-    const response = await apiClient.get<ApiResponse<Load[]>>('/loads/me/assigned');
-    return response.data.data as Load[];
+  // Get loads assigned to current driver — supports pagination
+  getMyAssignedLoads: async (params?: { page?: number; limit?: number; status?: string }): Promise<any> => {
+    const response = await apiClient.get<ApiResponse<any>>('/loads/me/assigned', { params });
+    return response.data.data;
   },
 
   getLoadById: async (id: string): Promise<Load> => {

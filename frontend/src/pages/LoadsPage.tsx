@@ -296,6 +296,9 @@ const LoadsPage: React.FC = () => {
     loading,
     error: apiError,
     stats,
+    totalRows,
+    paginationModel,
+    handlePaginationModelChange,
     fetchLoads,
     fetchResources,
     assignLoad,
@@ -461,6 +464,9 @@ const LoadsPage: React.FC = () => {
             loads={loads}
             filteredLoads={filteredLoads}
             loading={loading}
+            totalRows={totalRows}
+            paginationModel={paginationModel}
+            onPaginationModelChange={handlePaginationModelChange}
             onView={(load) => {
               setDetailsLoad(load);
               setOpenDetailsDialog(true);

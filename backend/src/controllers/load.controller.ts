@@ -43,26 +43,55 @@ export class LoadController {
   // Get loads assigned to current driver
   static getMyAssignedLoads = asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user!.id;
+    const { page = 1, limit = 0, status } = req.query;
     
-    // Find driver profile for this user
     const driver = await Driver.findOne({ userId });
-    
     if (!driver) {
       throw ApiError.notFound('Driver profile not found');
     }
     
     const driverId = driver._id.toString();
-    
-    // Get all loads assigned to this driver
-    const loads = await Load.find({ driverId })
-      .populate('driverId', 'name email phone')
-      .populate('truckId', 'unitNumber make model')
-      .populate('trailerId', 'unitNumber type')
-      .populate('createdBy', 'name email')
-      .sort({ createdAt: -1 })
-      .lean();
-    
-    return ApiResponse.success(res, loads, 'Assigned loads fetched successfully');
+    const query: any = { driverId };
+    if (status && status !== 'all') query.status = status;
+
+    const pageNum = Math.max(1, Number(page));
+    const limitNum = Number(limit);
+
+    // If limit is 0 or not provided, return all (backward compat)
+    if (!limitNum) {
+      const loads = await Load.find(query)
+        .populate('driverId', 'name email phone')
+        .populate('truckId', 'unitNumber make model')
+        .populate('trailerId', 'unitNumber type')
+        .populate('createdBy', 'name email')
+        .sort({ createdAt: -1 })
+        .lean();
+      return ApiResponse.success(res, loads, 'Assigned loads fetched successfully');
+    }
+
+    const skip = (pageNum - 1) * limitNum;
+    const [loads, total] = await Promise.all([
+      Load.find(query)
+        .populate('driverId', 'name email phone')
+        .populate('truckId', 'unitNumber make model')
+        .populate('trailerId', 'unitNumber type')
+        .populate('createdBy', 'name email')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Load.countDocuments(query),
+    ]);
+
+    return ApiResponse.success(res, {
+      loads,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum),
+      },
+    }, 'Assigned loads fetched successfully');
   });
 
   // Export loads as CSV

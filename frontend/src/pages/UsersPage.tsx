@@ -42,7 +42,7 @@ import { useTranslation } from 'react-i18next';
 
 export const UsersPage: React.FC = () => {
   const { t } = useTranslation();
-  const [users, setUsers] = useState<User[]>([]);
+  const [_users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,55 +58,42 @@ export const UsersPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [roleFilter, setRoleFilter] = useState<string>('all');
 
-  const fetchUsers = useCallback(async () => {
+  // Server-side pagination
+  const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 10 });
+  const [totalRows, setTotalRows] = useState(0);
+
+  const fetchUsers = useCallback(async (pagModel?: { page: number; pageSize: number }) => {
     try {
       setLoading(true);
       setError(null);
+      const p = pagModel ?? paginationModel;
+      const params: any = {
+        page: p.page + 1,
+        limit: p.pageSize,
+      };
+      if (statusFilter !== 'all') params.status = statusFilter;
+      if (roleFilter !== 'all') params.role = roleFilter;
+      if (searchTerm) params.search = searchTerm;
+
       const [usersResponse, statsData] = await Promise.all([
-        userApi.getAllUsers({ page: 1, limit: 1000 }),
+        userApi.getAllUsers(params),
         userApi.getUserStats(),
       ]);
       // Extract users array from paginated response
       setUsers(usersResponse.data || []);
+      setFilteredUsers(usersResponse.data || []);
+      setTotalRows(usersResponse.pagination?.total ?? (usersResponse.data || []).length);
       setStats(statsData);
     } catch (err: any) {
       setError(err.message || 'Failed to load users');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [paginationModel, statusFilter, roleFilter, searchTerm]);
 
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
-
-  // Apply filters
-  useEffect(() => {
-    let result = [...users];
-
-    // Search filter
-    if (searchTerm) {
-      const lowerSearch = searchTerm.toLowerCase();
-      result = result.filter(
-        (user) =>
-          user.name.toLowerCase().includes(lowerSearch) ||
-          user.email.toLowerCase().includes(lowerSearch) ||
-          (user.phone && user.phone.toLowerCase().includes(lowerSearch))
-      );
-    }
-
-    // Status filter
-    if (statusFilter !== 'all') {
-      result = result.filter((user) => user.status === statusFilter);
-    }
-
-    // Role filter
-    if (roleFilter !== 'all') {
-      result = result.filter((user) => user.role === roleFilter);
-    }
-
-    setFilteredUsers(result);
-  }, [users, searchTerm, statusFilter, roleFilter]);
 
   const handleEdit = useCallback((user: User) => {
     setSelectedUser(user);
@@ -455,12 +442,15 @@ export const UsersPage: React.FC = () => {
           rows={filteredUsers}
           columns={columns}
           loading={loading}
-            pageSizeOptions={[10, 25, 50, 100]}
-          initialState={{
-            pagination: {
-                paginationModel: { pageSize: 10 },
-            },
+          // Server-side pagination
+          paginationMode="server"
+          rowCount={totalRows}
+          paginationModel={paginationModel}
+          onPaginationModelChange={(model) => {
+            setPaginationModel(model);
+            fetchUsers(model);
           }}
+          pageSizeOptions={[10, 25, 50, 100]}
           disableRowSelectionOnClick
           autoHeight={false}
           sx={{

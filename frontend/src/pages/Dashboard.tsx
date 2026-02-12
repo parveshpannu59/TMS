@@ -719,12 +719,14 @@ const Dashboard = () => {
           </Grid>
         </Grid>
 
-        {/* ─── Critical Trips ──────────────────────────── */}
-        <Box mb={3}>
-          <Suspense fallback={<Skeleton variant="rounded" height={200} sx={{ borderRadius: 3 }} />}>
-            <CriticalTrips trips={data.criticalTrips} />
-          </Suspense>
-        </Box>
+        {/* Critical Trips hidden — only shows when there are actual critical/delayed trips */}
+        {data.criticalTrips && data.criticalTrips.length > 0 && (
+          <Box mb={3}>
+            <Suspense fallback={<Skeleton variant="rounded" height={200} sx={{ borderRadius: 3 }} />}>
+              <CriticalTrips trips={data.criticalTrips} />
+            </Suspense>
+          </Box>
+        )}
       </Box>
     </DashboardLayout>
   );

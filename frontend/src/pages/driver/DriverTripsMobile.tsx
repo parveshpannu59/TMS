@@ -5,7 +5,7 @@ import { loadApi } from '@/api/all.api';
 import type { Load } from '@/types/all.types';
 import '../../layouts/mobile/mobile.css';
 
-// Reverse geocode cache to avoid duplicate API calls
+// ── Reverse geocode cache ──
 const geoCache = new Map<string, string>();
 
 function useReverseGeocode(lat?: number, lng?: number): string | null {
@@ -14,8 +14,6 @@ function useReverseGeocode(lat?: number, lng?: number): string | null {
 
   useEffect(() => {
     if (!key || !lat || !lng) { setPlaceName(null); return; }
-
-    // Check cache first
     if (geoCache.has(key)) { setPlaceName(geoCache.get(key)!); return; }
 
     let cancelled = false;
@@ -44,7 +42,6 @@ function useReverseGeocode(lat?: number, lng?: number): string | null {
   return placeName;
 }
 
-// Component to render a single timeline entry with location
 function TimelineLocation({ lat, lng }: { lat?: number; lng?: number }) {
   const place = useReverseGeocode(lat, lng);
   if (!lat || !lng) return null;
@@ -58,6 +55,7 @@ function TimelineLocation({ lat, lng }: { lat?: number; lng?: number }) {
   );
 }
 
+// ── Constants ──
 const STATUS_LABELS: Record<string, string> = {
   assigned: 'Assigned',
   trip_accepted: 'Ready to Start',
@@ -90,6 +88,8 @@ const STATUS_COLOR: Record<string, string> = {
 
 type TabType = 'all' | 'active' | 'pending' | 'completed';
 
+const PAGE_SIZE = 10;
+
 const formatDate = (d: string | Date | undefined) => {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -101,49 +101,132 @@ const formatLocation = (loc: any) => {
   return parts.length ? parts.join(', ') : loc.address || '—';
 };
 
+// Map tab -> status query for backend filtering
+function getStatusQueryForTab(_tab: TabType): string | undefined {
+  // 'all' means no filter
+  // For 'active', 'pending', 'completed' we do client-side filtering because
+  // each tab encompasses multiple statuses and the backend only accepts one status
+  return undefined;
+}
+
+const activeStatuses = ['assigned', 'trip_accepted', 'trip_started', 'shipper_check_in', 'shipper_load_in', 'shipper_load_out', 'in_transit', 'receiver_check_in', 'receiver_offload'];
+const deliveredStatuses = ['completed', 'delivered'];
+const pendingStatuses = ['delivered'];
+
 export default function DriverTripsMobile() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [loads, setLoads] = useState<Load[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
+
+  // Tab counts (fetched once from the full list count)
+  const [tabCounts, setTabCounts] = useState({ all: 0, active: 0, pending: 0, completed: 0 });
+
   const fetchingRef = useRef(false);
-  const fetchLoads = useCallback(async () => {
+
+  // Fetch loads with pagination
+  const fetchLoads = useCallback(async (pageNum: number, append: boolean = false) => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
     try {
-      setLoading(true);
-      const assigned = await loadApi.getMyAssignedLoads();
-      setLoads(Array.isArray(assigned) ? assigned : []);
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
+
+      const params: any = { page: pageNum, limit: PAGE_SIZE };
+      const statusQ = getStatusQueryForTab(activeTab);
+      if (statusQ) params.status = statusQ;
+
+      const resp = await loadApi.getMyAssignedLoads(params);
+
+      // Handle both paginated and non-paginated responses
+      let newLoads: Load[] = [];
+      let total = 0;
+      let pages = 1;
+
+      if (resp && typeof resp === 'object' && 'loads' in resp) {
+        newLoads = (resp as any).loads || [];
+        total = (resp as any).pagination?.total ?? newLoads.length;
+        pages = (resp as any).pagination?.pages ?? 1;
+      } else {
+        newLoads = Array.isArray(resp) ? resp : [];
+        total = newLoads.length;
+      }
+
+      if (append) {
+        setLoads(prev => [...prev, ...newLoads]);
+      } else {
+        setLoads(newLoads);
+      }
+
+      setTotalCount(total);
+      setHasMore(pageNum < pages);
       setError(null);
     } catch (err: any) {
       setError(err?.message || 'Failed to load trips');
-      setLoads([]);
+      if (!append) setLoads([]);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
       fetchingRef.current = false;
+    }
+  }, [activeTab]);
+
+  // Fetch tab counts once on mount (small request to get all counts)
+  const fetchTabCounts = useCallback(async () => {
+    try {
+      const allLoads = await loadApi.getMyAssignedLoads();
+      const arr = Array.isArray(allLoads) ? allLoads : ((allLoads as any)?.loads || []);
+      setTabCounts({
+        all: arr.length,
+        active: arr.filter((l: any) => activeStatuses.includes(l.status)).length,
+        pending: arr.filter((l: any) => pendingStatuses.includes(l.status)).length,
+        completed: arr.filter((l: any) => l.status === 'completed').length,
+      });
+    } catch {
+      // ignore
     }
   }, []);
 
+  // Fetch on mount and when tab changes
   useEffect(() => {
-    fetchLoads();
-    const id = setInterval(fetchLoads, 30000);
-    return () => clearInterval(id);
-  }, [fetchLoads]);
+    setPage(1);
+    setHasMore(true);
+    fetchLoads(1, false);
+  }, [activeTab, fetchLoads]);
 
-  const activeStatuses = ['assigned', 'trip_accepted', 'trip_started', 'shipper_check_in', 'shipper_load_in', 'shipper_load_out', 'in_transit', 'receiver_check_in', 'receiver_offload'];
-  const deliveredStatuses = ['completed', 'delivered'];
-  const pendingStatuses = ['delivered']; // Awaiting approval
+  // Fetch tab counts once
+  const countsFetchedRef = useRef(false);
+  useEffect(() => {
+    if (countsFetchedRef.current) return;
+    countsFetchedRef.current = true;
+    fetchTabCounts();
+  }, [fetchTabCounts]);
 
+  const handleLoadMore = useCallback(() => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchLoads(nextPage, true);
+  }, [page, fetchLoads]);
+
+  // Client-side filtering for search and tab-specific statuses
   const filteredLoads = loads.filter((l) => {
     // Search filter
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      const matchesSearch = 
+      const matchesSearch =
         l.loadNumber?.toLowerCase().includes(q) ||
         l.customerName?.toLowerCase().includes(q) ||
         formatLocation(l.pickupLocation).toLowerCase().includes(q) ||
@@ -163,18 +246,27 @@ export default function DriverTripsMobile() {
     }
   });
 
-  const tabCounts = {
-    all: loads.length,
-    active: loads.filter(l => activeStatuses.includes(l.status)).length,
-    pending: loads.filter(l => pendingStatuses.includes(l.status)).length,
-    completed: loads.filter(l => l.status === 'completed').length,
-  };
-
   const toggleExpand = (id: string) => {
     setExpandedId(expandedId === id ? null : id);
   };
 
   const ios = { blue: '#007aff', green: '#34c759', orange: '#ff9500', red: '#ff3b30', purple: '#af52de' };
+
+  // Infinite scroll observer
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
+          handleLoadMore();
+        }
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, loading, loadingMore, handleLoadMore]);
 
   return (
     <div className="dm-content" style={{ display: 'grid', gap: 12 }}>
@@ -236,7 +328,7 @@ export default function DriverTripsMobile() {
         </div>
       )}
 
-      {loading && (
+      {loading && !loadingMore && (
         <div style={{ padding: 40, textAlign: 'center', color: 'var(--dm-muted)' }}>
           <div style={{ fontSize: 32, marginBottom: 8 }}>🚛</div>
           <div style={{ fontSize: 15 }}>{t('driverApp.loadingTrips')}</div>
@@ -252,7 +344,7 @@ export default function DriverTripsMobile() {
       )}
 
       {/* ─── Load Cards ─── */}
-      {!loading && filteredLoads.map((load) => {
+      {filteredLoads.map((load) => {
         const loadId = load.id || (load as any)._id;
         const isExpanded = expandedId === loadId;
         const isDelivered = deliveredStatuses.includes(load.status);
@@ -435,6 +527,29 @@ export default function DriverTripsMobile() {
           </div>
         );
       })}
+
+      {/* ── Infinite scroll sentinel + Load More button ── */}
+      {hasMore && !loading && filteredLoads.length > 0 && (
+        <div ref={sentinelRef} style={{ textAlign: 'center', padding: '12px 0' }}>
+          {loadingMore ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--dm-muted)', fontSize: 14 }}>
+              <div className="dm-spinner" style={{ width: 18, height: 18, border: '2px solid var(--dm-separator)', borderTopColor: ios.blue, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+              Loading more...
+            </div>
+          ) : (
+            <button
+              className="dm-btn ghost"
+              onClick={handleLoadMore}
+              style={{ borderRadius: 12, fontSize: 14, padding: '10px 24px' }}
+            >
+              Load More ({filteredLoads.length} of {totalCount})
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Spinner CSS */}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

@@ -88,9 +88,9 @@ export interface LoadsResponse {
 }
 
 export const loadApi = {
-  // Get my assigned loads (for logged-in driver)
-  getMyAssignedLoads: async (): Promise<Load[]> => {
-    const response = await apiClient.get('/loads/me/assigned');
+  // Get my assigned loads (for logged-in driver) — supports pagination
+  getMyAssignedLoads: async (params?: { page?: number; limit?: number; status?: string }): Promise<Load[] | { loads: Load[]; pagination: { page: number; limit: number; total: number; pages: number } }> => {
+    const response = await apiClient.get('/loads/me/assigned', { params });
     return response.data.data;
   },
 

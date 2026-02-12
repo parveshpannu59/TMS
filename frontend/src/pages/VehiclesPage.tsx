@@ -49,6 +49,10 @@ const VehiclesPage: React.FC = () => {
   
   // Filters
   const [vehicleTypeFilter, setVehicleTypeFilter] = useState<VehicleTypeFilter>('all');
+
+  // Server-side pagination
+  const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 10 });
+  const [totalRows, setTotalRows] = useState(0);
   
   // Dialogs
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -79,19 +83,30 @@ const VehiclesPage: React.FC = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchVehicles = useCallback(async () => {
+  const fetchVehicles = useCallback(async (pagModel?: { page: number; pageSize: number }) => {
     try {
       setLoading(true);
-      const params = vehicleTypeFilter !== 'all' ? { vehicleType: vehicleTypeFilter } : {};
+      const p = pagModel ?? paginationModel;
+      const params: any = {
+        page: p.page + 1,
+        limit: p.pageSize,
+      };
+      if (vehicleTypeFilter !== 'all') params.vehicleType = vehicleTypeFilter;
       const data = await vehicleApi.getAll(params);
-      setVehicles(data);
+      if (data && typeof data === 'object' && 'vehicles' in data) {
+        setVehicles((data as any).vehicles);
+        setTotalRows((data as any).pagination?.total ?? 0);
+      } else {
+        setVehicles(data as Vehicle[]);
+        setTotalRows((data as Vehicle[]).length);
+      }
       setError(null);
     } catch (err: any) {
       setError(err?.message || 'Failed to fetch vehicles');
     } finally {
       setLoading(false);
     }
-  }, [vehicleTypeFilter]);
+  }, [vehicleTypeFilter, paginationModel]);
 
   useEffect(() => {
     fetchVehicles();
@@ -343,10 +358,15 @@ const VehiclesPage: React.FC = () => {
             loading={loading}
             getRowId={(row) => row._id || row.id}
             autoHeight
-            pageSizeOptions={[10, 25, 50]}
-            initialState={{
-              pagination: { paginationModel: { pageSize: 25 } },
+            // Server-side pagination
+            paginationMode="server"
+            rowCount={totalRows}
+            paginationModel={paginationModel}
+            onPaginationModelChange={(model) => {
+              setPaginationModel(model);
+              fetchVehicles(model);
             }}
+            pageSizeOptions={[10, 25, 50]}
             disableRowSelectionOnClick
           />
         </Card>
