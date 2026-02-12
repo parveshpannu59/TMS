@@ -3,7 +3,10 @@ import mongoose, { Schema, Document } from 'mongoose';
 export enum DriverStatus {
   ACTIVE = 'active',
   INACTIVE = 'inactive',
-  ON_TRIP = 'on_trip',
+  ON_TRIP = 'on_trip',           // Legacy — keep for backward compat
+  ON_DUTY = 'on_duty',           // Currently on an active trip
+  OFF_DUTY = 'off_duty',         // Not on any trip, available
+  WAITING_FOR_APPROVAL = 'waiting_for_approval', // Trip delivered, pending owner review
 }
 
 export interface IDriver extends Document {

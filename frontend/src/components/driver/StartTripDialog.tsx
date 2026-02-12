@@ -15,8 +15,9 @@ import {
   useMediaQuery,
   Chip,
 } from '@mui/material';
-import { PhotoCamera, Close, CloudUpload, LocationOn, GpsFixed } from '@mui/icons-material';
+import { PhotoCamera, Close, CloudUpload, LocationOn, GpsFixed, AutoFixHigh } from '@mui/icons-material';
 import { loadApi } from '@/api/all.api';
+import { useDocumentOCR, extractMileage } from '@/hooks/useDocumentOCR';
 import type { Load } from '@/types/all.types';
 
 interface StartTripDialogProps {
@@ -39,7 +40,9 @@ export const StartTripDialog: React.FC<StartTripDialogProps> = ({
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ocrAutoFilled, setOcrAutoFilled] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { analyze, analyzing: ocrAnalyzing, ocrResult, reset: resetOCR } = useDocumentOCR();
 
   // Location state
   const [locationStatus, setLocationStatus] = useState<'idle' | 'requesting' | 'granted' | 'denied'>('idle');
@@ -113,7 +116,7 @@ export const StartTripDialog: React.FC<StartTripDialogProps> = ({
     };
   }, [open, requestLocation]);
 
-  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 10 * 1024 * 1024) {
@@ -121,11 +124,25 @@ export const StartTripDialog: React.FC<StartTripDialogProps> = ({
         return;
       }
       setPhoto(file);
+      setOcrAutoFilled(false);
       const reader = new FileReader();
       reader.onloadend = () => {
         setPhotoPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+
+      // Auto-analyze with OCR to extract mileage
+      try {
+        const result = await analyze(file);
+        if (result) {
+          // Try to extract mileage from OCR text
+          const mileage = extractMileage(result.rawText);
+          if (mileage && !startingMileage) {
+            setStartingMileage(String(mileage));
+            setOcrAutoFilled(true);
+          }
+        }
+      } catch { /* OCR failure is non-critical */ }
     }
   };
 
@@ -167,9 +184,11 @@ export const StartTripDialog: React.FC<StartTripDialogProps> = ({
     setPhoto(null);
     setPhotoPreview(null);
     setError(null);
+    setOcrAutoFilled(false);
     setLocationStatus('idle');
     setCoords(null);
     setLocationError(null);
+    resetOCR();
     onClose();
   };
 
@@ -289,10 +308,23 @@ export const StartTripDialog: React.FC<StartTripDialogProps> = ({
               label="Starting Mileage *"
               type="number"
               value={startingMileage}
-              onChange={(e) => setStartingMileage(e.target.value)}
+              onChange={(e) => { setStartingMileage(e.target.value); setOcrAutoFilled(false); }}
               placeholder="Enter odometer reading"
               required
               inputProps={{ min: 0 }}
+              helperText={
+                ocrAnalyzing ? '🔍 Scanning odometer photo...' :
+                ocrAutoFilled ? '✅ Auto-filled from photo — verify and edit if needed' :
+                photo && ocrResult && !ocrAutoFilled ? '⚠️ Could not read mileage from photo — enter manually' :
+                'Take a clear photo of the odometer, or enter manually'
+              }
+              InputProps={{
+                endAdornment: ocrAutoFilled ? (
+                  <Chip label="OCR" size="small" icon={<AutoFixHigh />} color="success" variant="outlined" sx={{ mr: -0.5 }} />
+                ) : ocrAnalyzing ? (
+                  <CircularProgress size={18} />
+                ) : undefined,
+              }}
             />
           </Box>
 

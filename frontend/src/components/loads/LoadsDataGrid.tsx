@@ -20,6 +20,8 @@ type LoadsDataGridProps = {
   onOpenNotes: (notes: string, title: string) => void;
   onConfirmRate?: (load: Load) => void;
   onViewTripDetails?: (load: Load) => void;
+  onReviewCompletion?: (load: Load) => void;
+  onManagePayment?: (load: Load) => void;
   onAddLoad: () => void;
 };
 
@@ -35,6 +37,8 @@ export const LoadsDataGrid = memo<LoadsDataGridProps>(function LoadsDataGrid({
   onOpenNotes,
   onConfirmRate,
   onViewTripDetails,
+  onReviewCompletion,
+  onManagePayment,
   onAddLoad,
 }) {
   const { t } = useTranslation();
@@ -48,6 +52,8 @@ export const LoadsDataGrid = memo<LoadsDataGridProps>(function LoadsDataGrid({
     onOpenNotes,
     onConfirmRate,
     onViewTripDetails,
+    onReviewCompletion,
+    onManagePayment,
   });
 
   return (

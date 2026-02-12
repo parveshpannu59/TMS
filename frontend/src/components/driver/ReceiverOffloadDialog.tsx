@@ -16,8 +16,9 @@ import {
   useTheme,
   useMediaQuery,
 } from '@mui/material';
-import { Close, PhotoCamera, AttachFile } from '@mui/icons-material';
+import { Close, PhotoCamera, AttachFile, AutoFixHigh } from '@mui/icons-material';
 import { loadApi } from '@/api/all.api';
+import { useDocumentOCR } from '@/hooks/useDocumentOCR';
 import type { Load } from '@/types/all.types';
 
 interface ReceiverOffloadDialogProps {
@@ -46,8 +47,10 @@ export const ReceiverOffloadDialog: React.FC<ReceiverOffloadDialogProps> = ({
   const [podPhotoPreview, setPodPhotoPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ocrExtracted, setOcrExtracted] = useState<Record<string, string> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const { analyze, analyzing: ocrAnalyzing, reset: resetOCR } = useDocumentOCR();
 
   useEffect(() => {
     if (open && initialPodPhoto) {
@@ -58,14 +61,38 @@ export const ReceiverOffloadDialog: React.FC<ReceiverOffloadDialogProps> = ({
     }
   }, [open, initialPodPhoto]);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const runOCR = async (file: File) => {
+    try {
+      setOcrExtracted(null);
+      const result = await analyze(file);
+      if (result && result.extractedFields) {
+        const fields = result.extractedFields;
+        const extracted: Record<string, string> = {};
+        if (fields.bolNumber) extracted['BOL #'] = fields.bolNumber;
+        if (fields.poNumber) extracted['PO #'] = fields.poNumber;
+        if (fields.proNumber) extracted['PRO #'] = fields.proNumber;
+        if (fields.weight) extracted['Weight'] = fields.weight;
+        if (fields.pieces) extracted['Pieces'] = fields.pieces;
+        if (fields.shipper) extracted['Shipper'] = fields.shipper;
+        if (fields.consignee) extracted['Consignee'] = fields.consignee;
+        if (fields.deliveryDate) extracted['Delivery Date'] = fields.deliveryDate;
+        if (fields.sealNumber) extracted['Seal #'] = fields.sealNumber;
+        if (Object.keys(extracted).length > 0) setOcrExtracted(extracted);
+        // Auto-fill quantity if found
+        if (fields.pieces && !quantity) setQuantity(fields.pieces);
+      }
+    } catch { /* OCR failure is non-critical */ }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setPodFile(file);
+      await runOCR(file);
     }
   };
 
-  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 10 * 1024 * 1024) {
@@ -78,6 +105,7 @@ export const ReceiverOffloadDialog: React.FC<ReceiverOffloadDialogProps> = ({
         setPodPhotoPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+      await runOCR(file);
     }
   };
 
@@ -138,6 +166,8 @@ export const ReceiverOffloadDialog: React.FC<ReceiverOffloadDialogProps> = ({
     setPodPhoto(null);
     setPodPhotoPreview(null);
     setError(null);
+    setOcrExtracted(null);
+    resetOCR();
     onClose();
   };
 
@@ -183,6 +213,36 @@ export const ReceiverOffloadDialog: React.FC<ReceiverOffloadDialogProps> = ({
             placeholder="Any additional notes or details"
           />
 
+          {/* OCR Scanning Indicator */}
+          {ocrAnalyzing && (
+            <Alert severity="info" icon={<CircularProgress size={16} />}>
+              <Typography variant="body2">Scanning document for delivery details...</Typography>
+            </Alert>
+          )}
+
+          {/* OCR Extracted Fields */}
+          {ocrExtracted && (
+            <Alert severity="success" icon={<AutoFixHigh />} sx={{ '& .MuiAlert-message': { width: '100%' } }}>
+              <Typography variant="body2" fontWeight={700} gutterBottom>
+                Extracted from POD:
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {Object.entries(ocrExtracted).map(([key, value]) => (
+                  <Box key={key} sx={{
+                    bgcolor: 'rgba(255,255,255,0.7)', borderRadius: 1, px: 1.5, py: 0.5,
+                    border: '1px solid rgba(34,197,94,0.3)',
+                  }}>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1 }}>{key}</Typography>
+                    <Typography variant="body2" fontWeight={600}>{value}</Typography>
+                  </Box>
+                ))}
+              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                Verify these details match your physical document.
+              </Typography>
+            </Alert>
+          )}
+
           <FormControlLabel
             control={
               <Checkbox
@@ -208,11 +268,12 @@ export const ReceiverOffloadDialog: React.FC<ReceiverOffloadDialogProps> = ({
             />
             <Button
               variant="outlined"
-              startIcon={<AttachFile />}
+              startIcon={ocrAnalyzing ? <CircularProgress size={16} /> : <AttachFile />}
               onClick={() => fileInputRef.current?.click()}
               fullWidth
+              disabled={ocrAnalyzing}
             >
-              {podFile ? podFile.name : 'Upload POD Document'}
+              {podFile ? podFile.name : 'Scan or Upload POD Document'}
             </Button>
           </Box>
 
@@ -253,11 +314,12 @@ export const ReceiverOffloadDialog: React.FC<ReceiverOffloadDialogProps> = ({
             ) : (
               <Button
                 variant="outlined"
-                startIcon={<PhotoCamera />}
+                startIcon={ocrAnalyzing ? <CircularProgress size={16} /> : <PhotoCamera />}
                 onClick={() => photoInputRef.current?.click()}
                 fullWidth
+                disabled={ocrAnalyzing}
               >
-                Take/Upload POD Photo
+                Scan or Take POD Photo
               </Button>
             )}
           </Box>

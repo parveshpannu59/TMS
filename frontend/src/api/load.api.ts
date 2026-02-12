@@ -281,4 +281,22 @@ export const loadApi = {
     });
     return response.data.data;
   },
+
+  // Confirm completion (Owner/Dispatcher reviews delivered load)
+  confirmCompletion: async (
+    id: string,
+    data: { reviewNotes?: string; adjustedPayment?: number }
+  ): Promise<Load> => {
+    const response = await apiClient.post(`/loads/${id}/confirm-completion`, data);
+    return response.data.data;
+  },
+
+  // Mark payment as paid
+  markPaymentPaid: async (
+    id: string,
+    data: { paymentNotes?: string; paymentMethod?: string }
+  ): Promise<Load> => {
+    const response = await apiClient.post(`/loads/${id}/mark-paid`, data);
+    return response.data.data;
+  },
 };

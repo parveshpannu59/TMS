@@ -184,14 +184,66 @@ export default function TripTrackingMap({
   const fmtLoc = (l: MapLocation | null | undefined) => l ? [l.city, l.state].filter(Boolean).join(', ') || l.address || '—' : '—';
   const phase: 'pre' | 'active' | 'post' = PRE_TRIP.includes(status) ? 'pre' : POST_TRIP.includes(status) ? 'post' : 'active';
 
+  // ─── Auto-geocode pickup/delivery when lat/lng is missing ───
+  const [geocodedPickup, setGeocodedPickup] = useState<{lat: number; lng: number} | null>(null);
+  const [geocodedDelivery, setGeocodedDelivery] = useState<{lat: number; lng: number} | null>(null);
+  const geocodeAttemptedRef = useRef(false);
+
+  useEffect(() => {
+    if (geocodeAttemptedRef.current) return;
+    const needsPickup = pickupLocation && !pickupLocation.lat && (pickupLocation.city || pickupLocation.address);
+    const needsDelivery = deliveryLocation && !deliveryLocation.lat && (deliveryLocation.city || deliveryLocation.address);
+    if (!needsPickup && !needsDelivery) return;
+    geocodeAttemptedRef.current = true;
+
+    const geocode = async (loc: MapLocation): Promise<{lat: number; lng: number} | null> => {
+      const q = [loc.address, loc.city, loc.state].filter(Boolean).join(', ');
+      if (!q) return null;
+      try {
+        const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`, {
+          headers: { 'Accept-Language': 'en' },
+        });
+        const data = await r.json();
+        if (data?.[0]?.lat && data?.[0]?.lon) {
+          return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+        }
+      } catch { /* ignore */ }
+      return null;
+    };
+
+    (async () => {
+      if (needsPickup && pickupLocation) {
+        const coords = await geocode(pickupLocation);
+        if (coords) setGeocodedPickup(coords);
+      }
+      if (needsDelivery && deliveryLocation) {
+        const coords = await geocode(deliveryLocation);
+        if (coords) setGeocodedDelivery(coords);
+      }
+    })();
+  }, [pickupLocation, deliveryLocation]);
+
+  // Effective pickup/delivery with geocoded fallback
+  const effectivePickup = useMemo(() => {
+    if (pickupLocation?.lat) return pickupLocation;
+    if (geocodedPickup && pickupLocation) return { ...pickupLocation, ...geocodedPickup };
+    return pickupLocation;
+  }, [pickupLocation, geocodedPickup]);
+
+  const effectiveDelivery = useMemo(() => {
+    if (deliveryLocation?.lat) return deliveryLocation;
+    if (geocodedDelivery && deliveryLocation) return { ...deliveryLocation, ...geocodedDelivery };
+    return deliveryLocation;
+  }, [deliveryLocation, geocodedDelivery]);
+
   // Fetch planned route from OSRM
   useEffect(() => {
-    if (plannedFetchedRef.current || !pickupLocation?.lat || !pickupLocation?.lng || !deliveryLocation?.lat || !deliveryLocation?.lng) return;
+    if (plannedFetchedRef.current || !effectivePickup?.lat || !effectivePickup?.lng || !effectiveDelivery?.lat || !effectiveDelivery?.lng) return;
     plannedFetchedRef.current = true;
     setRouteLoading(true);
     (async () => {
       try {
-        const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${pickupLocation.lng},${pickupLocation.lat};${deliveryLocation.lng},${deliveryLocation.lat}?overview=full&geometries=geojson`);
+        const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${effectivePickup.lng},${effectivePickup.lat};${effectiveDelivery.lng},${effectiveDelivery.lat}?overview=full&geometries=geojson`);
         const d = await r.json();
         if (d.code === 'Ok' && d.routes?.[0]) {
           setPlannedRoute(d.routes[0].geometry.coordinates.map((c: number[]) => [c[1], c[0]] as [number, number]));
@@ -201,7 +253,7 @@ export default function TripTrackingMap({
         }
       } catch { /* ignore */ } finally { setRouteLoading(false); }
     })();
-  }, [pickupLocation?.lat, pickupLocation?.lng, deliveryLocation?.lat, deliveryLocation?.lng]);
+  }, [effectivePickup?.lat, effectivePickup?.lng, effectiveDelivery?.lat, effectiveDelivery?.lng]);
 
   const tripStats = useMemo(() => {
     if (locationHistory.length < 2) return null;
@@ -220,11 +272,11 @@ export default function TripTrackingMap({
     const pts: [number, number][] = [];
     if (currentLocation) pts.push([currentLocation.lat, currentLocation.lng]);
     locationHistory.forEach(p => pts.push([p.lat, p.lng]));
-    if (pickupLocation?.lat && pickupLocation?.lng) pts.push([pickupLocation.lat, pickupLocation.lng]);
-    if (deliveryLocation?.lat && deliveryLocation?.lng) pts.push([deliveryLocation.lat, deliveryLocation.lng]);
+    if (effectivePickup?.lat && effectivePickup?.lng) pts.push([effectivePickup.lat, effectivePickup.lng]);
+    if (effectiveDelivery?.lat && effectiveDelivery?.lng) pts.push([effectiveDelivery.lat, effectiveDelivery.lng]);
     if (plannedRoute) plannedRoute.forEach(p => pts.push(p));
     return pts;
-  }, [currentLocation, locationHistory, pickupLocation, deliveryLocation, plannedRoute]);
+  }, [currentLocation, locationHistory, effectivePickup, effectiveDelivery, plannedRoute]);
 
   // ─── Init Map ─────────────────────────────────────────────
   useEffect(() => {
@@ -290,16 +342,16 @@ export default function TripTrackingMap({
     });
 
     // Pickup
-    if (pickupLocation?.lat && pickupLocation?.lng) {
-      const m = L.marker([pickupLocation.lat, pickupLocation.lng], { icon: PICKUP_ICON, zIndexOffset: 600 });
-      m.bindPopup(`<div style="font-size:13px;font-weight:600">Pickup</div><div style="font-size:11px;color:#666">${fmtLoc(pickupLocation)}</div>`);
+    if (effectivePickup?.lat && effectivePickup?.lng) {
+      const m = L.marker([effectivePickup.lat, effectivePickup.lng], { icon: PICKUP_ICON, zIndexOffset: 600 });
+      m.bindPopup(`<div style="font-size:13px;font-weight:600">Pickup</div><div style="font-size:11px;color:#666">${fmtLoc(effectivePickup)}</div>`);
       markers.addLayer(m);
     }
 
     // Delivery
-    if (deliveryLocation?.lat && deliveryLocation?.lng) {
-      const m = L.marker([deliveryLocation.lat, deliveryLocation.lng], { icon: DELIVERY_ICON, zIndexOffset: 600 });
-      m.bindPopup(`<div style="font-size:13px;font-weight:600">Delivery</div><div style="font-size:11px;color:#666">${fmtLoc(deliveryLocation)}</div>`);
+    if (effectiveDelivery?.lat && effectiveDelivery?.lng) {
+      const m = L.marker([effectiveDelivery.lat, effectiveDelivery.lng], { icon: DELIVERY_ICON, zIndexOffset: 600 });
+      m.bindPopup(`<div style="font-size:13px;font-weight:600">Delivery</div><div style="font-size:11px;color:#666">${fmtLoc(effectiveDelivery)}</div>`);
       markers.addLayer(m);
     }
 
@@ -326,7 +378,7 @@ export default function TripTrackingMap({
     }
 
     setLastUpdate(new Date());
-  }, [currentLocation, locationHistory, pickupLocation, deliveryLocation, driverName, loadNumber, status, showRoute, allPoints, plannedRoute, stops, phase, isCentered]);
+  }, [currentLocation, locationHistory, effectivePickup, effectiveDelivery, driverName, loadNumber, status, showRoute, allPoints, plannedRoute, stops, phase, isCentered]);
 
   // Auto-refresh
   useEffect(() => {
@@ -335,7 +387,7 @@ export default function TripTrackingMap({
     return () => clearInterval(id);
   }, [autoRefresh, onRefresh]);
 
-  const noData = !currentLocation && locationHistory.length === 0 && !(pickupLocation?.lat) && !(deliveryLocation?.lat);
+  const noData = !currentLocation && locationHistory.length === 0 && !(effectivePickup?.lat) && !(effectiveDelivery?.lat);
 
   // Re-center button
   const reCenter = useCallback(() => {
@@ -375,12 +427,12 @@ export default function TripTrackingMap({
         <div className="uber-route-info">
           <div className="uber-route-row">
             <span className="uber-dot" style={{ background: '#000' }} />
-            <span className="uber-route-text">{fmtLoc(pickupLocation)}</span>
+            <span className="uber-route-text">{fmtLoc(effectivePickup)}</span>
           </div>
           <div className="uber-route-line" />
           <div className="uber-route-row">
             <span className="uber-dot" style={{ background: '#22c55e' }} />
-            <span className="uber-route-text">{fmtLoc(deliveryLocation)}</span>
+            <span className="uber-route-text">{fmtLoc(effectiveDelivery)}</span>
           </div>
           <div className="uber-route-eta">
             <span style={{ fontWeight: 800, fontSize: 14 }}>{routeDistance}</span>
@@ -485,11 +537,26 @@ export default function TripTrackingMap({
       {/* ━━━ NO DATA ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {noData && !plannedRoute && (
         <div className="uber-no-data">
-          <div style={{ fontSize: 40, marginBottom: 8 }}>📡</div>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>Waiting for GPS</div>
-          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>
-            {phase === 'pre' ? 'Route appears when locations have coordinates' : 'Tracking starts when driver begins trip'}
-          </div>
+          {phase === 'post' ? (
+            <>
+              <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>Trip Completed</div>
+              <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>
+                No GPS route data was recorded for this trip.
+              </div>
+              <div style={{ fontSize: 11, color: '#b0b0b0', marginTop: 6 }}>
+                Route data is recorded when the driver uses live tracking during the trip.
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 40, marginBottom: 8 }}>📡</div>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>Waiting for GPS</div>
+              <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>
+                {phase === 'pre' ? 'Route appears when locations have coordinates' : 'Tracking starts when driver begins trip'}
+              </div>
+            </>
+          )}
         </div>
       )}
 

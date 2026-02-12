@@ -43,6 +43,12 @@ export const driverApi = {
     return response.data.data;
   },
 
+  // Get my duty status
+  getMyDutyStatus: async (): Promise<{ status: string; dutyLabel: string; currentLoadId: string | null; driverName: string }> => {
+    const response = await apiClient.get('/drivers/me/duty-status');
+    return response.data.data;
+  },
+
   // Get all drivers
   getDrivers: async (status?: string): Promise<Driver[]> => {
     const response = await apiClient.get('/drivers', { params: { status, limit: 100 } });

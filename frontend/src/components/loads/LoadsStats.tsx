@@ -5,6 +5,7 @@ import {
   PendingActions,
   LocalShipping,
   CheckCircle,
+  RateReview,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { StatsCard } from '@/components/common/StatsCard';
@@ -14,6 +15,7 @@ type LoadsStatsProps = {
   total: number;
   booked: number;
   inTransit: number;
+  delivered?: number;
   completed: number;
   totalRevenue: number;
 };
@@ -22,6 +24,7 @@ export const LoadsStats = memo<LoadsStatsProps>(function LoadsStats({
   total,
   booked,
   inTransit,
+  delivered = 0,
   completed,
   totalRevenue,
 }) {
@@ -30,7 +33,7 @@ export const LoadsStats = memo<LoadsStatsProps>(function LoadsStats({
 
   return (
     <Grid container spacing={2} sx={{ mb: 3 }}>
-      <Grid item xs={6} sm={6} md={3}>
+      <Grid item xs={6} sm={4} md={2.4}>
         <StatsCard
           title={t('loads.totalLoads', { defaultValue: 'Total Loads' })}
           value={total}
@@ -38,7 +41,7 @@ export const LoadsStats = memo<LoadsStatsProps>(function LoadsStats({
           color={theme.palette.primary.main}
         />
       </Grid>
-      <Grid item xs={6} sm={6} md={3}>
+      <Grid item xs={6} sm={4} md={2.4}>
         <StatsCard
           title={t('loads.booked', { defaultValue: 'Booked' })}
           value={booked}
@@ -47,7 +50,7 @@ export const LoadsStats = memo<LoadsStatsProps>(function LoadsStats({
           subtitle={t('loads.awaitingAssignment', { defaultValue: 'Awaiting assignment' })}
         />
       </Grid>
-      <Grid item xs={6} sm={6} md={3}>
+      <Grid item xs={6} sm={4} md={2.4}>
         <StatsCard
           title={t('loads.inTransit', { defaultValue: 'In Transit' })}
           value={inTransit}
@@ -56,7 +59,16 @@ export const LoadsStats = memo<LoadsStatsProps>(function LoadsStats({
           subtitle={t('loads.onTheRoad', { defaultValue: 'On the road' })}
         />
       </Grid>
-      <Grid item xs={6} sm={6} md={3}>
+      <Grid item xs={6} sm={4} md={2.4}>
+        <StatsCard
+          title="Delivered"
+          value={delivered}
+          icon={<RateReview />}
+          color={theme.palette.warning.dark}
+          subtitle="Review pending"
+        />
+      </Grid>
+      <Grid item xs={6} sm={4} md={2.4}>
         <StatsCard
           title={t('loads.completed', { defaultValue: 'Completed' })}
           value={completed}
