@@ -191,6 +191,20 @@ router.post(
   LoadController.endTrip
 );
 
+// Confirm completion (Owner/Dispatcher reviews delivered load)
+router.post(
+  '/:id/confirm-completion',
+  authorize(UserRole.OWNER, UserRole.DISPATCHER),
+  LoadController.confirmCompletion
+);
+
+// Mark payment as paid (Owner/Dispatcher)
+router.post(
+  '/:id/mark-paid',
+  authorize(UserRole.OWNER, UserRole.DISPATCHER),
+  LoadController.markPaymentPaid
+);
+
 // Update location during trip (Driver - live tracking)
 router.post(
   '/:id/update-location',

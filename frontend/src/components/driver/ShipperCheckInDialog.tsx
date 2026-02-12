@@ -18,8 +18,9 @@ import {
   Step,
   StepLabel,
 } from '@mui/material';
-import { Close, LocationOn, GpsFixed, CheckCircle } from '@mui/icons-material';
+import { Close, LocationOn, GpsFixed, CheckCircle, PhotoCamera, AutoFixHigh } from '@mui/icons-material';
 import { loadApi } from '@/api/all.api';
+import { useDocumentOCR } from '@/hooks/useDocumentOCR';
 import type { Load } from '@/types/all.types';
 
 interface ShipperCheckInDialogProps {
@@ -46,6 +47,9 @@ export const ShipperCheckInDialog: React.FC<ShipperCheckInDialogProps> = ({
   const [referenceNumber, setReferenceNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ocrAutoFilled, setOcrAutoFilled] = useState(false);
+  const { analyze, analyzing: ocrAnalyzing, reset: resetOCR } = useDocumentOCR();
+  const scanInputRef = useRef<HTMLInputElement>(null);
 
   // Location state
   const [locationStatus, setLocationStatus] = useState<'idle' | 'requesting' | 'granted' | 'denied'>('idle');
@@ -158,6 +162,33 @@ export const ShipperCheckInDialog: React.FC<ShipperCheckInDialogProps> = ({
     }
   };
 
+  const handleScanDocument = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setOcrAutoFilled(false);
+
+    try {
+      const result = await analyze(file);
+      if (result) {
+        let filled = false;
+        const fields = result.extractedFields;
+
+        if (fields.poNumber && !poNumber) { setPoNumber(fields.poNumber); filled = true; }
+        if (fields.loadNumber && !loadNumber) { setLoadNumber(fields.loadNumber); filled = true; }
+        if (fields.referenceNumber && !referenceNumber) { setReferenceNumber(fields.referenceNumber); filled = true; }
+
+        // Also try bolNumber and proNumber as reference
+        if (!referenceNumber && (fields.bolNumber || fields.proNumber)) {
+          setReferenceNumber(fields.bolNumber || fields.proNumber || '');
+          filled = true;
+        }
+
+        if (filled) setOcrAutoFilled(true);
+      }
+    } catch { /* OCR failure is non-critical */ }
+  };
+
   const handleClose = () => {
     setPoNumber('');
     setLoadNumber(load.loadNumber || '');
@@ -168,6 +199,8 @@ export const ShipperCheckInDialog: React.FC<ShipperCheckInDialogProps> = ({
     setCoords(null);
     setLocationError(null);
     setCheckInTime(null);
+    setOcrAutoFilled(false);
+    resetOCR();
     onClose();
   };
 
@@ -301,7 +334,38 @@ export const ShipperCheckInDialog: React.FC<ShipperCheckInDialogProps> = ({
               )}
             </Alert>
 
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            {/* Scan Document Button */}
+            <Box sx={{
+              border: `2px dashed ${ocrAutoFilled ? '#22c55e' : theme.palette.divider}`,
+              borderRadius: 2, p: 2, textAlign: 'center',
+              bgcolor: ocrAutoFilled ? 'rgba(34,197,94,0.06)' : 'rgba(59,130,246,0.04)',
+            }}>
+              <input
+                ref={scanInputRef}
+                type="file"
+                accept="image/*,application/pdf"
+                capture="environment"
+                onChange={handleScanDocument}
+                style={{ display: 'none' }}
+              />
+              <Button
+                variant={ocrAutoFilled ? 'outlined' : 'contained'}
+                color={ocrAutoFilled ? 'success' : 'primary'}
+                startIcon={ocrAnalyzing ? <CircularProgress size={16} /> : ocrAutoFilled ? <AutoFixHigh /> : <PhotoCamera />}
+                disabled={ocrAnalyzing}
+                onClick={() => scanInputRef.current?.click()}
+                sx={{ mb: 1 }}
+              >
+                {ocrAnalyzing ? 'Scanning Document...' : ocrAutoFilled ? 'Scan Again' : 'Scan PO / Gate Pass'}
+              </Button>
+              <Typography variant="caption" color="text.secondary" display="block">
+                {ocrAutoFilled
+                  ? '✅ Details auto-filled — verify and edit below'
+                  : 'Take a photo of PO slip, gate pass, or any document to auto-fill'}
+              </Typography>
+            </Box>
+
+            <Typography variant="body2" color="text.secondary">
               Enter at least one identifier to complete check-in. Load Number is pre-filled.
             </Typography>
 
@@ -319,16 +383,26 @@ export const ShipperCheckInDialog: React.FC<ShipperCheckInDialogProps> = ({
               fullWidth
               label="PO Number"
               value={poNumber}
-              onChange={(e) => setPoNumber(e.target.value)}
+              onChange={(e) => { setPoNumber(e.target.value); setOcrAutoFilled(false); }}
               placeholder="Enter Purchase Order number (optional)"
+              InputProps={{
+                endAdornment: ocrAutoFilled && poNumber ? (
+                  <Chip label="OCR" size="small" icon={<AutoFixHigh />} color="success" variant="outlined" />
+                ) : undefined,
+              }}
             />
             <TextField
               id="shipper-checkin-reference"
               fullWidth
               label="Reference Number"
               value={referenceNumber}
-              onChange={(e) => setReferenceNumber(e.target.value)}
+              onChange={(e) => { setReferenceNumber(e.target.value); setOcrAutoFilled(false); }}
               placeholder="Enter reference number (optional)"
+              InputProps={{
+                endAdornment: ocrAutoFilled && referenceNumber ? (
+                  <Chip label="OCR" size="small" icon={<AutoFixHigh />} color="success" variant="outlined" />
+                ) : undefined,
+              }}
             />
           </Box>
         )}

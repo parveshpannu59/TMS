@@ -5,6 +5,7 @@ import { loadApi } from '@/api/all.api';
 import { StartTripDialog } from '@/components/driver/StartTripDialog';
 import { DriverFormDialog } from '@/components/driver/DriverFormDialog';
 import { ShipperCheckInDialog } from '@/components/driver/ShipperCheckInDialog';
+import { LoadInDialog } from '@/components/driver/LoadInDialog';
 import { LoadOutDialog } from '@/components/driver/LoadOutDialog';
 import { ReceiverOffloadDialog } from '@/components/driver/ReceiverOffloadDialog';
 import { EndTripDialog } from '@/components/driver/EndTripDialog';
@@ -37,15 +38,25 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const TRIP_STEPS = [
-  { key: 'trip_started', label: 'En Route' },
-  { key: 'shipper_check_in', label: 'Check In' },
-  { key: 'shipper_load_in', label: 'Loaded' },
-  { key: 'shipper_load_out', label: 'BOL' },
-  { key: 'in_transit', label: 'Transit' },
-  { key: 'receiver_check_in', label: 'Arrive' },
-  { key: 'receiver_offload', label: 'POD' },
-  { key: 'delivered', label: 'Done' },
+  { key: 'trip_started', label: 'Start Trip', icon: '🚛', detail: 'En route to pickup' },
+  { key: 'shipper_check_in', label: 'At Pickup', icon: '📍', detail: 'Check in at shipper' },
+  { key: 'shipper_load_in', label: 'Loaded', icon: '📦', detail: 'Lumper fee & loading confirmed' },
+  { key: 'shipper_load_out', label: 'BOL Upload', icon: '📄', detail: 'Bill of Lading uploaded' },
+  { key: 'in_transit', label: 'Transit', icon: '🛣', detail: 'Driving to delivery' },
+  { key: 'receiver_check_in', label: 'At Delivery', icon: '🏁', detail: 'Arrive at receiver' },
+  { key: 'receiver_offload', label: 'POD Upload', icon: '📋', detail: 'Proof of Delivery uploaded' },
+  { key: 'delivered', label: 'Complete', icon: '✅', detail: 'Trip ended' },
 ];
+
+const STEP_DESCRIPTIONS: Record<string, string> = {
+  trip_started: 'Drive to the shipper/pickup location. Tap "Arrived at Pickup" when you get there.',
+  shipper_check_in: 'You\'re at the shipper. Tap "Confirm Loaded" to check in, enter lumper fee details, and confirm loading is complete.',
+  shipper_load_in: 'Loading done! Upload the Bill of Lading (BOL) document and depart from the shipper.',
+  shipper_load_out: 'BOL uploaded! Drive to the delivery/receiver location.',
+  in_transit: 'Tap "Arrived at Delivery" when you reach the receiver location.',
+  receiver_check_in: 'You\'re at the receiver. Upload Proof of Delivery (POD) and confirm offload.',
+  receiver_offload: 'All documents uploaded! Tap "End Trip" to complete and submit for owner approval.',
+};
 
 const ACTIVE_STATUSES = ['trip_started', 'shipper_check_in', 'shipper_load_in', 'shipper_load_out', 'in_transit', 'receiver_check_in', 'receiver_offload'];
 const PRE_TRIP_STATUSES = ['assigned', 'trip_accepted'];
@@ -337,18 +348,13 @@ export default function LoadTrackingMobile() {
     return {};
   }, [currentCoords, gpsAccuracy]);
 
-  const handleLoadIn = useCallback(async () => {
+  const [loadInDialogOpen, setLoadInDialogOpen] = useState(false);
+
+  const handleLoadIn = useCallback(() => {
     if (!load || load.status !== 'shipper_check_in') return;
-    try {
-      vibrate(30);
-      await loadApi.shipperLoadIn(load.id, { ...getGPSPayload() });
-      fetchLoad();
-      sendLocationNow();
-      setToast('Loaded confirmed!');
-    } catch (err: any) {
-      setToast(err?.message || 'Failed');
-    }
-  }, [load, fetchLoad, sendLocationNow]);
+    vibrate(30);
+    setLoadInDialogOpen(true);
+  }, [load]);
 
   const handleReceiverCheckIn = useCallback(async () => {
     if (!load) return;
@@ -486,7 +492,7 @@ export default function LoadTrackingMobile() {
               return (
                 <div key={step.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
                   <div style={{
-                    width: 22, height: 22, borderRadius: '50%',
+                    width: 24, height: 24, borderRadius: '50%',
                     background: isDone ? ios.green : isCurrent ? ios.blue : 'var(--dm-fill)',
                     color: isDone || isCurrent ? '#fff' : 'var(--dm-muted)',
                     display: 'grid', placeItems: 'center', fontSize: 10, fontWeight: 700,
@@ -496,7 +502,9 @@ export default function LoadTrackingMobile() {
                   }}>
                     {isDone ? (
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    ) : i + 1}
+                    ) : (
+                      <span style={{ fontSize: 10 }}>{step.icon}</span>
+                    )}
                   </div>
                   <div style={{
                     fontSize: 9, marginTop: 3,
@@ -508,7 +516,7 @@ export default function LoadTrackingMobile() {
                   </div>
                   {i < TRIP_STEPS.length - 1 && (
                     <div style={{
-                      position: 'absolute', top: 11, left: '60%', right: '-40%', height: 2,
+                      position: 'absolute', top: 12, left: '60%', right: '-40%', height: 2,
                       background: isDone ? ios.green : 'var(--dm-fill)', zIndex: 0,
                       transition: 'background 0.3s',
                     }} />
@@ -517,6 +525,43 @@ export default function LoadTrackingMobile() {
               );
             })}
           </div>
+          {/* Completed steps timeline */}
+          {currentStepIdx > 0 && (() => {
+            const statusHistory: Array<{ status: string; timestamp: string }> = (load as any)?.statusHistory || [];
+            return (
+              <div style={{ borderTop: '1px solid var(--dm-fill)', paddingTop: 6, marginTop: 6 }}>
+                {TRIP_STEPS.filter((_, i) => currentStepIdx > i).map((step) => {
+                  const h = statusHistory.find((e: any) => e.status === step.key);
+                  return (
+                    <div key={step.key} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 4px', fontSize: 11 }}>
+                      <span style={{ color: ios.green, fontSize: 10, flexShrink: 0 }}>✓</span>
+                      <span style={{ color: 'var(--dm-muted)', flex: 1 }}>
+                        <span style={{ fontWeight: 600, color: 'var(--dm-text)' }}>{step.label}</span>
+                        {' — '}{step.detail}
+                      </span>
+                      {h && (
+                        <span style={{ color: 'var(--dm-muted)', fontSize: 10, flexShrink: 0 }}>
+                          {new Date(h.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+          {/* Step instruction */}
+          {load?.status && STEP_DESCRIPTIONS[load.status] && (
+            <div style={{
+              marginTop: 8, padding: '8px 12px', borderRadius: 10,
+              background: `${ios.blue}08`, border: `1px solid ${ios.blue}12`,
+              fontSize: 12, color: 'var(--dm-text)', fontWeight: 500, lineHeight: 1.4,
+            }}>
+              <span style={{ fontWeight: 700, color: ios.blue }}>Step {currentStepIdx + 1} of {TRIP_STEPS.length}: </span>
+              {STEP_DESCRIPTIONS[load.status]}
+            </div>
+          )}
         </div>
       )}
 
@@ -889,6 +934,7 @@ export default function LoadTrackingMobile() {
           <DriverFormDialog open={driverFormOpen} onClose={() => setDriverFormOpen(false)} load={ensureLoadId(load)} onSuccess={() => { setDriverFormOpen(false); fetchLoad(); setToast('Form submitted!'); }} />
           <StartTripDialog open={startTripOpen} onClose={() => setStartTripOpen(false)} load={ensureLoadId(load)} onSuccess={() => { setStartTripOpen(false); fetchLoad(); fetchLocationHistory(); requestLocationAccess(); setToast('Trip started! Tracking location...'); }} />
           <ShipperCheckInDialog open={shipperCheckInOpen} onClose={() => setShipperCheckInOpen(false)} load={ensureLoadId(load)} onSuccess={() => { withLocationSend(() => { setShipperCheckInOpen(false); fetchLoad(); fetchLocationHistory(); setToast('Checked in at shipper!'); }); }} />
+          <LoadInDialog open={loadInDialogOpen} onClose={() => setLoadInDialogOpen(false)} load={ensureLoadId(load)} onSuccess={() => { setLoadInDialogOpen(false); fetchLoad(); fetchLocationHistory(); setToast('Loading confirmed!'); }} />
           <LoadOutDialog open={loadOutOpen} onClose={() => setLoadOutOpen(false)} load={ensureLoadId(load)} onSuccess={() => { withLocationSend(() => { setLoadOutOpen(false); fetchLoad(); fetchLocationHistory(); setToast('BOL uploaded! Departing...'); }); }} />
           <ReceiverOffloadDialog open={receiverOffloadOpen} onClose={() => setReceiverOffloadOpen(false)} load={ensureLoadId(load)} onSuccess={() => { withLocationSend(() => { setReceiverOffloadOpen(false); fetchLoad(); fetchLocationHistory(); setToast('POD uploaded! Offload done.'); }); }} />
           <LogExpenseDialog open={logExpenseOpen} onClose={() => setLogExpenseOpen(false)} load={ensureLoadId(load)} onSuccess={() => { setLogExpenseOpen(false); fetchExpenses(); setToast('Expense logged!'); }} defaultCategory={expenseCategory} />

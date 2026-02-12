@@ -14,8 +14,9 @@ import {
   useMediaQuery,
   Link,
 } from '@mui/material';
-import { Close, AttachFile, Description } from '@mui/icons-material';
+import { Close, AttachFile, Description, AutoFixHigh } from '@mui/icons-material';
 import { loadApi } from '@/api/all.api';
+import { useDocumentOCR } from '@/hooks/useDocumentOCR';
 import type { Load } from '@/types/all.types';
 
 interface LoadOutDialogProps {
@@ -36,14 +37,16 @@ export const LoadOutDialog: React.FC<LoadOutDialogProps> = ({
   const [bolFile, setBolFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ocrExtracted, setOcrExtracted] = useState<Record<string, string> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { analyze, analyzing: ocrAnalyzing, reset: resetOCR } = useDocumentOCR();
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Check if PDF and size
-      if (file.type !== 'application/pdf') {
-        setError('Please upload a PDF file');
+      // Accept PDF and images
+      if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+        setError('Please upload a PDF or image file');
         return;
       }
       if (file.size > 25 * 1024 * 1024) { // 25MB limit
@@ -52,6 +55,26 @@ export const LoadOutDialog: React.FC<LoadOutDialogProps> = ({
       }
       setBolFile(file);
       setError(null);
+      setOcrExtracted(null);
+
+      // Auto-analyze BOL to extract details
+      try {
+        const result = await analyze(file);
+        if (result && result.extractedFields) {
+          const fields = result.extractedFields;
+          const extracted: Record<string, string> = {};
+          if (fields.bolNumber) extracted['BOL #'] = fields.bolNumber;
+          if (fields.poNumber) extracted['PO #'] = fields.poNumber;
+          if (fields.proNumber) extracted['PRO #'] = fields.proNumber;
+          if (fields.shipper) extracted['Shipper'] = fields.shipper;
+          if (fields.consignee) extracted['Consignee'] = fields.consignee;
+          if (fields.weight) extracted['Weight'] = fields.weight;
+          if (fields.pieces) extracted['Pieces'] = fields.pieces;
+          if (fields.commodity) extracted['Commodity'] = fields.commodity;
+          if (fields.sealNumber) extracted['Seal #'] = fields.sealNumber;
+          if (Object.keys(extracted).length > 0) setOcrExtracted(extracted);
+        }
+      } catch { /* OCR failure is non-critical */ }
     }
   };
 
@@ -95,6 +118,8 @@ export const LoadOutDialog: React.FC<LoadOutDialogProps> = ({
   const handleClose = () => {
     setBolFile(null);
     setError(null);
+    setOcrExtracted(null);
+    resetOCR();
     onClose();
   };
 
@@ -145,7 +170,7 @@ export const LoadOutDialog: React.FC<LoadOutDialogProps> = ({
             <input
               ref={fileInputRef}
               type="file"
-              accept="application/pdf"
+              accept="application/pdf,image/*"
               onChange={handleFileSelect}
               style={{ display: 'none' }}
             />
@@ -187,15 +212,47 @@ export const LoadOutDialog: React.FC<LoadOutDialogProps> = ({
                 <Box>
                   <AttachFile sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
                   <Typography variant="body2" color="text.secondary">
-                    Click to upload BOL PDF
+                    Take Photo or Upload BOL (PDF/Image)
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Max size: 25MB (compress if larger)
+                    Max size: 25MB
                   </Typography>
                 </Box>
               )}
             </Box>
           </Box>
+
+          {/* OCR Scanning Indicator */}
+          {ocrAnalyzing && (
+            <Alert severity="info" icon={<CircularProgress size={16} />}>
+              <Typography variant="body2">Scanning document for BOL details...</Typography>
+            </Alert>
+          )}
+
+          {/* OCR Extracted Fields */}
+          {ocrExtracted && (
+            <Alert severity="success" icon={<AutoFixHigh />} sx={{ '& .MuiAlert-message': { width: '100%' } }}>
+              <Typography variant="body2" fontWeight={700} gutterBottom>
+                Extracted from BOL:
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {Object.entries(ocrExtracted).map(([key, value]) => (
+                  <Box key={key} sx={{
+                    bgcolor: 'rgba(255,255,255,0.7)', borderRadius: 1, px: 1.5, py: 0.5,
+                    border: '1px solid rgba(34,197,94,0.3)',
+                  }}>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1 }}>
+                      {key}
+                    </Typography>
+                    <Typography variant="body2" fontWeight={600}>{value}</Typography>
+                  </Box>
+                ))}
+              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                Verify these details match your physical BOL document.
+              </Typography>
+            </Alert>
+          )}
 
           {bolFile && bolFile.size > 20 * 1024 * 1024 && (
             <Alert severity="warning">
@@ -209,8 +266,14 @@ export const LoadOutDialog: React.FC<LoadOutDialogProps> = ({
             </Alert>
           )}
 
-          <Alert severity="info">
-            Upload the Bill of Lading document before leaving the shipper location.
+          <Alert severity="warning" variant="outlined">
+            <Typography variant="body2" fontWeight={600} gutterBottom>
+              BOL Upload Required
+            </Typography>
+            <Typography variant="caption">
+              The Bill of Lading must be uploaded within 2-3 hours of loading. 
+              Upload it now before departing the shipper location to avoid delays.
+            </Typography>
           </Alert>
         </Box>
       </DialogContent>

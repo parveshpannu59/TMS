@@ -202,9 +202,18 @@ export interface ILoad extends Document {
   // Status tracking timestamps
   assignedAt?: Date;
   tripEndedAt?: Date;
+  deliveredAt?: Date;
   completedAt?: Date;
   cancelledAt?: Date;
   cancellationReason?: string;
+  // Completion review workflow
+  reviewedBy?: string;
+  reviewedAt?: Date;
+  reviewNotes?: string;
+  paymentStatus?: 'pending' | 'approved' | 'paid';
+  paymentApprovedAt?: Date;
+  paymentApprovedBy?: string;
+  paymentAmount?: number;
   // Recurring load fields
   isRecurring?: boolean;
   recurringPattern?: 'daily' | 'weekly' | 'biweekly' | 'monthly';
@@ -555,6 +564,9 @@ const loadSchema = new Schema<ILoad>(
     tripEndedAt: {
       type: Date,
     },
+    deliveredAt: {
+      type: Date,
+    },
     completedAt: {
       type: Date,
     },
@@ -563,6 +575,32 @@ const loadSchema = new Schema<ILoad>(
     },
     cancellationReason: {
       type: String,
+    },
+    // ─── Completion Review Workflow ──────────────────────────
+    reviewedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    reviewedAt: {
+      type: Date,
+    },
+    reviewNotes: {
+      type: String,
+    },
+    paymentStatus: {
+      type: String,
+      enum: ['pending', 'approved', 'paid'],
+      default: 'pending',
+    },
+    paymentApprovedAt: {
+      type: Date,
+    },
+    paymentApprovedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    paymentAmount: {
+      type: Number,
     },
     // ─── Recurring Load Fields ─────────────────────────────
     isRecurring: {

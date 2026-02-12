@@ -61,15 +61,14 @@ export const useLoadsPage = (filters: LoadsPageFilters) => {
       (l) => l.status === 'booked' || l.status === 'rate_confirmed'
     ).length;
     const inTransit = loads.filter((l) =>
-      ['assigned', 'trip_accepted', 'in_transit'].includes(l.status)
+      ['assigned', 'trip_accepted', 'trip_started', 'shipper_check_in', 'shipper_load_in', 'shipper_load_out', 'in_transit', 'receiver_check_in', 'receiver_offload'].includes(l.status)
     ).length;
-    const completed = loads.filter((l) =>
-      ['delivered', 'completed'].includes(l.status)
-    ).length;
+    const delivered = loads.filter((l) => l.status === 'delivered').length;
+    const completed = loads.filter((l) => l.status === 'completed').length;
     const totalRevenue = loads
       .filter((l) => ['delivered', 'completed'].includes(l.status))
       .reduce((sum, l) => sum + (l.rate ?? 0), 0);
-    return { total, booked, inTransit, completed, totalRevenue };
+    return { total, booked, inTransit, delivered, completed, totalRevenue };
   }, [loads]);
 
   const filteredLoads = useMemo(() => {

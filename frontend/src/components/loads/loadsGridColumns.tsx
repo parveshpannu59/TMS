@@ -11,6 +11,8 @@ import {
   CheckCircle,
   Description,
   Info,
+  RateReview,
+  Payments,
 } from '@mui/icons-material';
 import { GridActionsCellItem } from '@mui/x-data-grid';
 import type { Load } from '@/api/load.api';
@@ -25,7 +27,7 @@ const STATUS_COLORS: Record<string, 'default' | 'primary' | 'secondary' | 'error
   trip_accepted: 'primary',
   in_transit: 'primary',
   arrived_receiver: 'secondary',
-  delivered: 'success',
+  delivered: 'warning',
   completed: 'success',
   cancelled: 'error',
 };
@@ -39,12 +41,16 @@ type ColumnFactoryParams = {
   onOpenNotes: (notes: string, title: string) => void;
   onConfirmRate?: (load: Load) => void;
   onViewTripDetails?: (load: Load) => void;
+  onReviewCompletion?: (load: Load) => void;
+  onManagePayment?: (load: Load) => void;
 };
 
 export function getLoadsGridColumns(params: ColumnFactoryParams & { t: (key: string, opts?: { defaultValue?: string }) => string }): GridColDef[] {
   const { t, onView, onEdit, onDelete, onAssign, onUnassign, onOpenNotes } = params;
   const onConfirmRate = params.onConfirmRate ?? null;
   const onViewTripDetails = params.onViewTripDetails ?? null;
+  const onReviewCompletion = params.onReviewCompletion ?? null;
+  const onManagePayment = params.onManagePayment ?? null;
 
   return [
     {
@@ -118,13 +124,20 @@ export function getLoadsGridColumns(params: ColumnFactoryParams & { t: (key: str
       headerName: t('common.status'),
       flex: 1,
       minWidth: 120,
-      renderCell: (p) => (
-        <Chip
-          label={(p.value || '').replace('_', ' ').toUpperCase()}
-          color={STATUS_COLORS[p.value as string] || 'default'}
-          size="small"
-        />
-      ),
+      renderCell: (p) => {
+        const status = p.value as string || '';
+        const label = status === 'delivered'
+          ? 'DELIVERED'
+          : status.replace(/_/g, ' ').toUpperCase();
+        return (
+          <Chip
+            label={label}
+            color={STATUS_COLORS[status] || 'default'}
+            size="small"
+            sx={status === 'delivered' ? { animation: 'pulse 2s infinite', fontWeight: 700 } : undefined}
+          />
+        );
+      },
     },
     {
       field: 'driverId',
@@ -245,6 +258,28 @@ export function getLoadsGridColumns(params: ColumnFactoryParams & { t: (key: str
             />
           );
         }
+        // Review & Confirm for delivered loads (awaiting owner review)
+        if (row.status === 'delivered' && onReviewCompletion) {
+          actions.push(
+            <GridActionsCellItem
+              key={`${rowId}-review`}
+              icon={<RateReview color="warning" />}
+              label="Review & Confirm"
+              onClick={() => onReviewCompletion(row)}
+            />
+          );
+        }
+        // Payment action for completed loads (only when payment is approved, not just pending)
+        if (row.status === 'completed' && (row as any).paymentStatus === 'approved' && onManagePayment) {
+          actions.push(
+            <GridActionsCellItem
+              key={`${rowId}-payment`}
+              icon={<Payments color="success" />}
+              label="Manage Payment"
+              onClick={() => onManagePayment(row)}
+            />
+          );
+        }
         actions.push(
           <GridActionsCellItem key={`${rowId}-edit`} icon={<Edit />} label={t('common.edit')} onClick={() => onEdit(row)} showInMenu />,
           <GridActionsCellItem key={`${rowId}-delete`} icon={<Delete />} label={t('common.delete')} onClick={() => onDelete(row._id)} showInMenu />
@@ -259,6 +294,7 @@ export function useLoadsGridColumns(params: ColumnFactoryParams): GridColDef[] {
   const { t } = useTranslation();
   return useMemo(
     () => getLoadsGridColumns({ ...params, t }),
-    [t, params.onView, params.onEdit, params.onDelete, params.onAssign, params.onUnassign, params.onOpenNotes, params.onConfirmRate, params.onViewTripDetails]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [t, params.onView, params.onEdit, params.onDelete, params.onAssign, params.onUnassign, params.onOpenNotes, params.onConfirmRate, params.onViewTripDetails, params.onReviewCompletion, params.onManagePayment]
   );
 }

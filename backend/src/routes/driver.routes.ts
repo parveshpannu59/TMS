@@ -12,6 +12,9 @@ router.use(authenticate);
 // Get my profile (Driver role - must be before /:id to avoid route conflict)
 router.get('/me/profile', DriverController.getMyProfile);
 
+// Get my duty status (Driver role)
+router.get('/me/duty-status', DriverController.getMyDutyStatus);
+
 // Get all drivers (all roles)
 router.get('/', DriverController.getDrivers);
 

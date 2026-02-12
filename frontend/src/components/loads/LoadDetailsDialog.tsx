@@ -56,7 +56,7 @@ const STATUS_COLORS: Record<string, 'default' | 'primary' | 'secondary' | 'error
   in_transit: 'primary',
   receiver_check_in: 'secondary',
   receiver_offload: 'secondary',
-  delivered: 'success',
+  delivered: 'warning',
   completed: 'success',
   cancelled: 'error',
 };
@@ -158,6 +158,40 @@ export const LoadDetailsDialog: React.FC<LoadDetailsDialogProps> = ({ open, onCl
 
         {!loading && (
           <>
+            {/* ─── Delivered Review Banner ─── */}
+            {ld.status === 'delivered' && (
+              <Alert
+                severity="warning"
+                variant="filled"
+                sx={{ mb: 2, borderRadius: 2 }}
+                icon={false}
+              >
+                <Typography fontWeight={700} gutterBottom>
+                  🚚 Trip Delivered — Awaiting Your Review
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  The driver has completed delivery. Please review the trip details, documents, and expenses below, then confirm completion from the Loads table to approve payment.
+                </Typography>
+              </Alert>
+            )}
+
+            {/* ─── Payment Status Banner ─── */}
+            {ld.status === 'completed' && (ld as any).paymentStatus && (ld as any).paymentStatus !== 'paid' && (
+              <Alert
+                severity="info"
+                variant="outlined"
+                sx={{ mb: 2, borderRadius: 2 }}
+              >
+                <Typography fontWeight={600}>
+                  Payment Status: {((ld as any).paymentStatus || '').toUpperCase()}
+                  {(ld as any).paymentAmount ? ` — $${(ld as any).paymentAmount}` : ''}
+                </Typography>
+                {(ld as any).reviewNotes && (
+                  <Typography variant="body2" color="text.secondary">Review Notes: {(ld as any).reviewNotes}</Typography>
+                )}
+              </Alert>
+            )}
+
             {/* Summary Cards */}
             <Grid container spacing={2} sx={{ mb: 2 }}>
               <Grid item xs={6} sm={3}>

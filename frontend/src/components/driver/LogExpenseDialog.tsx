@@ -18,9 +18,11 @@ import {
   InputLabel,
   Select,
   Divider,
+  Chip,
 } from '@mui/material';
-import { Close, PhotoCamera, LocalGasStation, Toll, Build } from '@mui/icons-material';
+import { Close, PhotoCamera, LocalGasStation, Toll, Build, AutoFixHigh } from '@mui/icons-material';
 import { loadApi } from '@/api/all.api';
+import { useDocumentOCR, extractAmount, extractMileage } from '@/hooks/useDocumentOCR';
 import type { Load } from '@/types/all.types';
 
 const CATEGORIES = [
@@ -77,9 +79,15 @@ export const LogExpenseDialog: React.FC<LogExpenseDialogProps> = ({
   const [repairStartTime, setRepairStartTime] = useState('');
   const [repairEndTime, setRepairEndTime] = useState('');
   const [repairDescription, setRepairDescription] = useState('');
+  const [repairLocation, setRepairLocation] = useState('');
+  const [repairIssuePhoto, setRepairIssuePhoto] = useState<File | null>(null);
+  const [repairIssuePreview, setRepairIssuePreview] = useState<string | null>(null);
+  const [repairCompleted, setRepairCompleted] = useState(false);
 
   // Payer
   const [paidBy, setPaidBy] = useState('driver');
+  const [ocrAutoFilled, setOcrAutoFilled] = useState(false);
+  const { analyze, analyzing: ocrAnalyzing, reset: resetOCR } = useDocumentOCR();
 
   useEffect(() => {
     if (open) setCategory(defaultCategory);
@@ -124,17 +132,26 @@ export const LogExpenseDialog: React.FC<LogExpenseDialogProps> = ({
         if (odometerAfterUrl) parts.push(`Odometer After Photo: ${odometerAfterUrl}`);
         if (parts.length) fullDescription = `${parts.join(' | ')}${description ? ` | Notes: ${description}` : ''}`;
       }
+      // Upload repair issue photo if present
+      let repairIssuePhotoUrl: string | undefined;
+      if (category === 'repair' && repairIssuePhoto) {
+        repairIssuePhotoUrl = await loadApi.uploadLoadDocument(load.id, repairIssuePhoto);
+      }
+
       if (category === 'repair') {
         const parts = [];
-        if (repairStartTime) parts.push(`Start: ${repairStartTime}`);
-        if (repairEndTime) parts.push(`End: ${repairEndTime}`);
+        if (repairStartTime) parts.push(`Start: ${new Date(repairStartTime).toLocaleString()}`);
+        if (repairEndTime) parts.push(`End: ${new Date(repairEndTime).toLocaleString()}`);
         if (repairStartTime && repairEndTime) {
           const start = new Date(repairStartTime);
           const end = new Date(repairEndTime);
           const hours = ((end.getTime() - start.getTime()) / 3600000).toFixed(1);
           parts.push(`Downtime: ${hours}h`);
         }
-        if (repairDescription) parts.push(`Repair: ${repairDescription}`);
+        if (repairLocation) parts.push(`Location: ${repairLocation}`);
+        if (repairDescription) parts.push(`Issue: ${repairDescription}`);
+        if (repairIssuePhotoUrl) parts.push(`Issue Photo: ${repairIssuePhotoUrl}`);
+        if (repairCompleted) parts.push('Status: Repair Completed');
         if (parts.length) fullDescription = `${parts.join(' | ')}${description ? ` | Notes: ${description}` : ''}`;
       }
       fullDescription = `${fullDescription || ''} | Paid by: ${paidBy}`.trim();
@@ -145,8 +162,12 @@ export const LogExpenseDialog: React.FC<LogExpenseDialogProps> = ({
         amount: parseFloat(amount),
         date: new Date().toISOString(),
         description: fullDescription || undefined,
-        location: (category === 'fuel' ? fuelStation : location) || undefined,
+        location: (category === 'fuel' ? fuelStation : category === 'repair' ? repairLocation : location) || undefined,
         receiptUrl,
+        paidBy,
+        repairStartTime: repairStartTime || undefined,
+        repairEndTime: repairEndTime || undefined,
+        repairDescription: repairDescription || undefined,
       });
 
       onSuccess();
@@ -173,8 +194,14 @@ export const LogExpenseDialog: React.FC<LogExpenseDialogProps> = ({
     setRepairStartTime('');
     setRepairEndTime('');
     setRepairDescription('');
+    setRepairLocation('');
+    setRepairIssuePhoto(null);
+    setRepairIssuePreview(null);
+    setRepairCompleted(false);
     setPaidBy('driver');
     setError(null);
+    setOcrAutoFilled(false);
+    resetOCR();
     onClose();
   };
 
@@ -265,12 +292,36 @@ export const LogExpenseDialog: React.FC<LogExpenseDialogProps> = ({
               </Box>
               <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                 <Button variant="outlined" component="label" startIcon={<PhotoCamera />} size="small">
-                  {odometerBeforePhoto ? 'Before ✓' : 'Odometer Before Photo'}
-                  <input type="file" hidden accept="image/*" capture="environment" onChange={(e) => setOdometerBeforePhoto(e.target.files?.[0] || null)} />
+                  {odometerBeforePhoto ? 'Before ✓' : 'Scan Odometer Before'}
+                  <input type="file" hidden accept="image/*" capture="environment" onChange={async (e) => {
+                    const f = e.target.files?.[0] || null;
+                    setOdometerBeforePhoto(f);
+                    if (f) {
+                      try {
+                        const result = await analyze(f);
+                        if (result) {
+                          const ml = extractMileage(result.rawText);
+                          if (ml && !odometerBefore) setOdometerBefore(String(ml));
+                        }
+                      } catch { /* non-critical */ }
+                    }
+                  }} />
                 </Button>
                 <Button variant="outlined" component="label" startIcon={<PhotoCamera />} size="small">
-                  {odometerAfterPhoto ? 'After ✓' : 'Odometer After Photo'}
-                  <input type="file" hidden accept="image/*" capture="environment" onChange={(e) => setOdometerAfterPhoto(e.target.files?.[0] || null)} />
+                  {odometerAfterPhoto ? 'After ✓' : 'Scan Odometer After'}
+                  <input type="file" hidden accept="image/*" capture="environment" onChange={async (e) => {
+                    const f = e.target.files?.[0] || null;
+                    setOdometerAfterPhoto(f);
+                    if (f) {
+                      try {
+                        const result = await analyze(f);
+                        if (result) {
+                          const ml = extractMileage(result.rawText);
+                          if (ml && !odometerAfter) setOdometerAfter(String(ml));
+                        }
+                      } catch { /* non-critical */ }
+                    }
+                  }} />
                 </Button>
               </Box>
             </>
@@ -279,20 +330,33 @@ export const LogExpenseDialog: React.FC<LogExpenseDialogProps> = ({
           {/* Maintenance-specific fields */}
           {category === 'repair' && (
             <>
-              <Divider sx={{ my: 0.5 }}><Typography variant="caption" color="text.secondary">Repair Details</Typography></Divider>
+              <Divider sx={{ my: 0.5 }}><Typography variant="caption" color="text.secondary">Maintenance & Repair Details</Typography></Divider>
+              
+              {/* Issue Description */}
               <TextField
                 fullWidth
-                label="Repair Description"
+                label="What happened? *"
                 multiline
                 rows={2}
                 value={repairDescription}
                 onChange={(e) => setRepairDescription(e.target.value)}
-                placeholder="e.g. Tire blowout, brake repair"
+                placeholder="e.g. Tire blowout on highway, brake pad worn out, engine overheating..."
               />
+
+              {/* Location */}
+              <TextField
+                fullWidth
+                label="Repair Location"
+                value={repairLocation}
+                onChange={(e) => setRepairLocation(e.target.value)}
+                placeholder="e.g. Joe's Truck Stop, Hwy 40 mile marker 120"
+              />
+
+              {/* Start & End Time */}
               <Box sx={{ display: 'flex', gap: 2 }}>
                 <TextField
                   fullWidth
-                  label="Repair Start Time"
+                  label="Start Date & Time *"
                   type="datetime-local"
                   value={repairStartTime}
                   onChange={(e) => setRepairStartTime(e.target.value)}
@@ -300,18 +364,96 @@ export const LogExpenseDialog: React.FC<LogExpenseDialogProps> = ({
                 />
                 <TextField
                   fullWidth
-                  label="Repair End Time"
+                  label="End Date & Time"
                   type="datetime-local"
                   value={repairEndTime}
-                  onChange={(e) => setRepairEndTime(e.target.value)}
+                  onChange={(e) => { setRepairEndTime(e.target.value); setRepairCompleted(true); }}
                   InputLabelProps={{ shrink: true }}
+                  helperText={repairCompleted ? 'Repair completed' : 'Fill when repair is done'}
                 />
               </Box>
-              {repairStartTime && repairEndTime && (
-                <Alert severity="info" sx={{ py: 0.5 }}>
-                  Downtime: {((new Date(repairEndTime).getTime() - new Date(repairStartTime).getTime()) / 3600000).toFixed(1)} hours
+
+              {/* Downtime Summary */}
+              {repairStartTime && repairEndTime && (() => {
+                const start = new Date(repairStartTime);
+                const end = new Date(repairEndTime);
+                const diffMs = end.getTime() - start.getTime();
+                if (diffMs < 0) return (
+                  <Alert severity="error" sx={{ py: 0.5 }}>
+                    End time must be after start time
+                  </Alert>
+                );
+                const hours = Math.floor(diffMs / 3600000);
+                const mins = Math.floor((diffMs % 3600000) / 60000);
+                return (
+                  <Alert severity="info" sx={{ py: 0.5 }} icon={false}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography variant="body2" fontWeight={600}>
+                        Total Downtime: {hours}h {mins}m
+                      </Typography>
+                      <Chip
+                        label={repairCompleted ? 'Repair Complete' : 'In Progress'}
+                        size="small"
+                        color={repairCompleted ? 'success' : 'warning'}
+                        variant="outlined"
+                      />
+                    </Box>
+                  </Alert>
+                );
+              })()}
+
+              {repairStartTime && !repairEndTime && (
+                <Alert severity="warning" sx={{ py: 0.5 }}>
+                  <Typography variant="body2">
+                    Repair in progress. Enter end time when the fix is complete.
+                  </Typography>
                 </Alert>
               )}
+
+              {/* Photo of Issue */}
+              <Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  Photo of the Issue (for proof)
+                </Typography>
+                <Button
+                  variant="outlined"
+                  component="label"
+                  startIcon={<PhotoCamera />}
+                  size="small"
+                  fullWidth
+                >
+                  {repairIssuePhoto ? repairIssuePhoto.name : 'Take Photo of Issue'}
+                  <input
+                    type="file"
+                    hidden
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] || null;
+                      setRepairIssuePhoto(f);
+                      if (f) {
+                        const reader = new FileReader();
+                        reader.onload = () => setRepairIssuePreview(reader.result as string);
+                        reader.readAsDataURL(f);
+                      } else {
+                        setRepairIssuePreview(null);
+                      }
+                    }}
+                  />
+                </Button>
+                {repairIssuePreview && (
+                  <Box sx={{ mt: 1, position: 'relative' }}>
+                    <img src={repairIssuePreview} alt="Issue" style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 8 }} />
+                    <Button
+                      size="small"
+                      onClick={() => { setRepairIssuePhoto(null); setRepairIssuePreview(null); }}
+                      sx={{ position: 'absolute', top: 4, right: 4, bgcolor: 'rgba(0,0,0,0.5)', color: '#fff', minWidth: 'auto', px: 1, '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}
+                    >
+                      ✕
+                    </Button>
+                  </Box>
+                )}
+              </Box>
             </>
           )}
 
@@ -353,22 +495,49 @@ export const LogExpenseDialog: React.FC<LogExpenseDialogProps> = ({
 
           <Box>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              Receipt Photo / Scan
+              Receipt Photo / Scan {ocrAnalyzing && '— 🔍 Analyzing...'}
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Button
                 variant="outlined"
                 component="label"
-                startIcon={<PhotoCamera />}
-                disabled={loading}
+                startIcon={ocrAnalyzing ? <CircularProgress size={16} /> : <PhotoCamera />}
+                disabled={loading || ocrAnalyzing}
               >
-                {receiptFile ? receiptFile.name : 'Capture Receipt'}
+                {receiptFile ? receiptFile.name : 'Scan or Upload Receipt'}
                 <input
                   type="file"
                   hidden
                   accept="image/*,application/pdf"
                   capture="environment"
-                  onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0] || null;
+                    setReceiptFile(file);
+                    setOcrAutoFilled(false);
+                    if (file) {
+                      try {
+                        const result = await analyze(file);
+                        if (result) {
+                          // Auto-fill amount from receipt
+                          const extractedAmt = result.extractedFields?.amount
+                            ? parseFloat(result.extractedFields.amount.replace(/[^0-9.]/g, ''))
+                            : extractAmount(result.rawText);
+                          if (extractedAmt && !amount) {
+                            setAmount(String(extractedAmt));
+                            setOcrAutoFilled(true);
+                          }
+                          // Auto-fill vendor/station for fuel
+                          if (category === 'fuel' && result.extractedFields?.shipper && !fuelStation) {
+                            setFuelStation(result.extractedFields.shipper);
+                          }
+                          // Auto-fill location
+                          if (!location && (result.extractedFields?.shipper || result.extractedFields?.consignee)) {
+                            setLocation(result.extractedFields.shipper || result.extractedFields.consignee || '');
+                          }
+                        }
+                      } catch { /* OCR failure is non-critical */ }
+                    }
+                  }}
                 />
               </Button>
               {receiptFile && (
@@ -376,7 +545,20 @@ export const LogExpenseDialog: React.FC<LogExpenseDialogProps> = ({
                   ({(receiptFile.size / 1024).toFixed(0)} KB)
                 </Typography>
               )}
+              {ocrAutoFilled && (
+                <Chip label="OCR" size="small" icon={<AutoFixHigh />} color="success" variant="outlined" />
+              )}
             </Box>
+            {ocrAutoFilled && (
+              <Typography variant="caption" color="success.main" sx={{ mt: 0.5, display: 'block' }}>
+                ✅ Amount auto-filled from receipt — verify and edit if needed
+              </Typography>
+            )}
+            {receiptFile && !ocrAnalyzing && !ocrAutoFilled && (
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                Upload a clear photo for auto-fill, or enter details manually
+              </Typography>
+            )}
           </Box>
         </Box>
       </DialogContent>

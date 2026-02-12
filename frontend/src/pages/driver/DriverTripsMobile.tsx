@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { loadApi } from '@/api/all.api';
@@ -61,15 +61,15 @@ function TimelineLocation({ lat, lng }: { lat?: number; lng?: number }) {
 const STATUS_LABELS: Record<string, string> = {
   assigned: 'Assigned',
   trip_accepted: 'Ready to Start',
-  trip_started: 'Trip Started',
-  shipper_check_in: 'At Shipper',
+  trip_started: 'En Route to Pickup',
+  shipper_check_in: 'At Pickup',
   shipper_load_in: 'Loading',
-  shipper_load_out: 'Loaded',
+  shipper_load_out: 'Loaded — Depart',
   in_transit: 'In Transit',
-  receiver_check_in: 'At Receiver',
+  receiver_check_in: 'At Delivery',
   receiver_offload: 'Offloading',
-  completed: 'Completed',
-  delivered: 'Delivered',
+  completed: 'Trip Completed',
+  delivered: 'Awaiting Approval',
   cancelled: 'Cancelled',
 };
 
@@ -78,17 +78,17 @@ const STATUS_COLOR: Record<string, string> = {
   trip_accepted: '#34c759',
   trip_started: '#34c759',
   shipper_check_in: '#5ac8fa',
-  shipper_load_in: '#5ac8fa',
+  shipper_load_in: '#06b6d4',
   shipper_load_out: '#af52de',
   in_transit: '#ff9500',
   receiver_check_in: '#ff2d55',
   receiver_offload: '#af52de',
-  completed: '#34c759',
-  delivered: '#34c759',
+  completed: '#22c55e',
+  delivered: '#f59e0b',
   cancelled: '#8e8e93',
 };
 
-type TabType = 'all' | 'active' | 'future' | 'delivered';
+type TabType = 'all' | 'active' | 'pending' | 'completed';
 
 const formatDate = (d: string | Date | undefined) => {
   if (!d) return '—';
@@ -137,8 +137,8 @@ export default function DriverTripsMobile() {
 
   const activeStatuses = ['assigned', 'trip_accepted', 'trip_started', 'shipper_check_in', 'shipper_load_in', 'shipper_load_out', 'in_transit', 'receiver_check_in', 'receiver_offload'];
   const deliveredStatuses = ['completed', 'delivered'];
+  const pendingStatuses = ['delivered']; // Awaiting approval
 
-  const now = new Date();
   const filteredLoads = loads.filter((l) => {
     // Search filter
     if (searchQuery) {
@@ -154,10 +154,10 @@ export default function DriverTripsMobile() {
     switch (activeTab) {
       case 'active':
         return activeStatuses.includes(l.status);
-      case 'future':
-        return l.pickupDate && new Date(l.pickupDate) > now && ['assigned', 'trip_accepted'].includes(l.status);
-      case 'delivered':
-        return deliveredStatuses.includes(l.status);
+      case 'pending':
+        return pendingStatuses.includes(l.status);
+      case 'completed':
+        return l.status === 'completed';
       default:
         return true;
     }
@@ -166,8 +166,8 @@ export default function DriverTripsMobile() {
   const tabCounts = {
     all: loads.length,
     active: loads.filter(l => activeStatuses.includes(l.status)).length,
-    future: loads.filter(l => l.pickupDate && new Date(l.pickupDate) > now && ['assigned', 'trip_accepted'].includes(l.status)).length,
-    delivered: loads.filter(l => deliveredStatuses.includes(l.status)).length,
+    pending: loads.filter(l => pendingStatuses.includes(l.status)).length,
+    completed: loads.filter(l => l.status === 'completed').length,
   };
 
   const toggleExpand = (id: string) => {
@@ -188,12 +188,12 @@ export default function DriverTripsMobile() {
         display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
         background: 'var(--dm-fill)', borderRadius: 10, padding: 3,
       }}>
-        {(['all', 'active', 'future', 'delivered'] as TabType[]).map((tab) => {
+        {(['all', 'active', 'pending', 'completed'] as TabType[]).map((tab) => {
           const tabLabels: Record<TabType, string> = {
-            all: t('driverApp.all'),
-            active: t('driverApp.active'),
-            future: t('driverApp.future'),
-            delivered: t('driverApp.delivered'),
+            all: 'All',
+            active: 'Active',
+            pending: 'Pending',
+            completed: 'Done',
           };
           return (
             <button
@@ -256,6 +256,7 @@ export default function DriverTripsMobile() {
         const loadId = load.id || (load as any)._id;
         const isExpanded = expandedId === loadId;
         const isDelivered = deliveredStatuses.includes(load.status);
+        const isPending = load.status === 'delivered';
         const loadData = load as any;
 
         return (
@@ -285,9 +286,19 @@ export default function DriverTripsMobile() {
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ fontWeight: 700, fontSize: 17, color: ios.green }}>${(load.rate || 0).toLocaleString()}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--dm-muted)', fontSize: 13 }}>
-                  {formatDate(load.pickupDate)}
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {isPending && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 600, color: '#f59e0b',
+                      padding: '2px 8px', borderRadius: 10,
+                      background: 'rgba(245,158,11,0.12)',
+                      animation: 'ios-pulse 2s infinite',
+                    }}>
+                      ⏳ PENDING
+                    </span>
+                  )}
+                  <span style={{ color: 'var(--dm-muted)', fontSize: 13 }}>{formatDate(load.pickupDate)}</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--dm-muted)" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
                 </div>
               </div>
             </div>

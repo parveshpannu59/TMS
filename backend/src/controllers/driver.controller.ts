@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { DriverService } from '../services/driver.service';
+import { Driver, DriverStatus } from '../models/Driver.model';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
 
@@ -54,6 +55,31 @@ export class DriverController {
     const filePath = `/uploads/drivers/${req.file.filename}`;
     const driver = await DriverService.updateDriverDocument(id as string, 'photo', filePath);
     return ApiResponse.success(res, driver, 'Driver photo uploaded successfully');
+  });
+
+  // Get driver duty status (for driver mobile app)
+  static getMyDutyStatus = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user!.id;
+    const driver = await Driver.findOne({ userId }).select('status currentLoadId name').lean();
+    if (!driver) {
+      return ApiResponse.success(res, { status: 'off_duty', dutyLabel: 'Off Duty' }, 'No driver profile');
+    }
+
+    const statusMap: Record<string, string> = {
+      [DriverStatus.ON_DUTY]: 'On Duty',
+      [DriverStatus.ON_TRIP]: 'On Duty',
+      [DriverStatus.WAITING_FOR_APPROVAL]: 'Waiting for Approval',
+      [DriverStatus.OFF_DUTY]: 'Off Duty',
+      [DriverStatus.ACTIVE]: 'Off Duty',
+      [DriverStatus.INACTIVE]: 'Inactive',
+    };
+
+    return ApiResponse.success(res, {
+      status: driver.status,
+      dutyLabel: statusMap[driver.status] || 'Off Duty',
+      currentLoadId: (driver as any).currentLoadId || null,
+      driverName: (driver as any).name,
+    }, 'Duty status fetched');
   });
 
   // Upload driver verification document (license, aadhar, pan)
