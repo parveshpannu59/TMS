@@ -35,6 +35,7 @@ import {
 } from '@mui/icons-material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { DashboardLayout } from '@layouts/DashboardLayout';
+import { StatsCard } from '@/components/common/StatsCard';
 import { loadApi, driverApi, truckApi, trailerApi } from '@api/all.api';
 import { useTranslation } from 'react-i18next';
 
@@ -344,15 +345,25 @@ const TripManagementDashboard: React.FC = () => {
   return (
     <DashboardLayout>
       <Box sx={{ width: '100%', p: 2 }}>
-        {/* Header */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Box>
-            <Typography variant="h5" fontWeight={700} gutterBottom>
-              📋 {t('trips.title')}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {t('trips.subtitle')}
-            </Typography>
+        {/* Page Header */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{
+              width: 44, height: 44, borderRadius: 2.5,
+              background: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 14px rgba(6,182,212,0.3)',
+            }}>
+              <DirectionsCar sx={{ fontSize: 24, color: 'white' }} />
+            </Box>
+            <Box>
+              <Typography variant="h4" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+                {t('trips.title')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3 }}>
+                {t('trips.subtitle')}
+              </Typography>
+            </Box>
           </Box>
           <Button
             variant="contained"
@@ -373,75 +384,16 @@ const TripManagementDashboard: React.FC = () => {
         {/* Summary Cards */}
         <Grid container spacing={2} sx={{ mb: 3 }}>
           <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography color="text.secondary" variant="caption">
-                      {t('trips.activeTrips')}
-                    </Typography>
-                    <Typography variant="h5" fontWeight={700}>
-                      {trips.length}
-                    </Typography>
-                  </Box>
-                  <DirectionsCar sx={{ fontSize: 40, color: 'primary.main', opacity: 0.5 }} />
-                </Box>
-              </CardContent>
-            </Card>
+            <StatsCard title={t('trips.activeTrips')} value={trips.length} icon={<DirectionsCar />} color="#3b82f6" />
           </Grid>
-
           <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography color="text.secondary" variant="caption">
-                      {t('trips.assigned')}
-                    </Typography>
-                    <Typography variant="h5" fontWeight={700}>
-                      {assignedCount}
-                    </Typography>
-                  </Box>
-                  <Assignment sx={{ fontSize: 40, color: 'info.main', opacity: 0.5 }} />
-                </Box>
-              </CardContent>
-            </Card>
+            <StatsCard title={t('trips.assigned')} value={assignedCount} icon={<Assignment />} color="#06b6d4" />
           </Grid>
-
           <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography color="text.secondary" variant="caption">
-                      {t('trips.inTransit')}
-                    </Typography>
-                    <Typography variant="h5" fontWeight={700}>
-                      {inTransitCount}
-                    </Typography>
-                  </Box>
-                  <LocalShipping sx={{ fontSize: 40, color: 'warning.main', opacity: 0.5 }} />
-                </Box>
-              </CardContent>
-            </Card>
+            <StatsCard title={t('trips.inTransit')} value={inTransitCount} icon={<LocalShipping />} color="#f59e0b" />
           </Grid>
-
           <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography color="text.secondary" variant="caption">
-                      {t('trips.totalValue')}
-                    </Typography>
-                    <Typography variant="h5" fontWeight={700}>
-                      ₹{totalValue.toLocaleString()}
-                    </Typography>
-                  </Box>
-                  <LocalShipping sx={{ fontSize: 40, color: 'success.main', opacity: 0.5 }} />
-                </Box>
-              </CardContent>
-            </Card>
+            <StatsCard title={t('trips.totalValue')} value={`₹${totalValue.toLocaleString()}`} icon={<LocalShipping />} color="#10b981" />
           </Grid>
         </Grid>
 

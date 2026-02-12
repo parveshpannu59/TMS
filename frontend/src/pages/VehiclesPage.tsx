@@ -308,10 +308,26 @@ const VehiclesPage: React.FC = () => {
   return (
     <DashboardLayout>
       <Box sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" fontWeight={700}>
-            Vehicles
-          </Typography>
+        {/* Page Header */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{
+              width: 44, height: 44, borderRadius: 2.5,
+              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 14px rgba(99,102,241,0.3)',
+            }}>
+              <LocalShipping sx={{ fontSize: 24, color: 'white' }} />
+            </Box>
+            <Box>
+              <Typography variant="h4" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+                Vehicles
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3 }}>
+                Manage your fleet of trucks and trailers
+              </Typography>
+            </Box>
+          </Box>
           <Button
             variant="contained"
             startIcon={<AddIcon />}
@@ -333,9 +349,9 @@ const VehiclesPage: React.FC = () => {
           </Alert>
         )}
 
-        <Card sx={{ mb: 2, p: 2 }}>
+        <Card sx={{ mb: 2, p: 2, border: '1px solid rgba(226,232,240,0.8)' }}>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <Typography variant="subtitle2" fontWeight={600}>
+            <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
               Filter by Type:
             </Typography>
             <ToggleButtonGroup
@@ -351,14 +367,13 @@ const VehiclesPage: React.FC = () => {
           </Box>
         </Card>
 
-        <Card>
+        <Card sx={{ border: '1px solid rgba(226,232,240,0.8)' }}>
           <DataGrid
             rows={vehicles}
             columns={columns}
             loading={loading}
             getRowId={(row) => row._id || row.id}
             autoHeight
-            // Server-side pagination
             paginationMode="server"
             rowCount={totalRows}
             paginationModel={paginationModel}
@@ -368,6 +383,7 @@ const VehiclesPage: React.FC = () => {
             }}
             pageSizeOptions={[10, 25, 50]}
             disableRowSelectionOnClick
+            sx={{ border: 'none' }}
           />
         </Card>
 

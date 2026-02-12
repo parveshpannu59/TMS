@@ -1,68 +1,283 @@
+/* ═══════════════════════════════════════════════════════════════
+   Haulxp TMS — Global Design System
+   ═══════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  /* Core palette */
+  --fp-navy: #0f172a;
+  --fp-navy-light: #1e293b;
+  --fp-blue: #3b82f6;
+  --fp-blue-dark: #2563eb;
+  --fp-indigo: #6366f1;
+  --fp-slate-50: #f8fafc;
+  --fp-slate-100: #f1f5f9;
+  --fp-slate-200: #e2e8f0;
+  --fp-slate-300: #cbd5e1;
+  --fp-slate-400: #94a3b8;
+  --fp-slate-500: #64748b;
+  --fp-slate-600: #475569;
+  --fp-slate-700: #334155;
+  --fp-slate-800: #1e293b;
+  --fp-slate-900: #0f172a;
+
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
+  color-scheme: light;
+  color: var(--fp-navy);
+  background-color: var(--fp-slate-100);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  background: var(--fp-slate-100);
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
+a {
+  color: var(--fp-blue);
+  text-decoration: none;
   font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
 }
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+a:hover {
+  color: var(--fp-blue-dark);
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
+/* ── Scrollbar styling ──────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--fp-slate-300);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fp-slate-400);
+}
+
+/* ── DataGrid global polish ─────────────────────────────────── */
+.MuiDataGrid-root {
+  border: none !important;
+  font-family: 'Inter', sans-serif !important;
+}
+.MuiDataGrid-root .MuiDataGrid-columnHeaders {
+  background: linear-gradient(135deg, var(--fp-slate-50) 0%, #f0f4f8 100%) !important;
+  border-bottom: 2px solid var(--fp-slate-200) !important;
+  min-height: 48px !important;
+}
+.MuiDataGrid-root .MuiDataGrid-columnHeaderTitle {
+  font-weight: 700 !important;
+  font-size: 0.8rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  color: var(--fp-slate-600) !important;
+}
+.MuiDataGrid-root .MuiDataGrid-row {
+  transition: background-color 0.15s ease !important;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.6) !important;
+}
+.MuiDataGrid-root .MuiDataGrid-row:hover {
+  background-color: rgba(59, 130, 246, 0.04) !important;
+}
+.MuiDataGrid-root .MuiDataGrid-row:nth-of-type(even) {
+  background-color: rgba(248, 250, 252, 0.5);
+}
+.MuiDataGrid-root .MuiDataGrid-cell {
+  border-bottom: none !important;
+  font-size: 0.875rem !important;
+  color: var(--fp-slate-700) !important;
+}
+.MuiDataGrid-root .MuiDataGrid-cell:focus,
+.MuiDataGrid-root .MuiDataGrid-cell:focus-within {
+  outline: none !important;
+}
+.MuiDataGrid-root .MuiDataGrid-footerContainer {
+  border-top: 2px solid var(--fp-slate-200) !important;
+  background: var(--fp-slate-50) !important;
+}
+.MuiDataGrid-root .MuiDataGrid-virtualScroller {
+  overflow: auto !important;
+}
+
+/* ── Page header pattern ────────────────────────────────────── */
+.fp-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.fp-page-header h4,
+.fp-page-header h5 {
+  color: var(--fp-navy);
+}
+
+/* ── Card glass effect ──────────────────────────────────────── */
+.fp-glass-card {
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(226, 232, 240, 0.8) !important;
+}
+
+/* ── Smooth transitions everywhere ──────────────────────────── */
+.MuiCard-root,
+.MuiPaper-root,
+.MuiButton-root,
+.MuiChip-root,
+.MuiTextField-root {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* ── Card hover subtle lift ─────────────────────────────────── */
+.MuiCard-root:hover {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04) !important;
+}
+
+/* ── Chip refinements ───────────────────────────────────────── */
+.MuiChip-root {
+  font-size: 0.75rem !important;
+  letter-spacing: 0.02em !important;
+}
+.MuiChip-sizeSmall {
+  height: 26px !important;
+}
+
+/* ── Dialog polish ──────────────────────────────────────────── */
+.MuiDialog-paper {
+  border-radius: 16px !important;
+  box-shadow: 0 24px 48px -12px rgba(15, 23, 42, 0.2) !important;
+}
+.MuiDialogTitle-root {
+  font-weight: 700 !important;
+  font-size: 1.15rem !important;
+  padding: 20px 24px !important;
+  border-bottom: 1px solid var(--fp-slate-200);
+}
+.MuiDialogActions-root {
+  padding: 16px 24px !important;
+  border-top: 1px solid var(--fp-slate-200);
+}
+
+/* ── Tabs polish ────────────────────────────────────────────── */
+.MuiTabs-root {
+  min-height: 44px !important;
+}
+.MuiTab-root {
+  text-transform: uppercase !important;
+  font-weight: 700 !important;
+  font-size: 0.75rem !important;
+  letter-spacing: 0.06em !important;
+  min-height: 44px !important;
+  padding: 8px 18px !important;
+}
+.MuiTabs-indicator {
+  height: 3px !important;
+  border-radius: 3px 3px 0 0 !important;
+}
+
+/* ── Alert polish ───────────────────────────────────────────── */
+.MuiAlert-root {
+  border-radius: 12px !important;
+  font-weight: 500 !important;
+}
+
+/* ── Tooltip polish ─────────────────────────────────────────── */
+.MuiTooltip-tooltip {
+  border-radius: 8px !important;
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+  background: var(--fp-navy) !important;
+  padding: 6px 12px !important;
+}
+
+/* ── Toggle button polish ───────────────────────────────────── */
+.MuiToggleButtonGroup-root {
+  border-radius: 10px !important;
+  overflow: hidden;
+}
+.MuiToggleButton-root {
+  text-transform: uppercase !important;
+  font-weight: 600 !important;
+  font-size: 0.75rem !important;
+  letter-spacing: 0.04em !important;
+  border: 1px solid var(--fp-slate-200) !important;
+  padding: 6px 16px !important;
+}
+.MuiToggleButton-root.Mui-selected {
+  background: linear-gradient(135deg, var(--fp-blue) 0%, var(--fp-indigo) 100%) !important;
+  color: white !important;
+  border-color: transparent !important;
+}
+
+/* ── Select/FormControl refinements ─────────────────────────── */
+.MuiSelect-select {
+  font-size: 0.875rem !important;
+}
+
+/* ── Table refinements (for pages that use HTML tables) ────── */
+.MuiTableHead-root .MuiTableCell-root {
+  font-weight: 700 !important;
+  font-size: 0.8rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  color: var(--fp-slate-600) !important;
+  background: var(--fp-slate-50) !important;
+  border-bottom: 2px solid var(--fp-slate-200) !important;
+  padding: 12px 16px !important;
+}
+.MuiTableBody-root .MuiTableCell-root {
+  font-size: 0.875rem !important;
+  color: var(--fp-slate-700) !important;
+  padding: 12px 16px !important;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.6) !important;
+}
+.MuiTableBody-root .MuiTableRow-root:hover {
+  background-color: rgba(59, 130, 246, 0.04) !important;
+}
+
+/* ── Icon button subtle style ───────────────────────────────── */
+.MuiIconButton-root {
+  transition: all 0.2s ease !important;
+}
+.MuiIconButton-root:hover {
+  background-color: rgba(59, 130, 246, 0.08) !important;
+}
+
+/* ── Selection / highlight accent ───────────────────────────── */
+::selection {
+  background: rgba(59, 130, 246, 0.2);
+  color: var(--fp-navy);
+}
+
+/* ── Keyframes ──────────────────────────────────────────────── */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
   }
-  a:hover {
-    color: #747bff;
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
-  button {
-    background-color: #f9f9f9;
-  }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }

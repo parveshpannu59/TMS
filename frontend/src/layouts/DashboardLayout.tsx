@@ -50,117 +50,99 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = React.memo(({ chi
   }, []);
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: '#f1f5f9' }}>
       <AppBar
         position="fixed"
         elevation={0}
         sx={{
-          width: {
-            xs: '100%',
-            sm: sidebarOpen ? `calc(100% - ${SIDEBAR_WIDTH}px)` : '100%'
-          },
-          ml: {
-            xs: 0,
-            sm: sidebarOpen ? `${SIDEBAR_WIDTH}px` : 0
-          },
+          width: { xs: '100%', sm: sidebarOpen ? `calc(100% - ${SIDEBAR_WIDTH}px)` : '100%' },
+          ml: { xs: 0, sm: sidebarOpen ? `${SIDEBAR_WIDTH}px` : 0 },
           transition: theme.transitions.create(['width', 'margin'], {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.enteringScreen,
           }),
           zIndex: theme.zIndex.drawer - 1,
-          bgcolor: 'background.paper',
+          bgcolor: 'rgba(255,255,255,0.85)',
           color: 'text.primary',
-          borderBottom: `1px solid ${theme.palette.divider}`,
-          backdropFilter: 'blur(8px)',
+          borderBottom: '1px solid #e2e8f0',
+          backdropFilter: 'blur(12px)',
         }}
       >
-        <Toolbar sx={{ minHeight: '64px !important', px: { xs: 2, sm: 3 } }}>
+        <Toolbar sx={{ minHeight: '60px !important', px: { xs: 2, sm: 3 } }}>
           <IconButton
             color="inherit"
             aria-label="toggle drawer"
             edge="start"
             onClick={handleDrawerToggle}
-            sx={{ 
+            sx={{
               mr: 2,
-              '&:hover': {
-                bgcolor: 'action.hover',
-              },
+              color: '#64748b',
+              '&:hover': { bgcolor: 'rgba(59,130,246,0.06)', color: '#3b82f6' },
             }}
           >
             <MenuIcon />
           </IconButton>
 
-          <Typography 
-            variant="h6" 
-            component="div" 
-            sx={{ 
+          {/* Title */}
+          <Typography
+            variant="h6"
+            component="div"
+            sx={{
               flexGrow: 1,
               fontWeight: 700,
-              background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
+              color: '#0f172a',
               display: { xs: 'none', sm: 'block' },
-              fontSize: '1.125rem',
+              fontSize: '1rem',
+              letterSpacing: '-0.3px',
             }}
           >
-{t('common.appTitle', { defaultValue: 'Transportation Management System' })}
+            {t('common.appTitle', { defaultValue: 'Haulxp TMS' })}
           </Typography>
 
-          <Typography 
-            variant="h6" 
-            component="div" 
-            sx={{ 
+          <Typography
+            variant="h6"
+            component="div"
+            sx={{
               flexGrow: 1,
               fontWeight: 700,
-              background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
+              color: '#0f172a',
               display: { xs: 'block', sm: 'none' },
-              fontSize: '1.125rem',
+              fontSize: '1rem',
             }}
           >
             TMS
           </Typography>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            {/* Real-time connection indicator */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <RealtimeIndicator />
             <NotificationMenu />
             {!isMobile && (
-              <Box sx={{ textAlign: 'right', mr: 1 }}>
-                <Typography variant="body2" fontWeight={600} sx={{ lineHeight: 1.2 }}>
-                {user?.name}
-              </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+              <Box sx={{ textAlign: 'right', mr: 0.5 }}>
+                <Typography sx={{ fontWeight: 600, fontSize: '0.85rem', color: '#0f172a', lineHeight: 1.2 }}>
+                  {user?.name}
+                </Typography>
+                <Typography sx={{ fontSize: '0.7rem', color: '#94a3b8', textTransform: 'capitalize' }}>
                   {user?.role}
                 </Typography>
               </Box>
             )}
-            <IconButton 
-              color="inherit" 
+            <IconButton
+              color="inherit"
               onClick={handleMenuOpen}
-              sx={{
-                '&:hover': {
-                  bgcolor: 'action.hover',
-                },
-                p: 0.5,
-              }}
+              sx={{ p: 0.5, '&:hover': { bgcolor: 'rgba(59,130,246,0.06)' } }}
             >
-              <Avatar 
+              <Avatar
                 src={
-                  user?.profilePicture 
-                    ? (user.profilePicture.startsWith('http') 
-                        ? user.profilePicture 
+                  user?.profilePicture
+                    ? (user.profilePicture.startsWith('http')
+                        ? user.profilePicture
                         : `${getApiOrigin()}${user.profilePicture}`)
                     : undefined
                 }
-                sx={{ 
-                  bgcolor: user?.profilePicture ? 'transparent' : 'primary.main',
-                  width: 40,
-                  height: 40,
-                  fontWeight: 600,
+                sx={{
+                  width: 38, height: 38, fontWeight: 700, fontSize: '0.85rem',
+                  background: user?.profilePicture ? 'transparent' : 'linear-gradient(135deg, #3b82f6, #6366f1)',
+                  boxShadow: '0 2px 8px rgba(59,130,246,0.2)',
                 }}
               >
                 {!user?.profilePicture && (user?.name?.charAt(0).toUpperCase() || <AccountCircle />)}
@@ -172,76 +154,52 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = React.memo(({ chi
             anchorEl={anchorEl}
             open={Boolean(anchorEl)}
             onClose={handleMenuClose}
-            anchorOrigin={{
-              vertical: 'bottom',
-              horizontal: 'right',
-            }}
-            transformOrigin={{
-              vertical: 'top',
-              horizontal: 'right',
-            }}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
             PaperProps={{
               elevation: 3,
               sx: {
-                mt: 1.5,
-                minWidth: 200,
-                borderRadius: 2,
+                mt: 1.5, minWidth: 220, borderRadius: '14px',
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 10px 40px rgba(0,0,0,0.08)',
               },
             }}
           >
-            <MenuItem disabled sx={{ opacity: '1 !important' }}>
-              <Typography variant="subtitle2" fontWeight={600}>
-                {user?.name}
+            <Box sx={{ px: 2, py: 1.5 }}>
+              <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>{user?.name}</Typography>
+              <Typography sx={{ fontSize: '0.78rem', color: '#64748b' }}>{user?.email}</Typography>
+              <Typography sx={{ fontSize: '0.72rem', color: '#94a3b8', textTransform: 'capitalize', mt: 0.3 }}>
+                {user?.role}
               </Typography>
-            </MenuItem>
-            <MenuItem disabled sx={{ opacity: '1 !important' }}>
-              <Typography variant="caption" color="text.secondary">
-                {user?.email}
-              </Typography>
-            </MenuItem>
-            <MenuItem disabled sx={{ opacity: '1 !important', mb: 1 }}>
-              <Typography 
-                variant="caption" 
-                color="text.secondary" 
-                sx={{ textTransform: 'capitalize' }}
-              >
-                Role: {user?.role}
-              </Typography>
-            </MenuItem>
+            </Box>
             <Divider />
-            <MenuItem 
+            <MenuItem
               onClick={handleLogout}
               sx={{
-                mt: 1,
-                color: 'error.main',
-                '&:hover': {
-                  bgcolor: 'error.lighter',
-                },
+                mt: 0.5, mx: 1, borderRadius: '8px', color: '#ef4444',
+                '&:hover': { bgcolor: 'rgba(239,68,68,0.06)' },
               }}
             >
-              <Logout fontSize="small" sx={{ mr: 1 }} />
-              Logout
+              <Logout fontSize="small" sx={{ mr: 1.5 }} />
+              <Typography sx={{ fontWeight: 600, fontSize: '0.85rem' }}>Logout</Typography>
             </MenuItem>
           </Menu>
         </Toolbar>
       </AppBar>
 
-      <Sidebar 
-        mobileOpen={isMobile ? sidebarOpen : false} 
+      <Sidebar
+        mobileOpen={isMobile ? sidebarOpen : false}
         desktopOpen={!isMobile ? sidebarOpen : false}
         onMobileClose={handleDrawerToggle}
         onDesktopClose={handleDrawerToggle}
       />
 
-      {/* Main content area - uses flexGrow to automatically fill remaining space.
-          The persistent drawer sidebar already takes up space in the flex layout,
-          so NO margin-left is needed. */}
       <Box
         component="main"
         sx={{
           flexGrow: 1,
           minHeight: '100vh',
-          bgcolor: 'background.default',
+          bgcolor: '#f1f5f9',
           transition: theme.transitions.create('all', {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.enteringScreen,
@@ -251,14 +209,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = React.memo(({ chi
           overflow: 'hidden',
         }}
       >
-        <Toolbar sx={{ minHeight: '64px !important' }} />
-        <Box 
-          sx={{ 
-            flex: 1, 
-            minHeight: 0, 
-            overflow: 'auto',
-          }}
-        >
+        <Toolbar sx={{ minHeight: '60px !important' }} />
+        <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
           {children}
         </Box>
       </Box>
@@ -268,63 +220,36 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = React.memo(({ chi
 
 DashboardLayout.displayName = 'DashboardLayout';
 
-// ─── Real-time Connection Indicator ─────────────────────────
+// ─── Real-time Connection Indicator ──────────────────
 function RealtimeIndicator() {
   const { connected, onlineCount } = usePusherContext();
   return (
     <Box
       sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 0.5,
-        px: 1.2,
-        py: 0.4,
-        borderRadius: 3,
-        bgcolor: connected ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
+        display: 'flex', alignItems: 'center', gap: 0.5,
+        px: 1, py: 0.35, borderRadius: 2,
+        bgcolor: connected ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)',
         border: '1px solid',
-        borderColor: connected ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)',
+        borderColor: connected ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
         cursor: 'default',
-        transition: 'all 0.3s',
       }}
-      title={connected ? `Real-time connected | ${onlineCount} drivers online` : 'Real-time disconnected'}
+      title={connected ? `Real-time connected | ${onlineCount} drivers online` : 'Disconnected'}
     >
       <Box
         sx={{
-          width: 7,
-          height: 7,
-          borderRadius: '50%',
+          width: 6, height: 6, borderRadius: '50%',
           bgcolor: connected ? '#22c55e' : '#ef4444',
+          boxShadow: connected ? '0 0 0 2px rgba(34,197,94,0.15)' : 'none',
           animation: connected ? 'pulse 2s infinite' : 'none',
-          '@keyframes pulse': {
-            '0%': { opacity: 1 },
-            '50%': { opacity: 0.4 },
-            '100%': { opacity: 1 },
-          },
+          '@keyframes pulse': { '0%': { opacity: 1 }, '50%': { opacity: 0.4 }, '100%': { opacity: 1 } },
         }}
       />
-      <Typography
-        variant="caption"
-        sx={{
-          fontSize: 10,
-          fontWeight: 700,
-          color: connected ? '#22c55e' : '#ef4444',
-          letterSpacing: 0.5,
-          textTransform: 'uppercase',
-        }}
-      >
+      <Typography sx={{ fontSize: '0.62rem', fontWeight: 700, color: connected ? '#22c55e' : '#ef4444', letterSpacing: 0.5, textTransform: 'uppercase' }}>
         {connected ? 'LIVE' : 'OFF'}
       </Typography>
       {connected && onlineCount > 0 && (
-        <Typography
-          variant="caption"
-          sx={{
-            fontSize: 9,
-            fontWeight: 600,
-            color: '#6b7280',
-            ml: 0.3,
-          }}
-        >
-          · {onlineCount} 🟢
+        <Typography sx={{ fontSize: '0.58rem', fontWeight: 600, color: '#94a3b8', ml: 0.2 }}>
+          {onlineCount}
         </Typography>
       )}
     </Box>

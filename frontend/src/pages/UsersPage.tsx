@@ -12,8 +12,6 @@ import {
   DialogActions,
   Alert,
   Grid,
-  Card,
-  CardContent,
   TextField,
   MenuItem,
   InputAdornment,
@@ -33,6 +31,7 @@ import {
 import { userApi } from '@api/user.api';
 import type { User, UserStats } from '../types/user.types';
 import type { ApiError } from '../types/api.types';
+import { StatsCard } from '@/components/common/StatsCard';
 import { CreateUserDialog } from '@components/users/CreateUserDialog';
 import { EditUserDialog } from '@components/users/EditUserDialog';
 import { ChangePasswordDialog } from '@components/users/ChangePasswordDialog';
@@ -258,99 +257,72 @@ export const UsersPage: React.FC = () => {
         overflowX: 'hidden',
         p: 3
       }}>
-        {/* Compact Header */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Box>
-            <Typography variant="h5" component="h1" fontWeight={700} sx={{ mb: 0.5 }}>
-          {t('users.title')}
-        </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {t('users.subtitle')}
-            </Typography>
+        {/* Page Header */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{
+              width: 44, height: 44, borderRadius: 2.5,
+              background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 14px rgba(59,130,246,0.3)',
+            }}>
+              <People sx={{ fontSize: 24, color: 'white' }} />
+            </Box>
+            <Box>
+              <Typography variant="h4" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+                {t('users.title')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3 }}>
+                {t('users.subtitle')}
+              </Typography>
+            </Box>
           </Box>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={() => setCreateDialogOpen(true)}
-            sx={{ minWidth: 140 }}
-        >
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => setCreateDialogOpen(true)}
+          >
             {t('users.addUser')}
-        </Button>
-      </Box>
+          </Button>
+        </Box>
 
-        {/* Compact Stats Row */}
-      {stats && (
+        {/* Stats Row */}
+        {stats && (
           <Grid container spacing={2} sx={{ mb: 2 }}>
             <Grid item xs={6} sm={3}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box>
-                      <Typography variant="h4" fontWeight={700} sx={{ mb: 0.5 }}>
-                        {stats.totalUsers}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                  {t('users.totalUsers')}
-                </Typography>
-                    </Box>
-                    <People sx={{ fontSize: 32, color: 'primary.main', opacity: 0.2 }} />
-                  </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+              <StatsCard
+                title={t('users.totalUsers')}
+                value={stats.totalUsers}
+                icon={<People />}
+                color="#3b82f6"
+              />
+            </Grid>
             <Grid item xs={6} sm={3}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box>
-                      <Typography variant="h4" fontWeight={700} sx={{ mb: 0.5, color: 'success.main' }}>
-                        {stats.activeUsers}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                  {t('users.activeUsers')}
-                </Typography>
-                    </Box>
-                    <CheckCircle sx={{ fontSize: 32, color: 'success.main', opacity: 0.2 }} />
-                  </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+              <StatsCard
+                title={t('users.activeUsers')}
+                value={stats.activeUsers}
+                icon={<CheckCircle />}
+                color="#10b981"
+              />
+            </Grid>
             <Grid item xs={6} sm={3}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box>
-                      <Typography variant="h4" fontWeight={700} sx={{ mb: 0.5, color: 'error.main' }}>
-                        {stats.inactiveUsers}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                  {t('users.inactiveUsers')}
-                </Typography>
-                    </Box>
-                    <Cancel sx={{ fontSize: 32, color: 'error.main', opacity: 0.2 }} />
-                  </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+              <StatsCard
+                title={t('users.inactiveUsers')}
+                value={stats.inactiveUsers}
+                icon={<Cancel />}
+                color="#ef4444"
+              />
+            </Grid>
             <Grid item xs={6} sm={3}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box>
-                      <Typography variant="h4" fontWeight={700} sx={{ mb: 0.5, color: 'secondary.main' }}>
-                        {stats.roleStats?.owner || 0}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                  {t('users.owners')}
-                </Typography>
-                    </Box>
-                    <People sx={{ fontSize: 32, color: 'secondary.main', opacity: 0.2 }} />
-                  </Box>
-              </CardContent>
-            </Card>
+              <StatsCard
+                title={t('users.owners')}
+                value={stats.roleStats?.owner || 0}
+                icon={<People />}
+                color="#6366f1"
+              />
+            </Grid>
           </Grid>
-        </Grid>
-      )}
+        )}
 
       {error && (
           <Alert 
@@ -364,65 +336,67 @@ export const UsersPage: React.FC = () => {
       )}
 
         {/* Search and Filters */}
-        <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
-          <TextField
-            placeholder={t('users.searchPlaceholder')}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ flex: 1, minWidth: 300 }}
-            size="small"
-          />
-          
-          <TextField
-            select
-            label="Status"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            sx={{ minWidth: 150 }}
-            size="small"
-          >
-            <MenuItem value="all">{t('users.allStatus')}</MenuItem>
-            <MenuItem value="active">Active</MenuItem>
-            <MenuItem value="inactive">Inactive</MenuItem>
-          </TextField>
-
-          <TextField
-            select
-            label="Role"
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-            sx={{ minWidth: 150 }}
-            size="small"
-          >
-            <MenuItem value="all">{t('users.allRoles')}</MenuItem>
-            <MenuItem value="owner">Owner</MenuItem>
-            <MenuItem value="dispatcher">Dispatcher</MenuItem>
-            <MenuItem value="accountant">Accountant</MenuItem>
-            <MenuItem value="driver">Driver</MenuItem>
-          </TextField>
-
-          {(searchTerm || statusFilter !== 'all' || roleFilter !== 'all') && (
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<FilterList />}
-              onClick={() => {
-                setSearchTerm('');
-                setStatusFilter('all');
-                setRoleFilter('all');
+        <Paper sx={{ p: 2, mb: 2, borderRadius: 3, border: '1px solid rgba(226,232,240,0.8)' }}>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+            <TextField
+              placeholder={t('users.searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search sx={{ color: 'text.secondary' }} />
+                  </InputAdornment>
+                ),
               }}
+              sx={{ flex: 1, minWidth: 300 }}
+              size="small"
+            />
+            
+            <TextField
+              select
+              label="Status"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              sx={{ minWidth: 150 }}
+              size="small"
             >
-              Clear
-            </Button>
-          )}
-        </Box>
+              <MenuItem value="all">{t('users.allStatus')}</MenuItem>
+              <MenuItem value="active">Active</MenuItem>
+              <MenuItem value="inactive">Inactive</MenuItem>
+            </TextField>
+
+            <TextField
+              select
+              label="Role"
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              sx={{ minWidth: 150 }}
+              size="small"
+            >
+              <MenuItem value="all">{t('users.allRoles')}</MenuItem>
+              <MenuItem value="owner">Owner</MenuItem>
+              <MenuItem value="dispatcher">Dispatcher</MenuItem>
+              <MenuItem value="accountant">Accountant</MenuItem>
+              <MenuItem value="driver">Driver</MenuItem>
+            </TextField>
+
+            {(searchTerm || statusFilter !== 'all' || roleFilter !== 'all') && (
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<FilterList />}
+                onClick={() => {
+                  setSearchTerm('');
+                  setStatusFilter('all');
+                  setRoleFilter('all');
+                }}
+              >
+                Clear
+              </Button>
+            )}
+          </Box>
+        </Paper>
 
         {/* Compact DataGrid - Takes remaining space */}
         <Paper 

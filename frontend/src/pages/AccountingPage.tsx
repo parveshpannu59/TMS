@@ -14,7 +14,6 @@ import {
   InputLabel,
   Button,
   Alert,
-  alpha,
   useTheme,
   CircularProgress,
   IconButton,
@@ -43,6 +42,7 @@ import {
   HourglassEmpty,
 } from '@mui/icons-material';
 import { DashboardLayout } from '@layouts/DashboardLayout';
+import { StatsCard } from '@/components/common/StatsCard';
 import { dashboardApi, type AccountantDashboardData } from '@/api/dashboardApi';
 import { loadApi } from '@/api/all.api';
 import { getApiOrigin } from '@/api/client';
@@ -423,13 +423,25 @@ const AccountingPage: React.FC = () => {
   return (
     <DashboardLayout>
       <Box sx={{ p: 3 }}>
-        {/* Header */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        {/* Page Header */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <AccountBalance sx={{ fontSize: 32, color: 'primary.main' }} />
-            <Typography variant="h4" fontWeight={700}>
-              {t('accounting.dashboard', { defaultValue: 'Accounting Dashboard' })}
-            </Typography>
+            <Box sx={{
+              width: 44, height: 44, borderRadius: 2.5,
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 14px rgba(16,185,129,0.3)',
+            }}>
+              <AccountBalance sx={{ fontSize: 24, color: 'white' }} />
+            </Box>
+            <Box>
+              <Typography variant="h4" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+                {t('accounting.dashboard', { defaultValue: 'Accounting Dashboard' })}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3 }}>
+                Track revenue, expenses, and financial performance
+              </Typography>
+            </Box>
           </Box>
           <FormControl size="small" sx={{ minWidth: 200 }}>
             <InputLabel id="accounting-period-label">{t('accounting.period', { defaultValue: 'Period' })}</InputLabel>
@@ -454,49 +466,16 @@ const AccountingPage: React.FC = () => {
         )}
 
         {/* Summary Cards */}
-        <Grid container spacing={3} mb={4}>
+        <Grid container spacing={2} mb={3}>
           {summaryCards.map((card, index) => (
             <Grid item xs={12} sm={6} md={3} key={index}>
-              <Card
-                sx={{
-                  height: '100%',
-                  background: `linear-gradient(135deg, ${alpha(card.color, 0.1)} 0%, ${alpha(card.color, 0.05)} 100%)`,
-                  borderLeft: `4px solid ${card.color}`,
-                  transition: 'transform 0.2s',
-                  '&:hover': {
-                    transform: 'translateY(-4px)',
-                    boxShadow: 4,
-                  },
-                }}
-              >
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                    <Typography variant="body2" color="text.secondary" fontWeight={600}>
-                      {card.title}
-                    </Typography>
-                    <Box
-                      sx={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 2,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        bgcolor: alpha(card.color, 0.1),
-                        color: card.color,
-                      }}
-                    >
-                      {card.icon}
-                    </Box>
-                  </Box>
-                  <Typography variant="h4" fontWeight={700} sx={{ mb: 0.5 }}>
-                    {card.value}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {card.subtitle}
-                  </Typography>
-                </CardContent>
-              </Card>
+              <StatsCard
+                title={card.title}
+                value={card.value}
+                icon={card.icon}
+                color={card.color}
+                subtitle={card.subtitle}
+              />
             </Grid>
           ))}
         </Grid>

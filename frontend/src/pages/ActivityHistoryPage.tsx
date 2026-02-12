@@ -157,12 +157,19 @@ const ActivityHistoryPage: React.FC = () => {
     <DashboardLayout>
       <Box sx={{ p: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-          <History sx={{ fontSize: 32, color: 'primary.main' }} />
+          <Box sx={{
+            width: 44, height: 44, borderRadius: 2.5,
+            background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 4px 14px rgba(99,102,241,0.3)',
+          }}>
+            <History sx={{ fontSize: 24, color: 'white' }} />
+          </Box>
           <Box>
-            <Typography variant="h4" fontWeight={700}>
+            <Typography variant="h4" fontWeight={700} sx={{ lineHeight: 1.2 }}>
               {t('activity.title', { defaultValue: 'Activity History' })}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3 }}>
               {t('activity.subtitle', { defaultValue: 'Track all changes and actions in your TMS' })}
             </Typography>
           </Box>
