@@ -28,6 +28,7 @@ import {
   Inventory,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
 import { notificationApi } from '@api/notification.api';
 import assignmentApi from '@api/assignment.api';
 import { loadApi } from '@api/all.api';
@@ -38,6 +39,7 @@ import type { Load } from '@/types/all.types';
 
 export const NotificationMenu: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
@@ -100,6 +102,13 @@ export const NotificationMenu: React.FC = () => {
       setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch (err: any) {
       console.error('Failed to mark notification as read:', err);
+    }
+
+    // Handle driver-declined notifications for dispatchers — navigate to loads page with auto-reassign
+    if (notification.metadata?.action === 'reassign' && notification.metadata?.loadId) {
+      handleClose();
+      navigate(`/loads?reassign=${notification.metadata.loadId}`);
+      return;
     }
 
     // Handle load assignment notifications
@@ -228,6 +237,9 @@ export const NotificationMenu: React.FC = () => {
     }
     if (status === 'rejected') {
       return { color: 'error', label: 'REJECTED' };
+    }
+    if (status === 'delivered' || metadata?.requiresApproval) {
+      return { color: 'warning', label: 'NEEDS APPROVAL' };
     }
     // Pending or new assignments
     return { color: 'info', label: 'PENDING' };
@@ -379,8 +391,16 @@ export const NotificationMenu: React.FC = () => {
             </Typography>
           </Box>
         ) : (
-          <Box sx={{ maxHeight: 400, overflow: 'auto' }}>
-            {notifications.map((notification) => renderNotificationRow(notification))}
+          <Box sx={{
+            maxHeight: 400, overflow: 'auto',
+            scrollbarWidth: 'none',          /* Firefox */
+            msOverflowStyle: 'none',         /* IE / Edge */
+            '&::-webkit-scrollbar': { display: 'none' }, /* Chrome / Safari */
+          }}>
+            {/* Deduplicate by title+message to prevent showing duplicates */}
+            {notifications
+              .filter((n, i, arr) => arr.findIndex(x => x.title === n.title && x.message === n.message) === i)
+              .map((notification) => renderNotificationRow(notification))}
           </Box>
         )}
 

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import {
@@ -9,16 +9,12 @@ import {
   Alert,
   InputAdornment,
   IconButton,
-  Fade,
+  CircularProgress,
 } from '@mui/material';
-import { Visibility, VisibilityOff, Login as LoginIcon, Email, Lock } from '@mui/icons-material';
+import { Visibility, VisibilityOff, Email, Lock } from '@mui/icons-material';
 import { useAuth } from '@hooks/useAuth';
 import { loginSchema, LoginFormData } from '@utils/validation';
 
-/**
- * Login form component with validation and error handling
- * Optimized for performance with memoization and reduced GPU usage
- */
 export const LoginForm: React.FC = React.memo(() => {
   const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
@@ -33,10 +29,7 @@ export const LoginForm: React.FC = React.memo(() => {
   } = useForm<LoginFormData>({
     resolver: yupResolver(loginSchema),
     mode: 'onBlur',
-    defaultValues: {
-      email: '',
-      password: '',
-    },
+    defaultValues: { email: '', password: '' },
   });
 
   const handleTogglePassword = useCallback(() => {
@@ -49,28 +42,16 @@ export const LoginForm: React.FC = React.memo(() => {
         setError(null);
         setIsSubmitting(true);
         await login(data);
-        // Reset form on successful login
         reset();
       } catch (err: any) {
-        console.error('Login error caught in LoginForm:', err);
-        // Handle different error types
         let errorMessage = 'Login failed. Please try again.';
-        
         if (err && typeof err === 'object') {
-          // If it's an ApiError object with a message property
-          if (err.message) {
-            errorMessage = err.message;
-          }
-          // If it has a data property with message
-          if (err.data?.message) {
-            errorMessage = err.data.message;
-          }
+          if (err.message) errorMessage = err.message;
+          if (err.data?.message) errorMessage = err.data.message;
         } else if (typeof err === 'string') {
           errorMessage = err;
         }
-        
         setError(errorMessage);
-        // Keep form data for user to correct
       } finally {
         setIsSubmitting(false);
       }
@@ -87,146 +68,76 @@ export const LoginForm: React.FC = React.memo(() => {
     [handleSubmit, onSubmit]
   );
 
-  // Memoize input field styles to prevent re-renders
-  const inputFieldStyles = useMemo(
-    () => ({
-      '& .MuiOutlinedInput-root': {
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-        transition: 'border-color 0.2s ease, background-color 0.2s ease',
-        '&:hover': {
-          backgroundColor: 'rgba(255, 255, 255, 1)',
-          '& .MuiOutlinedInput-notchedOutline': {
-            borderColor: '#667eea',
-          },
-        },
-        '&.Mui-focused': {
-          backgroundColor: 'rgba(255, 255, 255, 1)',
-          '& .MuiOutlinedInput-notchedOutline': {
-            borderWidth: 2,
-            borderColor: '#667eea',
-          },
-        },
-        '&.Mui-error': {
-          '& .MuiOutlinedInput-notchedOutline': {
-            borderColor: '#c53030',
-          },
-        },
+  const inputSx = {
+    '& .MuiOutlinedInput-root': {
+      borderRadius: '12px',
+      backgroundColor: '#f8fafc',
+      fontSize: '0.95rem',
+      transition: 'all 0.2s',
+      '& .MuiOutlinedInput-notchedOutline': {
+        borderColor: '#e2e8f0',
       },
-      '& .MuiInputLabel-root': {
-        fontWeight: 500,
-        '&.Mui-focused': {
-          color: '#667eea',
-        },
-      },
-    }),
-    []
-  );
-
-  // Memoize button styles
-  const buttonStyles = useMemo(
-    () => ({
-      py: 1.75,
-      mt: 1,
-      fontSize: '1rem',
-      fontWeight: 600,
-      textTransform: 'none',
-      borderRadius: 2,
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      boxShadow: '0 4px 14px rgba(102, 126, 234, 0.4)',
-      transition: 'box-shadow 0.2s ease, transform 0.2s ease',
       '&:hover': {
-        background: 'linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%)',
-        boxShadow: '0 6px 20px rgba(102, 126, 234, 0.5)',
-        transform: 'translateY(-1px)',
+        backgroundColor: '#f1f5f9',
+        '& .MuiOutlinedInput-notchedOutline': { borderColor: '#94a3b8' },
       },
-      '&:active': {
-        transform: 'translateY(0px)',
+      '&.Mui-focused': {
+        backgroundColor: '#fff',
+        '& .MuiOutlinedInput-notchedOutline': { borderWidth: 2, borderColor: '#3b82f6' },
       },
-      '&:disabled': {
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        opacity: 0.6,
-        transform: 'none',
-      },
-      // Respect reduced motion preference
-      '@media (prefers-reduced-motion: reduce)': {
-        transition: 'none',
-        '&:hover': {
-          transform: 'none',
-        },
-      },
-    }),
-    []
-  );
+      '&.Mui-error .MuiOutlinedInput-notchedOutline': { borderColor: '#ef4444' },
+    },
+    '& .MuiInputLabel-root': {
+      fontWeight: 500, fontSize: '0.9rem',
+      '&.Mui-focused': { color: '#3b82f6' },
+    },
+  };
 
   return (
     <Box
       component="form"
       onSubmit={handleFormSubmit}
       noValidate
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: { xs: 2.5, sm: 3 },
-        width: '100%',
-      }}
+      sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, width: '100%' }}
     >
-      <Box sx={{ mb: 1 }}>
+      {/* Header */}
+      <Box sx={{ mb: 0.5 }}>
         <Typography
-          variant="h4"
-          component="h1"
+          variant="h5"
           sx={{
-            fontWeight: 700,
-            fontSize: { xs: '1.75rem', sm: '2rem' },
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            backgroundClip: 'text',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            mb: 1,
+            fontWeight: 800,
+            fontSize: '1.6rem',
+            color: '#0f172a',
             letterSpacing: '-0.5px',
+            mb: 0.5,
           }}
         >
-        Welcome Back
-      </Typography>
-        <Typography
-          variant="body1"
-          sx={{
-            color: 'text.secondary',
-            fontSize: '0.95rem',
-            fontWeight: 400,
-          }}
-        >
-          Sign in to access your TMS account
-      </Typography>
+          Sign in
+        </Typography>
+        <Typography sx={{ color: '#64748b', fontSize: '0.9rem' }}>
+          Enter your credentials to continue
+        </Typography>
       </Box>
 
-      <Fade in={!!error} timeout={300}>
-        <Box>
+      {/* Error */}
       {error && (
-        <Alert 
-          severity="error" 
+        <Alert
+          severity="error"
           onClose={() => setError(null)}
           sx={{
-            mb: 1,
+            borderRadius: '12px',
+            fontSize: '0.85rem',
             fontWeight: 500,
-                backgroundColor: '#fff5f5',
-                color: '#c53030',
-                border: '1px solid #fc8181',
-                borderRadius: 2,
-                boxShadow: '0 2px 8px rgba(197, 48, 48, 0.1)',
-                '& .MuiAlert-icon': {
-                  color: '#c53030',
-                },
-                '& .MuiAlert-action': {
-                  color: '#c53030',
-                },
+            backgroundColor: '#fef2f2',
+            border: '1px solid #fecaca',
+            '& .MuiAlert-icon': { color: '#ef4444' },
           }}
         >
           {error}
         </Alert>
       )}
-        </Box>
-      </Fade>
 
+      {/* Email */}
       <Controller
         name="email"
         control={control}
@@ -234,7 +145,7 @@ export const LoginForm: React.FC = React.memo(() => {
           <TextField
             {...field}
             id="login-email"
-            label="Email Address"
+            label="Email"
             type="email"
             fullWidth
             autoComplete="email"
@@ -245,20 +156,16 @@ export const LoginForm: React.FC = React.memo(() => {
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <Email
-                    sx={{
-                      color: errors.email ? 'error.main' : 'action.active',
-                      fontSize: 20,
-                    }}
-                  />
+                  <Email sx={{ color: errors.email ? '#ef4444' : '#94a3b8', fontSize: 20 }} />
                 </InputAdornment>
               ),
             }}
-            sx={inputFieldStyles}
+            sx={inputSx}
           />
         )}
       />
 
+      {/* Password */}
       <Controller
         name="password"
         control={control}
@@ -276,12 +183,7 @@ export const LoginForm: React.FC = React.memo(() => {
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <Lock
-                    sx={{
-                      color: errors.password ? 'error.main' : 'action.active',
-                      fontSize: 20,
-                    }}
-                  />
+                  <Lock sx={{ color: errors.password ? '#ef4444' : '#94a3b8', fontSize: 20 }} />
                 </InputAdornment>
               ),
               endAdornment: (
@@ -290,53 +192,80 @@ export const LoginForm: React.FC = React.memo(() => {
                     onClick={handleTogglePassword}
                     edge="end"
                     disabled={isSubmitting}
-                    sx={{
-                      color: 'action.active',
-                      '&:hover': {
-                        backgroundColor: 'rgba(102, 126, 234, 0.08)',
-                      },
-                    }}
+                    sx={{ color: '#94a3b8', '&:hover': { backgroundColor: 'rgba(59,130,246,0.06)' } }}
                   >
-                    {showPassword ? <VisibilityOff /> : <Visibility />}
+                    {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
                   </IconButton>
                 </InputAdornment>
               ),
             }}
-            sx={inputFieldStyles}
+            sx={inputSx}
           />
         )}
       />
 
+      {/* Submit */}
       <Button
         type="submit"
         variant="contained"
         size="large"
         fullWidth
         disabled={isSubmitting}
-        startIcon={<LoginIcon />}
-        sx={buttonStyles}
-      >
-        {isSubmitting ? 'Signing in...' : 'Sign In'}
-      </Button>
-
-      <Box
+        disableElevation
         sx={{
-          mt: 2,
-          pt: 2,
-          borderTop: '1px solid',
-          borderColor: 'divider',
-          textAlign: 'center',
+          py: 1.5,
+          mt: 0.5,
+          fontSize: '0.95rem',
+          fontWeight: 700,
+          textTransform: 'none',
+          borderRadius: '12px',
+          background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+          color: '#fff',
+          letterSpacing: '-0.2px',
+          position: 'relative',
+          overflow: 'hidden',
+          transition: 'all 0.2s',
+          '&:hover': {
+            background: 'linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)',
+            boxShadow: '0 8px 25px rgba(59,130,246,0.35)',
+            transform: 'translateY(-1px)',
+          },
+          '&:active': { transform: 'translateY(0)' },
+          '&:disabled': {
+            background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+            opacity: 0.7,
+            color: '#fff',
+          },
         }}
       >
-        <Typography
-          variant="caption"
-          sx={{
-            color: 'text.secondary',
-            fontSize: '0.75rem',
-            fontWeight: 400,
-          }}
-        >
-          Secure login powered by enterprise-grade authentication
+        {isSubmitting ? (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <CircularProgress size={18} sx={{ color: '#fff' }} />
+            Signing in...
+          </Box>
+        ) : (
+          'Sign In'
+        )}
+      </Button>
+
+      {/* Divider */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 0.5 }}>
+        <Box sx={{ flex: 1, height: '1px', background: '#e2e8f0' }} />
+        <Typography sx={{ color: '#94a3b8', fontSize: '0.72rem', fontWeight: 500, whiteSpace: 'nowrap' }}>
+          PROTECTED ACCESS
+        </Typography>
+        <Box sx={{ flex: 1, height: '1px', background: '#e2e8f0' }} />
+      </Box>
+
+      {/* Security badge */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.8 }}>
+        <Box sx={{
+          width: 6, height: 6, borderRadius: '50%',
+          background: '#22c55e',
+          boxShadow: '0 0 0 2px rgba(34,197,94,0.2)',
+        }} />
+        <Typography sx={{ color: '#94a3b8', fontSize: '0.75rem' }}>
+          256-bit SSL encrypted connection
         </Typography>
       </Box>
     </Box>

@@ -1,9 +1,30 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import Notification, { NotificationPriority } from '../models/Notification';
 import { Load } from '../models/Load.model';
 import { asyncHandler } from '../utils/asyncHandler';
 import { ApiError } from '../utils/ApiError';
 import { PaginationHelper } from '../utils/pagination';
+
+// Helper: build companyId query that matches both string and ObjectId stored values
+function companyIdQuery(companyId: string) {
+  try {
+    const oid = new mongoose.Types.ObjectId(companyId);
+    return { $in: [companyId, oid] };
+  } catch {
+    return companyId;
+  }
+}
+
+// Helper: build userId query that matches both string and ObjectId stored values
+function userIdQuery(userId: string) {
+  try {
+    const oid = new mongoose.Types.ObjectId(userId);
+    return [{ userId: userId }, { userId: oid }, { userId: null }];
+  } catch {
+    return [{ userId: userId }, { userId: null }];
+  }
+}
 
 /**
  * @desc Get user notifications
@@ -15,20 +36,17 @@ export const getNotifications = asyncHandler(async (req: Request, res: Response)
   const companyId = req.user?.companyId;
   const { page = 1, limit = 20, read, type, priority } = req.query;
 
-  // Build query - let Mongoose handle ObjectId conversion
+  // Build query - handle both string and ObjectId companyId/userId
   const query: any = {};
 
-  // If user has companyId, filter by it
+  // If user has companyId, match both string and ObjectId forms
   if (companyId) {
-    query.companyId = companyId;
+    query.companyId = companyIdQuery(companyId);
   }
 
   // Add $or condition for user-specific or company-wide notifications
   if (userId) {
-    query.$or = [
-      { userId: userId },
-      { userId: null },
-    ];
+    query.$or = userIdQuery(userId);
   } else {
     query.userId = null;
   }
@@ -95,16 +113,12 @@ export const getUnreadCount = asyncHandler(async (req: Request, res: Response) =
     read: false,
   };
 
-  // If user has companyId, filter by it
   if (companyId) {
-    query.companyId = companyId;
+    query.companyId = companyIdQuery(companyId);
   }
 
   if (userId) {
-    query.$or = [
-      { userId: userId },
-      { userId: null },
-    ];
+    query.$or = userIdQuery(userId);
   } else {
     query.userId = null;
   }
@@ -131,16 +145,12 @@ export const markAsRead = asyncHandler(async (req: Request, res: Response) => {
     _id: id,
   };
 
-  // If user has companyId, filter by it
   if (companyId) {
-    query.companyId = companyId;
+    query.companyId = companyIdQuery(companyId);
   }
 
   if (userId) {
-    query.$or = [
-      { userId: userId },
-      { userId: null },
-    ];
+    query.$or = userIdQuery(userId);
   } else {
     query.userId = null;
   }
@@ -175,16 +185,12 @@ export const markAllAsRead = asyncHandler(async (req: Request, res: Response) =>
     read: false,
   };
 
-  // If user has companyId, filter by it
   if (companyId) {
-    query.companyId = companyId;
+    query.companyId = companyIdQuery(companyId);
   }
 
   if (userId) {
-    query.$or = [
-      { userId: userId },
-      { userId: null },
-    ];
+    query.$or = userIdQuery(userId);
   } else {
     query.userId = null;
   }
@@ -220,16 +226,12 @@ export const deleteNotification = asyncHandler(async (req: Request, res: Respons
     _id: id,
   };
 
-  // If user has companyId, filter by it
   if (companyId) {
-    query.companyId = companyId;
+    query.companyId = companyIdQuery(companyId);
   }
 
   if (userId) {
-    query.$or = [
-      { userId: userId },
-      { userId: null },
-    ];
+    query.$or = userIdQuery(userId);
   } else {
     query.userId = null;
   }
@@ -299,16 +301,12 @@ export const clearReadNotifications = asyncHandler(async (req: Request, res: Res
     read: true,
   };
 
-  // If user has companyId, filter by it
   if (companyId) {
-    query.companyId = companyId;
+    query.companyId = companyIdQuery(companyId);
   }
 
   if (userId) {
-    query.$or = [
-      { userId: userId },
-      { userId: null },
-    ];
+    query.$or = userIdQuery(userId);
   } else {
     query.userId = null;
   }

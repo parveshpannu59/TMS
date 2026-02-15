@@ -1,7 +1,10 @@
 import Assignment, { AssignmentStatus } from '../models/Assignment';
-import { Load } from '../models/Load.model';
+import { Load, LoadStatus } from '../models/Load.model';
 import Notification, { NotificationType } from '../models/Notification';
 import { IAssignment } from '../models/Assignment';
+import { Driver, DriverStatus } from '../models/Driver.model';
+import Truck from '../models/Truck';
+import Trailer from '../models/Trailer';
 
 export class AssignmentService {
   /**
@@ -22,8 +25,8 @@ export class AssignmentService {
     const assignment = new Assignment({
       loadId: data.loadId,
       driverId: data.driverId,
-      truckId: data.truckId,
-      trailerId: data.trailerId,
+      ...(data.truckId ? { truckId: data.truckId } : {}),
+      ...(data.trailerId ? { trailerId: data.trailerId } : {}),
       assignedBy: data.assignedBy,
       status: AssignmentStatus.PENDING,
       expiresAt,
@@ -120,11 +123,38 @@ export class AssignmentService {
     await assignment.save();
 
     // Update load status to 'trip_accepted'
-    await Load.findByIdAndUpdate(
+    const load = await Load.findByIdAndUpdate(
       assignment.loadId,
-      { status: 'trip_accepted' },
+      { status: LoadStatus.TRIP_ACCEPTED },
       { new: true }
     );
+
+    // NOW activate driver, truck, and trailer (deferred from initial assignment)
+    try {
+      const driver = await Driver.findById(driverId);
+      if (driver) {
+        driver.status = DriverStatus.ON_TRIP;
+        driver.currentLoadId = assignment.loadId.toString();
+        await driver.save();
+      }
+
+      if (load?.truckId) {
+        await Truck.findByIdAndUpdate(load.truckId, {
+          status: 'on_road',
+          currentLoadId: assignment.loadId.toString(),
+          currentDriverId: driverId,
+        });
+      }
+
+      if (load?.trailerId) {
+        await Trailer.findByIdAndUpdate(load.trailerId, {
+          status: 'on_road',
+          currentLoadId: assignment.loadId.toString(),
+        });
+      }
+    } catch (err) {
+      console.error('Failed to update driver/vehicle statuses on acceptance:', err);
+    }
 
     // Update the original "New Load Assigned" notification sent to driver
     try {
@@ -204,17 +234,43 @@ export class AssignmentService {
     };
     await assignment.save();
 
-    // Revert load status back to 'booked' or 'rate_confirmed'
-    await Load.findByIdAndUpdate(
-      assignment.loadId,
-      { status: 'booked', driverId: undefined },
-      { new: true }
-    );
+    // Revert load — clear driver/truck/trailer and revert status to booked
+    const load = await Load.findById(assignment.loadId);
+    let loadNumber = '';
+    let driverName = 'A driver';
+    if (load) {
+      loadNumber = load.loadNumber || assignment.loadId.toString();
+      // Revert truck and trailer statuses to available
+      if (load.truckId) {
+        await Truck.findByIdAndUpdate(load.truckId, {
+          status: 'available',
+          $unset: { currentLoadId: 1, currentDriverId: 1 },
+        });
+      }
+      if (load.trailerId) {
+        await Trailer.findByIdAndUpdate(load.trailerId, {
+          status: 'available',
+          $unset: { currentLoadId: 1, currentTruckId: 1 },
+        });
+      }
+
+      // Revert load
+      load.status = LoadStatus.BOOKED;
+      load.driverId = undefined as any;
+      load.truckId = undefined as any;
+      load.trailerId = undefined as any;
+      await load.save();
+    }
+
+    // Get driver name for notification
+    try {
+      const driverDoc = await Driver.findById(driverId);
+      if (driverDoc?.name) driverName = driverDoc.name;
+    } catch (_) {}
 
     // Update the original "New Load Assigned" notification sent to driver
     try {
-      const driver = await import('../models/Driver.model');
-      const driverDoc = await driver.Driver.findById(driverId);
+      const driverDoc = await Driver.findById(driverId);
       if (driverDoc?.userId) {
         await Notification.updateMany(
           {
@@ -227,7 +283,7 @@ export class AssignmentService {
               read: true,
               'metadata.status': 'rejected',
               title: 'Assignment Rejected',
-              message: `You have rejected the assignment for Load #${assignment.loadId}`,
+              message: `You have rejected the assignment for Load #${loadNumber}`,
             },
           }
         );
@@ -236,19 +292,22 @@ export class AssignmentService {
       console.error('Failed to update driver notification:', err);
     }
 
-    // Notify dispatcher
+    // Notify dispatcher — include loadNumber and action for auto-reassign on click
     await this.createNotification({
       userId: assignment.assignedBy.toString(),
       type: NotificationType.WARNING,
-      title: 'Assignment Rejected',
-      message: `Driver has rejected the assignment for Load #${assignment.loadId}. Reason: ${reason || 'Not provided'}`,
+      title: 'Driver Declined Assignment',
+      message: `${driverName} has declined Load #${loadNumber}. Please select another driver.${reason ? ` Reason: ${reason}` : ''}`,
       data: {
         loadId: assignment.loadId.toString(),
+        loadNumber,
         assignmentId: assignmentId,
         driverId: driverId,
         status: 'rejected',
+        action: 'reassign',
         reason,
       },
+      actionUrl: '/loads',
     });
 
     return assignment.populate([
@@ -271,9 +330,19 @@ export class AssignmentService {
     actionUrl?: string;
   }): Promise<any> {
     try {
+      // Resolve the correct companyId from the target user
+      let companyId: string | undefined;
+      try {
+        const { User } = await import('../models/User.model');
+        const targetUser = await User.findById(data.userId).select('companyId').lean();
+        companyId = (targetUser as any)?.companyId?.toString();
+      } catch (_) {}
+      // Fallback: use the userId itself as companyId (owner's _id often equals companyId)
+      if (!companyId) companyId = data.userId;
+
       const notification = new Notification({
         userId: data.userId,
-        companyId: process.env.DEFAULT_COMPANY_ID || '000000000000000000000001',
+        companyId,
         type: data.type,
         title: data.title,
         message: data.message,

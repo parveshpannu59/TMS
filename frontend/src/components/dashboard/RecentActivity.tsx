@@ -1,7 +1,8 @@
-import { memo, useState } from 'react';
-import { Box, Typography, alpha, useTheme, Collapse, Button } from '@mui/material';
+import { memo, useState, useCallback, useRef } from 'react';
+import { Box, Typography, alpha, useTheme, Button, CircularProgress, Collapse } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Activity } from '../../types/dashboard.types';
+import { activityLogApi } from '../../api/activityLog.api';
 import { formatDistanceToNow } from 'date-fns';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
@@ -16,6 +17,7 @@ interface RecentActivityProps {
 }
 
 const INITIAL_COUNT = 3;
+const LOAD_MORE_SIZE = 5;
 
 const getActivityIcon = (type: Activity['type']) => {
   switch (type) {
@@ -31,6 +33,23 @@ const getActivityIcon = (type: Activity['type']) => {
       return { icon: <AssignmentIcon sx={{ fontSize: 16 }} />, color: '#94a3b8' };
   }
 };
+
+// Map activity log API data to the Activity type used by the component
+function mapLogToActivity(log: any): Activity {
+  let type: Activity['type'] = 'info';
+  const action = (log.action || '').toLowerCase();
+  if (action.includes('create') || action.includes('complete') || action.includes('deliver') || action.includes('approve')) type = 'success';
+  else if (action.includes('delete') || action.includes('cancel') || action.includes('emergency')) type = 'error';
+  else if (action.includes('update') || action.includes('assign') || action.includes('transit')) type = 'info';
+  else if (action.includes('alert') || action.includes('warn')) type = 'warning';
+
+  return {
+    id: log._id || log.id || String(Math.random()),
+    type,
+    message: log.description || `${log.action} ${log.entityName || log.entity || ''}`.trim(),
+    timestamp: log.createdAt || new Date().toISOString(),
+  };
+}
 
 const ActivityItem = memo(({ activity, idx, theme }: { activity: Activity; idx: number; theme: any }) => {
   const config = getActivityIcon(activity.type);
@@ -97,11 +116,48 @@ ActivityItem.displayName = 'ActivityItem';
 export const RecentActivity = memo(({ activities }: RecentActivityProps) => {
   const { t } = useTranslation();
   const theme = useTheme();
+
+  // Show first INITIAL_COUNT from the dashboard-provided activities
   const [expanded, setExpanded] = useState(false);
 
-  const hasMore = activities.length > INITIAL_COUNT;
+  // Lazy-loaded extra activities (beyond what the dashboard provided)
+  const [extraActivities, setExtraActivities] = useState<Activity[]>([]);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMoreFromApi, setHasMoreFromApi] = useState(true);
+  const apiPageRef = useRef(1);
+
+  const hasMoreInProps = activities.length > INITIAL_COUNT;
   const visibleActivities = activities.slice(0, INITIAL_COUNT);
   const hiddenActivities = activities.slice(INITIAL_COUNT);
+
+  // All activities to show (dashboard-provided + lazy-loaded from API)
+  const allActivities = [...activities, ...extraActivities];
+  const totalShown = expanded ? allActivities.length : INITIAL_COUNT;
+
+  const loadMoreFromApi = useCallback(async () => {
+    if (loadingMore || !hasMoreFromApi) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = apiPageRef.current + 1;
+      apiPageRef.current = nextPage;
+      // Skip the items we already have from the dashboard (typically 10)
+      // Use the activity-logs API for additional items
+      const resp = await activityLogApi.getActivityLogs({
+        page: nextPage,
+        limit: LOAD_MORE_SIZE,
+      });
+      const mapped = (resp.data || []).map(mapLogToActivity);
+      // Filter out duplicates that might already be in the dashboard data
+      const existingIds = new Set(allActivities.map(a => a.id));
+      const newItems = mapped.filter(a => !existingIds.has(a.id));
+      setExtraActivities(prev => [...prev, ...newItems]);
+      setHasMoreFromApi(resp.pagination?.hasNextPage ?? false);
+    } catch {
+      setHasMoreFromApi(false);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMoreFromApi, allActivities]);
 
   return (
     <Box
@@ -149,7 +205,7 @@ export const RecentActivity = memo(({ activities }: RecentActivityProps) => {
               fontSize: '0.7rem',
             }}
           >
-            {activities.length} total
+            {activities.length + extraActivities.length} total
           </Typography>
         )}
       </Box>
@@ -175,24 +231,52 @@ export const RecentActivity = memo(({ activities }: RecentActivityProps) => {
             }}
           />
 
-          {/* First 3 items - always visible */}
+          {/* First INITIAL_COUNT items - always visible */}
           {visibleActivities.map((activity, idx) => (
             <ActivityItem key={activity.id} activity={activity} idx={idx} theme={theme} />
           ))}
 
-          {/* Remaining items - collapsible */}
-          {hasMore && (
+          {/* Remaining dashboard items + extra API items - collapsible */}
+          {(hasMoreInProps || extraActivities.length > 0) && (
             <Collapse in={expanded} timeout={400}>
               {hiddenActivities.map((activity, idx) => (
                 <ActivityItem key={activity.id} activity={activity} idx={INITIAL_COUNT + idx} theme={theme} />
               ))}
+              {extraActivities.map((activity, idx) => (
+                <ActivityItem key={activity.id} activity={activity} idx={activities.length + idx} theme={theme} />
+              ))}
+
+              {/* Load More from API button (inside the expanded section) */}
+              {expanded && hasMoreFromApi && (
+                <Box sx={{ mt: 1.5, textAlign: 'center' }}>
+                  <Button
+                    size="small"
+                    onClick={loadMoreFromApi}
+                    disabled={loadingMore}
+                    endIcon={loadingMore ? <CircularProgress size={14} /> : <KeyboardArrowDownIcon />}
+                    sx={{
+                      borderRadius: 3,
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      fontSize: '0.75rem',
+                      color: '#8b5cf6',
+                      bgcolor: alpha('#8b5cf6', 0.06),
+                      px: 2,
+                      py: 0.5,
+                      '&:hover': { bgcolor: alpha('#8b5cf6', 0.12) },
+                    }}
+                  >
+                    {loadingMore ? 'Loading...' : 'Load Older Activities'}
+                  </Button>
+                </Box>
+              )}
             </Collapse>
           )}
         </Box>
       )}
 
       {/* Show More / Show Less button */}
-      {hasMore && (
+      {(hasMoreInProps || extraActivities.length > 0) && (
         <Box sx={{ mt: 2, textAlign: 'center' }}>
           <Button
             size="small"
@@ -214,7 +298,7 @@ export const RecentActivity = memo(({ activities }: RecentActivityProps) => {
           >
             {expanded
               ? 'Show Less'
-              : `Show ${hiddenActivities.length} More`}
+              : `Show ${hiddenActivities.length + extraActivities.length} More`}
           </Button>
         </Box>
       )}

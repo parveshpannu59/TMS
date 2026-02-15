@@ -78,9 +78,9 @@ export interface VehicleDocumentData {
 
 export const vehicleApi = {
   /**
-   * Get all vehicles
+   * Get all vehicles (supports server-side pagination when page/limit provided)
    */
-  async getAll(params?: { status?: string; vehicleType?: string }): Promise<Vehicle[]> {
+  async getAll(params?: { status?: string; vehicleType?: string; page?: number; limit?: number; search?: string }): Promise<Vehicle[] | { vehicles: Vehicle[]; pagination: { page: number; limit: number; total: number; pages: number } }> {
     const response = await apiClient.get('/vehicles', { params });
     return response.data.data;
   },

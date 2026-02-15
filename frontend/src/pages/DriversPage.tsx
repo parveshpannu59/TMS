@@ -18,7 +18,6 @@ import {
 import { DataGrid, GridColDef, GridActionsCellItem } from '@mui/x-data-grid';
 import { Add, Edit, Delete, LocalShipping, Search, FilterList } from '@mui/icons-material';
 import { InputAdornment } from '@mui/material';
-import { DashboardLayout } from '@layouts/DashboardLayout';
 import { EmptyState } from '@/components/common/EmptyState';
 import { driverApi, Driver, DriverFormData } from '@/api/driver.api';
 import { userApi } from '@/api/user.api';
@@ -570,25 +569,32 @@ const DriversPage: React.FC = () => {
   ];
 
   return (
-    <DashboardLayout>
-      <Box sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+    <Box className="page-fixed-layout">
+      <Box className="page-fixed-header">
+        {/* Page Header */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <LocalShipping sx={{ fontSize: 32, color: 'primary.main' }} />
-            <Typography variant="h4" fontWeight={700}>
-              {t('drivers.title')}
-            </Typography>
+            <Box sx={{
+              width: 44, height: 44, borderRadius: 2.5,
+              background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 14px rgba(59,130,246,0.3)',
+            }}>
+              <LocalShipping sx={{ fontSize: 24, color: 'white' }} />
+            </Box>
+            <Box>
+              <Typography variant="h4" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+                {t('drivers.title')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3 }}>
+                Manage driver profiles, licenses, and availability
+              </Typography>
+            </Box>
           </Box>
           <Button
             variant="contained"
             startIcon={<Add />}
             onClick={() => handleOpenDialog()}
-            sx={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              '&:hover': {
-                background: 'linear-gradient(135deg, #5568d3 0%, #6a4196 100%)',
-              },
-            }}
           >
             {t('drivers.addDriver')}
           </Button>
@@ -607,52 +613,56 @@ const DriversPage: React.FC = () => {
         )}
 
         {/* Search and Filters */}
-        <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
-          <TextField
-            placeholder={t('drivers.searchPlaceholder', { defaultValue: 'Search by name, email, phone, or license#...' })}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ flex: 1, minWidth: 300 }}
-            size="small"
-          />
-          
-          <TextField
-            select
-            label={t('common.status')}
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            sx={{ minWidth: 150 }}
-            size="small"
-          >
-            <MenuItem value="all">{t('common.allStatus')}</MenuItem>
-            <MenuItem value="active">{t('common.active')}</MenuItem>
-            <MenuItem value="inactive">{t('common.inactive')}</MenuItem>
-            <MenuItem value="on_trip">{t('drivers.onTrip')}</MenuItem>
-          </TextField>
-
-          {(searchTerm || statusFilter !== 'all') && (
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<FilterList />}
-              onClick={() => {
-                setSearchTerm('');
-                setStatusFilter('all');
+        <Card sx={{ mb: 0, p: 2, border: '1px solid rgba(226,232,240,0.8)' }}>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+            <TextField
+              placeholder={t('drivers.searchPlaceholder', { defaultValue: 'Search by name, email, phone, or license#...' })}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search sx={{ color: 'text.secondary' }} />
+                  </InputAdornment>
+                ),
               }}
+              sx={{ flex: 1, minWidth: 300 }}
+              size="small"
+            />
+            
+            <TextField
+              select
+              label={t('common.status')}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              sx={{ minWidth: 150 }}
+              size="small"
             >
-              {t('common.clear')}
-            </Button>
-          )}
-        </Box>
+              <MenuItem value="all">{t('common.allStatus')}</MenuItem>
+              <MenuItem value="active">{t('common.active')}</MenuItem>
+              <MenuItem value="inactive">{t('common.inactive')}</MenuItem>
+              <MenuItem value="on_trip">{t('drivers.onTrip')}</MenuItem>
+            </TextField>
 
-        <Card>
+            {(searchTerm || statusFilter !== 'all') && (
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<FilterList />}
+                onClick={() => {
+                  setSearchTerm('');
+                  setStatusFilter('all');
+                }}
+              >
+                {t('common.clear')}
+              </Button>
+            )}
+          </Box>
+        </Card>
+      </Box>
+
+      <Box className="page-scrollable-content">
+        <Card sx={{ border: '1px solid rgba(226,232,240,0.8)' }}>
           {!loading && filteredDrivers.length === 0 ? (
             <EmptyState
               icon={<LocalShipping />}
@@ -662,36 +672,23 @@ const DriversPage: React.FC = () => {
               onAction={drivers.length === 0 ? () => handleOpenDialog() : undefined}
             />
           ) : (
-            <Box sx={{ minHeight: 900, height: filteredDrivers.length > 10 ? filteredDrivers.length * 52 + 150 : 900 }}>
               <DataGrid
                 rows={filteredDrivers}
                 columns={columns}
                 loading={loading}
+                density="compact"
+                autoHeight
                 getRowId={(row) => row.id || row._id || String(Math.random())}
                 pageSizeOptions={[10, 25, 50]}
                 initialState={{
                   pagination: { paginationModel: { pageSize: 10 } },
                 }}
                 disableRowSelectionOnClick
-                autoHeight={false}
-                sx={{
-                  border: 'none',
-                  height: '100%',
-                  width: '100%',
-                  '& .MuiDataGrid-cell:focus': {
-                    outline: 'none',
-                  },
-                  '& .MuiDataGrid-row:hover': {
-                    bgcolor: 'action.hover',
-                  },
-                  '& .MuiDataGrid-virtualScroller': {
-                    overflow: 'auto !important',
-                  },
-                }}
+                sx={{ border: 'none' }}
               />
-            </Box>
           )}
         </Card>
+      </Box>
 
         {/* Add/Edit Dialog */}
         <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
@@ -925,7 +922,6 @@ const DriversPage: React.FC = () => {
           </DialogActions>
         </Dialog>
       </Box>
-    </DashboardLayout>
   );
 };
 

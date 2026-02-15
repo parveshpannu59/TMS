@@ -10,16 +10,47 @@ import { ApiResponse } from '../utils/ApiResponse';
  * @access Private
  */
 export const getVehicles = asyncHandler(async (req: Request, res: Response) => {
-  const { status, vehicleType } = req.query;
+  const { status, vehicleType, page = 1, limit = 0, search } = req.query;
   const companyId = (req as any).user?.companyId || (req as any).user?.id;
 
   const query: any = { companyId };
   if (status) query.status = status;
   if (vehicleType) query.vehicleType = vehicleType;
+  if (search) {
+    const s = String(search);
+    query.$or = [
+      { name: { $regex: s, $options: 'i' } },
+      { registrationNumber: { $regex: s, $options: 'i' } },
+      { unitNumber: { $regex: s, $options: 'i' } },
+      { make: { $regex: s, $options: 'i' } },
+      { model: { $regex: s, $options: 'i' } },
+    ];
+  }
 
-  const vehicles = await Vehicle.find(query).sort({ createdAt: -1 });
+  const pageNum = Math.max(1, Number(page));
+  const limitNum = Number(limit);
 
-  return ApiResponse.success(res, vehicles, 'Vehicles fetched successfully');
+  // If limit is 0 or not provided, return all (backward compat)
+  if (!limitNum) {
+    const vehicles = await Vehicle.find(query).sort({ createdAt: -1 });
+    return ApiResponse.success(res, vehicles, 'Vehicles fetched successfully');
+  }
+
+  const skip = (pageNum - 1) * limitNum;
+  const [vehicles, total] = await Promise.all([
+    Vehicle.find(query).sort({ createdAt: -1 }).skip(skip).limit(limitNum).lean(),
+    Vehicle.countDocuments(query),
+  ]);
+
+  return ApiResponse.success(res, {
+    vehicles,
+    pagination: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      pages: Math.ceil(total / limitNum),
+    },
+  }, 'Vehicles fetched successfully');
 });
 
 /**

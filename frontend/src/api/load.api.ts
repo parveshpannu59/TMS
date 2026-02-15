@@ -88,9 +88,9 @@ export interface LoadsResponse {
 }
 
 export const loadApi = {
-  // Get my assigned loads (for logged-in driver)
-  getMyAssignedLoads: async (): Promise<Load[]> => {
-    const response = await apiClient.get('/loads/me/assigned');
+  // Get my assigned loads (for logged-in driver) — supports pagination
+  getMyAssignedLoads: async (params?: { page?: number; limit?: number; status?: string }): Promise<Load[] | { loads: Load[]; pagination: { page: number; limit: number; total: number; pages: number } }> => {
+    const response = await apiClient.get('/loads/me/assigned', { params });
     return response.data.data;
   },
 
@@ -158,6 +158,15 @@ export const loadApi = {
     await apiClient.delete(`/loads/${id}`);
   },
 
+  // Edit assignment (change driver/truck/trailer/rate on assigned loads)
+  editAssignment: async (
+    id: string,
+    data: { driverId?: string; truckId?: string; trailerId?: string; rate?: number }
+  ): Promise<Load> => {
+    const response = await apiClient.patch(`/loads/${id}/edit-assignment`, data);
+    return response.data.data;
+  },
+
   // Broker confirms rate
   confirmRate: async (
     id: string,
@@ -202,6 +211,7 @@ export const loadApi = {
       dropoffTime: string;
       dropoffLocation: string;
       dropoffDate: string;
+      dropoffPlace?: string;
     }
   ): Promise<Load> => {
     const response = await apiClient.post(`/loads/${id}/driver-form`, data);

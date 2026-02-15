@@ -2,7 +2,6 @@ import { memo } from 'react';
 import { Box, Button, Typography, Tooltip } from '@mui/material';
 import { Add, LocalShipping, FileDownload } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '@mui/material/styles';
 import { getApiOrigin } from '@/api/client';
 
 type LoadsHeaderProps = {
@@ -11,13 +10,11 @@ type LoadsHeaderProps = {
 
 export const LoadsHeader = memo<LoadsHeaderProps>(function LoadsHeader({ onAddLoad }) {
   const { t } = useTranslation();
-  const theme = useTheme();
 
   const handleExportCSV = () => {
     const token = localStorage.getItem('token');
     const url = `${getApiOrigin()}/api/loads/export/csv`;
     const a = document.createElement('a');
-    // Use fetch to include auth header
     fetch(url, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.blob())
       .then(blob => {
@@ -30,16 +27,7 @@ export const LoadsHeader = memo<LoadsHeaderProps>(function LoadsHeader({ onAddLo
   };
 
   return (
-    <Box
-      sx={{
-        bgcolor: 'background.paper',
-        borderBottom: '1px solid',
-        borderColor: 'divider',
-        px: 3,
-        py: 2,
-        mb: 0,
-      }}
-    >
+    <Box sx={{ px: 3, py: 2.5, mb: 0 }}>
       <Box
         sx={{
           display: 'flex',
@@ -49,16 +37,23 @@ export const LoadsHeader = memo<LoadsHeaderProps>(function LoadsHeader({ onAddLo
           gap: 2,
         }}
       >
-        <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 0.5 }}>
-            <LocalShipping sx={{ fontSize: { xs: 28, sm: 32 }, color: 'primary.main' }} />
-            <Typography variant="h4" fontWeight={700} sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{
+            width: 44, height: 44, borderRadius: 2.5,
+            background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 4px 14px rgba(59,130,246,0.3)',
+          }}>
+            <LocalShipping sx={{ fontSize: 24, color: 'white' }} />
+          </Box>
+          <Box>
+            <Typography variant="h4" fontWeight={700} sx={{ fontSize: { xs: '1.25rem', sm: '1.375rem' }, lineHeight: 1.2 }}>
               {t('loads.title')}
             </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3 }}>
+              {t('loads.subtitle', { defaultValue: 'Manage your freight operations and track deliveries' })}
+            </Typography>
           </Box>
-          <Typography variant="body2" color="text.secondary" sx={{ ml: { xs: 0, sm: '44px' } }}>
-            {t('loads.subtitle', { defaultValue: 'Manage your freight operations and track deliveries' })}
-          </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1, width: { xs: '100%', sm: 'auto' } }}>
           <Tooltip title="Export as CSV">
@@ -66,12 +61,7 @@ export const LoadsHeader = memo<LoadsHeaderProps>(function LoadsHeader({ onAddLo
               variant="outlined"
               startIcon={<FileDownload />}
               onClick={handleExportCSV}
-              sx={{
-                height: 44,
-                borderRadius: 2,
-                textTransform: 'none',
-                fontWeight: 600,
-              }}
+              size="medium"
             >
               Export
             </Button>
@@ -80,17 +70,7 @@ export const LoadsHeader = memo<LoadsHeaderProps>(function LoadsHeader({ onAddLo
             variant="contained"
             startIcon={<Add />}
             onClick={onAddLoad}
-            sx={{
-              flex: { xs: 1, sm: 'initial' },
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              minWidth: { sm: 160 },
-              height: 44,
-              boxShadow: theme.shadows[3],
-              '&:hover': {
-                boxShadow: theme.shadows[6],
-                background: 'linear-gradient(135deg, #5568d3 0%, #6a4196 100%)',
-              },
-            }}
+            sx={{ flex: { xs: 1, sm: 'initial' } }}
           >
             {t('loads.addLoad')}
           </Button>

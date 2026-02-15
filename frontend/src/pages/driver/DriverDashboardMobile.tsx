@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Menu, MenuItem } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { loadApi } from '@/api/all.api';
 import { driverApi } from '@/api/driver.api';
@@ -68,6 +69,7 @@ export default function DriverDashboardMobile() {
   const scanPodInputRef = useRef<HTMLInputElement>(null);
   const [logExpenseOpen, setLogExpenseOpen] = useState(false);
   const [logExpenseCategory, setLogExpenseCategory] = useState('fuel');
+  const [expenseCategoryAnchor, setExpenseCategoryAnchor] = useState<null | HTMLElement>(null);
   const [reportDelayOpen, setReportDelayOpen] = useState(false);
   const [tripExpenses, setTripExpenses] = useState<{ expenses: any[]; summary: { total: number; fuel: number; tolls: number; other: number } } | null>(null);
 
@@ -101,8 +103,9 @@ export default function DriverDashboardMobile() {
 
   const ensureLoadId = (l: Load) => ({ ...l, id: l.id || (l as any)._id } as Load);
 
+  // Only show loads the driver has ACCEPTED (trip_accepted) — not 'assigned' (pending acceptance via notification)
   const acceptedLoad = loads.find(
-    (l) => ['trip_accepted', 'assigned'].includes(l.status) && !['completed', 'cancelled', 'delivered'].includes(l.status)
+    (l) => l.status === 'trip_accepted'
   ) || null;
 
   const activeLoad = loads.find(
@@ -113,11 +116,27 @@ export default function DriverDashboardMobile() {
   const deliveredLoads = loads.filter(l => l.status === 'delivered');
   const completedLoads = loads.filter(l => l.status === 'completed');
 
+  // Track if any dialog is open — pause auto-refresh to prevent form resets
+  const anyDialogOpen = startTripDialogOpen || driverFormDialogOpen || shipperCheckInDialogOpen
+    || loadInDialogOpen || loadOutDialogOpen || receiverOffloadDialogOpen || endTripDialogOpen || logExpenseOpen;
+
   useEffect(() => {
     fetchLoads();
     fetchDutyStatus();
-    const id = setInterval(() => { fetchLoads(); fetchDutyStatus(); }, 30000);
+    const id = setInterval(() => {
+      if (!anyDialogOpen) { fetchLoads(); fetchDutyStatus(); }
+    }, 30000);
     return () => clearInterval(id);
+  }, [fetchLoads, fetchDutyStatus, anyDialogOpen]);
+
+  // Auto-refresh when driver accepts an assignment from the notification sheet
+  useEffect(() => {
+    const handler = () => {
+      fetchLoads();
+      fetchDutyStatus();
+    };
+    window.addEventListener('assignment-accepted', handler);
+    return () => window.removeEventListener('assignment-accepted', handler);
   }, [fetchLoads, fetchDutyStatus]);
 
   // Live GPS tracking when trip is started
@@ -194,7 +213,7 @@ export default function DriverDashboardMobile() {
     if (!displayLoad) return null;
     const s = displayLoad.status;
     const hasForm = !!(displayLoad as any).driverFormDetails;
-    if (['assigned', 'trip_accepted'].includes(s)) {
+    if (s === 'trip_accepted') {
       if (!hasForm)
         return { label: t('driverApp.fillTripForm'), fn: () => { vibrate(30); setDriverFormDialogOpen(true); } };
       return { label: t('driverApp.startTrip'), fn: () => { vibrate(30); setStartTripDialogOpen(true); } };
@@ -618,16 +637,42 @@ export default function DriverDashboardMobile() {
             </div>
             {/* Allow expense submission for delivered loads */}
             {deliveredLoads[0] && (
-              <button
-                className="dm-btn ghost"
-                onClick={() => {
-                  setLogExpenseCategory('fuel');
-                  setLogExpenseOpen(true);
-                }}
-                style={{ borderRadius: 12, fontSize: 14 }}
-              >
-                + Submit Expense / Reimbursement
-              </button>
+              <>
+                <button
+                  className="dm-btn ghost"
+                  onClick={(e) => setExpenseCategoryAnchor(e.currentTarget)}
+                  style={{ borderRadius: 12, fontSize: 14 }}
+                >
+                  + Submit Expense / Reimbursement
+                </button>
+                <Menu
+                  anchorEl={expenseCategoryAnchor}
+                  open={!!expenseCategoryAnchor}
+                  onClose={() => setExpenseCategoryAnchor(null)}
+                  anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+                  transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+                  PaperProps={{ sx: { borderRadius: 3, minWidth: 220, boxShadow: '0 8px 30px rgba(0,0,0,0.15)', mt: -1 } }}
+                >
+                  {[
+                    { key: 'fuel', label: 'Fuel', icon: '⛽' },
+                    { key: 'toll', label: 'Toll', icon: '🛣️' },
+                    { key: 'repair', label: 'Repair / Maintenance', icon: '🔧' },
+                    { key: 'other', label: 'Other Expense', icon: '📋' },
+                  ].map(opt => (
+                    <MenuItem
+                      key={opt.key}
+                      onClick={() => {
+                        setExpenseCategoryAnchor(null);
+                        setLogExpenseCategory(opt.key);
+                        setLogExpenseOpen(true);
+                      }}
+                      sx={{ fontSize: 14, fontWeight: 500, gap: 1.5, py: 1.2 }}
+                    >
+                      <span style={{ fontSize: 18 }}>{opt.icon}</span> {opt.label}
+                    </MenuItem>
+                  ))}
+                </Menu>
+              </>
             )}
           </div>
         </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -17,30 +17,77 @@ import {
   FormControl,
   InputLabel,
   Select,
-  Divider,
   Chip,
+  alpha,
 } from '@mui/material';
-import { Close, PhotoCamera, LocalGasStation, Toll, Build, AutoFixHigh } from '@mui/icons-material';
+import {
+  Close,
+  PhotoCamera,
+  LocalGasStation,
+  Toll,
+  Build,
+  AutoFixHigh,
+  CloudUpload,
+  CheckCircle,
+  LocalShipping,
+  RvHookup,
+  Delete as DeleteIcon,
+  CameraAlt,
+} from '@mui/icons-material';
 import { loadApi } from '@/api/all.api';
-import { useDocumentOCR, extractAmount, extractMileage } from '@/hooks/useDocumentOCR';
+import { useDocumentOCR, extractAmount } from '@/hooks/useDocumentOCR';
 import type { Load } from '@/types/all.types';
 
-const CATEGORIES = [
-  { value: 'fuel', label: 'Fuel', icon: <LocalGasStation fontSize="small" /> },
-  { value: 'toll', label: 'Toll', icon: <Toll fontSize="small" /> },
-  { value: 'scale', label: 'Scale' },
-  { value: 'parking', label: 'Parking' },
-  { value: 'lumper', label: 'Lumper' },
-  { value: 'dock_fee', label: 'Dock Fee' },
-  { value: 'repair', label: 'Maintenance & Repair', icon: <Build fontSize="small" /> },
-  { value: 'other', label: 'Other' },
-];
+// ─── OCR helpers ────────────────────────────────────────
+function extractFuelQuantity(text: string): number | null {
+  const patterns = [/QTY:\s*([\d,.]+)\s*GAL/i, /Gallons?\s*:\s*([\d,.]+)/i, /([\d,.]+)\s*GAL(?:LONS?)?/i];
+  for (const p of patterns) {
+    const m = text.replace(/\s+/g, ' ').match(p);
+    if (m) { const v = parseFloat(m[1].replace(/,/g, '')); if (v > 0 && v < 10000) return v; }
+  }
+  return null;
+}
+function extractFuelPrice(text: string): number | null {
+  const patterns = [/PRICE:\s*\$?([\d,.]+)\s*\/?\s*GAL/i, /Price\s*\/?\s*Gal\s*:\s*\$?([\d,.]+)/i, /\$?([\d]+\.\d{2,3})\s*\/\s*GAL/i];
+  for (const p of patterns) {
+    const m = text.replace(/\s+/g, ' ').match(p);
+    if (m) { const v = parseFloat(m[1].replace(/,/g, '')); if (v > 0 && v < 20) return v; }
+  }
+  return null;
+}
+function extractFuelStation(text: string): string | null {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length > 0) {
+    const name = lines[0].replace(/(\w)\s(?=\w\s|\w$)/g, '$1');
+    if (name.length > 3 && name.length < 80) return name;
+  }
+  return null;
+}
+function extractTotalAmount(text: string): number | null {
+  const cleaned = text.replace(/\s+/g, ' ');
+  const patterns = [/TOTAL\s*\$?\s*([\d,.]+)/gi, /Sale\s*Total\s*\$?\s*([\d,.]+)/i];
+  let best: number | null = null;
+  for (const p of patterns) {
+    let m;
+    while ((m = p.exec(cleaned)) !== null) {
+      const v = parseFloat(m[1].replace(/,/g, ''));
+      if (v > 10 && (!best || v > best)) best = v;
+    }
+  }
+  return best;
+}
 
-const PAYER_OPTIONS = [
-  { value: 'driver', label: 'Driver (I paid)' },
-  { value: 'dispatcher', label: 'Dispatcher / Owner' },
-  { value: 'broker', label: 'Broker / Shipper' },
-];
+// ─── Title & icon map ───────────────────────────────────
+const CATEGORY_META: Record<string, { label: string; gradient: string; icon: React.ReactNode }> = {
+  fuel:     { label: 'Log Fuel',                gradient: 'linear-gradient(135deg, #f59e0b, #d97706)', icon: <LocalGasStation sx={{ color: '#fff', fontSize: 20 }} /> },
+  toll:     { label: 'Log Toll',                gradient: 'linear-gradient(135deg, #6366f1, #4f46e5)', icon: <Toll sx={{ color: '#fff', fontSize: 20 }} /> },
+  repair:   { label: 'Log Maintenance & Repair', gradient: 'linear-gradient(135deg, #ef4444, #dc2626)', icon: <Build sx={{ color: '#fff', fontSize: 20 }} /> },
+  scale:    { label: 'Log Scale',               gradient: 'linear-gradient(135deg, #06b6d4, #0891b2)', icon: <Toll sx={{ color: '#fff', fontSize: 20 }} /> },
+  parking:  { label: 'Log Parking',             gradient: 'linear-gradient(135deg, #8b5cf6, #7c3aed)', icon: <Toll sx={{ color: '#fff', fontSize: 20 }} /> },
+  lumper:   { label: 'Log Lumper',              gradient: 'linear-gradient(135deg, #10b981, #059669)', icon: <Toll sx={{ color: '#fff', fontSize: 20 }} /> },
+  dock_fee: { label: 'Log Dock Fee',            gradient: 'linear-gradient(135deg, #3b82f6, #2563eb)', icon: <Toll sx={{ color: '#fff', fontSize: 20 }} /> },
+  other:    { label: 'Log Expense',             gradient: 'linear-gradient(135deg, #64748b, #475569)', icon: <Toll sx={{ color: '#fff', fontSize: 20 }} /> },
+};
 
 interface LogExpenseDialogProps {
   open: boolean;
@@ -62,41 +109,101 @@ export const LogExpenseDialog: React.FC<LogExpenseDialogProps> = ({
   const [category, setCategory] = useState(defaultCategory);
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  const [location, setLocation] = useState('');
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fuel-specific fields
+  // Fuel-specific
   const [fuelQuantity, setFuelQuantity] = useState('');
+  const [fuelPricePerGal, setFuelPricePerGal] = useState('');
   const [fuelStation, setFuelStation] = useState('');
-  const [odometerBefore, setOdometerBefore] = useState('');
-  const [odometerAfter, setOdometerAfter] = useState('');
-  const [odometerBeforePhoto, setOdometerBeforePhoto] = useState<File | null>(null);
-  const [odometerAfterPhoto, setOdometerAfterPhoto] = useState<File | null>(null);
+  const [odometerMiles, setOdometerMiles] = useState('');
+  const [vehicleType, setVehicleType] = useState<'truck' | 'trailer'>('truck');
 
-  // Maintenance-specific fields
+  // Repair-specific
   const [repairStartTime, setRepairStartTime] = useState('');
   const [repairEndTime, setRepairEndTime] = useState('');
   const [repairDescription, setRepairDescription] = useState('');
-  const [repairLocation, setRepairLocation] = useState('');
   const [repairIssuePhoto, setRepairIssuePhoto] = useState<File | null>(null);
   const [repairIssuePreview, setRepairIssuePreview] = useState<string | null>(null);
   const [repairCompleted, setRepairCompleted] = useState(false);
 
-  // Payer
-  const [paidBy, setPaidBy] = useState('driver');
+  // OCR
   const [ocrAutoFilled, setOcrAutoFilled] = useState(false);
+  const [ocrFields, setOcrFields] = useState<string[]>([]);
   const { analyze, analyzing: ocrAnalyzing, reset: resetOCR } = useDocumentOCR();
 
+  // Auto-set category from prop every time dialog opens
   useEffect(() => {
     if (open) setCategory(defaultCategory);
   }, [open, defaultCategory]);
 
+  // ─── Receipt OCR ──────────────────────────────────────
+  const handleReceiptFile = useCallback(async (file: File | null) => {
+    setReceiptFile(file);
+    setOcrAutoFilled(false);
+    setOcrFields([]);
+    if (!file) { setReceiptPreview(null); return; }
+
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = () => setReceiptPreview(reader.result as string);
+      reader.readAsDataURL(file);
+    } else { setReceiptPreview(null); }
+
+    try {
+      const result = await analyze(file);
+      if (!result) return;
+      const raw = result.rawText || '';
+      const filled: string[] = [];
+
+      if (category === 'fuel') {
+        const qty = extractFuelQuantity(raw);
+        if (qty && !fuelQuantity) { setFuelQuantity(String(qty)); filled.push('Quantity'); }
+        const price = extractFuelPrice(raw);
+        if (price && !fuelPricePerGal) { setFuelPricePerGal(String(price)); filled.push('Price/Gal'); }
+        const total = extractTotalAmount(raw);
+        if (total && !amount) { setAmount(String(total)); filled.push('Amount'); }
+        const station = extractFuelStation(raw);
+        if (station && !fuelStation) { setFuelStation(station); filled.push('Station'); }
+      } else {
+        const extractedAmt = result.extractedFields?.amount
+          ? parseFloat(result.extractedFields.amount.replace(/[^0-9.]/g, ''))
+          : (extractTotalAmount(raw) || extractAmount(raw));
+        if (extractedAmt && !amount) { setAmount(String(extractedAmt)); filled.push('Amount'); }
+      }
+
+      if (filled.length > 0) { setOcrAutoFilled(true); setOcrFields(filled); }
+    } catch { /* non-critical */ }
+  }, [analyze, category, amount, fuelQuantity, fuelPricePerGal, fuelStation]);
+
+  // ─── Auto-calculate total amount for fuel ─────────────
+  useEffect(() => {
+    if (category === 'fuel' && fuelQuantity && fuelPricePerGal) {
+      const qty = parseFloat(fuelQuantity);
+      const ppg = parseFloat(fuelPricePerGal);
+      if (qty > 0 && ppg > 0) {
+        setAmount((qty * ppg).toFixed(2));
+      }
+    }
+  }, [category, fuelQuantity, fuelPricePerGal]);
+
+  // ─── Submit ───────────────────────────────────────────
   const handleSubmit = async () => {
-    if (!amount || parseFloat(amount) <= 0) {
-      setError('Please enter a valid amount');
-      return;
+    if (category === 'fuel') {
+      if (!receiptFile) { setError('Receipt is mandatory. Please scan or upload.'); return; }
+      if (!amount || parseFloat(amount) <= 0) { setError('Please enter a valid amount'); return; }
+      if (!odometerMiles) { setError('Odometer / Miles is mandatory'); return; }
+      if (!fuelQuantity) { setError('Fuel quantity is mandatory'); return; }
+    } else if (category === 'toll') {
+      if (!receiptFile) { setError('Receipt is mandatory. Please scan or upload.'); return; }
+      if (!amount || parseFloat(amount) <= 0) { setError('Please enter a valid amount'); return; }
+    } else if (category === 'repair') {
+      if (!receiptFile) { setError('Receipt is mandatory. Please scan or upload.'); return; }
+      if (!amount || parseFloat(amount) <= 0) { setError('Please enter a valid amount'); return; }
+    } else {
+      if (!amount || parseFloat(amount) <= 0) { setError('Please enter a valid amount'); return; }
     }
 
     try {
@@ -108,53 +215,37 @@ export const LogExpenseDialog: React.FC<LogExpenseDialogProps> = ({
         receiptUrl = await loadApi.uploadLoadDocument(load.id, receiptFile);
       }
 
-      // Upload odometer photos if fuel
-      let odometerBeforeUrl: string | undefined;
-      let odometerAfterUrl: string | undefined;
-      if (category === 'fuel') {
-        if (odometerBeforePhoto) {
-          odometerBeforeUrl = await loadApi.uploadLoadDocument(load.id, odometerBeforePhoto);
-        }
-        if (odometerAfterPhoto) {
-          odometerAfterUrl = await loadApi.uploadLoadDocument(load.id, odometerAfterPhoto);
-        }
-      }
-
-      // Build description with all extra info
       let fullDescription = description;
+
+      // Fuel description
       if (category === 'fuel') {
         const parts = [];
         if (fuelStation) parts.push(`Station: ${fuelStation}`);
         if (fuelQuantity) parts.push(`Qty: ${fuelQuantity} gal`);
-        if (odometerBefore) parts.push(`Odometer Before: ${odometerBefore}`);
-        if (odometerAfter) parts.push(`Odometer After: ${odometerAfter}`);
-        if (odometerBeforeUrl) parts.push(`Odometer Before Photo: ${odometerBeforeUrl}`);
-        if (odometerAfterUrl) parts.push(`Odometer After Photo: ${odometerAfterUrl}`);
+        if (fuelPricePerGal) parts.push(`Price: $${fuelPricePerGal}/gal`);
+        if (odometerMiles) parts.push(`Odometer: ${odometerMiles} mi`);
+        parts.push(`Vehicle: ${vehicleType}`);
         if (parts.length) fullDescription = `${parts.join(' | ')}${description ? ` | Notes: ${description}` : ''}`;
       }
-      // Upload repair issue photo if present
-      let repairIssuePhotoUrl: string | undefined;
-      if (category === 'repair' && repairIssuePhoto) {
-        repairIssuePhotoUrl = await loadApi.uploadLoadDocument(load.id, repairIssuePhoto);
-      }
 
+      // Repair description + photo upload
+      let repairIssuePhotoUrl: string | undefined;
       if (category === 'repair') {
+        if (repairIssuePhoto) {
+          repairIssuePhotoUrl = await loadApi.uploadLoadDocument(load.id, repairIssuePhoto);
+        }
         const parts = [];
+        if (repairDescription) parts.push(`Issue: ${repairDescription}`);
         if (repairStartTime) parts.push(`Start: ${new Date(repairStartTime).toLocaleString()}`);
         if (repairEndTime) parts.push(`End: ${new Date(repairEndTime).toLocaleString()}`);
         if (repairStartTime && repairEndTime) {
-          const start = new Date(repairStartTime);
-          const end = new Date(repairEndTime);
-          const hours = ((end.getTime() - start.getTime()) / 3600000).toFixed(1);
+          const hours = ((new Date(repairEndTime).getTime() - new Date(repairStartTime).getTime()) / 3600000).toFixed(1);
           parts.push(`Downtime: ${hours}h`);
         }
-        if (repairLocation) parts.push(`Location: ${repairLocation}`);
-        if (repairDescription) parts.push(`Issue: ${repairDescription}`);
         if (repairIssuePhotoUrl) parts.push(`Issue Photo: ${repairIssuePhotoUrl}`);
         if (repairCompleted) parts.push('Status: Repair Completed');
         if (parts.length) fullDescription = `${parts.join(' | ')}${description ? ` | Notes: ${description}` : ''}`;
       }
-      fullDescription = `${fullDescription || ''} | Paid by: ${paidBy}`.trim();
 
       await loadApi.addExpense(load.id, {
         category,
@@ -162,9 +253,9 @@ export const LogExpenseDialog: React.FC<LogExpenseDialogProps> = ({
         amount: parseFloat(amount),
         date: new Date().toISOString(),
         description: fullDescription || undefined,
-        location: (category === 'fuel' ? fuelStation : category === 'repair' ? repairLocation : location) || undefined,
+        location: fuelStation || undefined,
         receiptUrl,
-        paidBy,
+        paidBy: 'driver',
         repairStartTime: repairStartTime || undefined,
         repairEndTime: repairEndTime || undefined,
         repairDescription: repairDescription || undefined,
@@ -183,220 +274,334 @@ export const LogExpenseDialog: React.FC<LogExpenseDialogProps> = ({
     setCategory(defaultCategory);
     setAmount('');
     setDescription('');
-    setLocation('');
     setReceiptFile(null);
+    setReceiptPreview(null);
     setFuelQuantity('');
+    setFuelPricePerGal('');
     setFuelStation('');
-    setOdometerBefore('');
-    setOdometerAfter('');
-    setOdometerBeforePhoto(null);
-    setOdometerAfterPhoto(null);
+    setOdometerMiles('');
+    setVehicleType('truck');
     setRepairStartTime('');
     setRepairEndTime('');
     setRepairDescription('');
-    setRepairLocation('');
     setRepairIssuePhoto(null);
     setRepairIssuePreview(null);
     setRepairCompleted(false);
-    setPaidBy('driver');
     setError(null);
     setOcrAutoFilled(false);
+    setOcrFields([]);
     resetOCR();
     onClose();
   };
 
-  const getCategoryTitle = () => {
-    const cat = CATEGORIES.find(c => c.value === category);
-    return cat ? `Log ${cat.label}` : 'Log Expense';
-  };
+  const meta = CATEGORY_META[category] || CATEGORY_META.other;
+
+  const isValid = (() => {
+    if (category === 'fuel') return !!(receiptFile && amount && parseFloat(amount) > 0 && odometerMiles && fuelQuantity);
+    if (category === 'toll') return !!(receiptFile && amount && parseFloat(amount) > 0);
+    if (category === 'repair') return !!(receiptFile && amount && parseFloat(amount) > 0);
+    return !!(amount && parseFloat(amount) > 0);
+  })();
+
+  // ─── Shared receipt upload block ──────────────────────
+  const renderReceiptUpload = (mandatory: boolean) => (
+    <Box sx={{
+      p: 2, borderRadius: 3,
+      border: `2px dashed ${receiptFile ? alpha('#10b981', 0.5) : alpha('#3b82f6', 0.3)}`,
+      background: receiptFile ? alpha('#10b981', 0.04) : alpha('#3b82f6', 0.02),
+      transition: 'all 0.2s',
+    }}>
+      {!receiptFile ? (
+        <>
+          {/* Primary: single tap → camera → auto-attach + OCR */}
+          <Button
+            variant="contained" component="label" fullWidth
+            startIcon={ocrAnalyzing ? <CircularProgress size={16} color="inherit" /> : <PhotoCamera />}
+            disabled={ocrAnalyzing}
+            sx={{
+              py: 2, borderRadius: 2.5, fontSize: '0.95rem', fontWeight: 700,
+              background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
+              boxShadow: '0 4px 14px rgba(59,130,246,0.3)',
+              '&:hover': { background: 'linear-gradient(135deg, #2563eb, #4f46e5)' },
+            }}
+          >
+            {ocrAnalyzing ? 'Scanning...' : `Scan Receipt${mandatory ? ' *' : ''}`}
+            <input type="file" hidden accept="image/*" capture="environment"
+              onChange={(e) => handleReceiptFile(e.target.files?.[0] || null)} />
+          </Button>
+          {/* Fallback: upload from gallery */}
+          <Box sx={{ textAlign: 'center', mt: 1 }}>
+            <Button component="label" size="small"
+              sx={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'none', '&:hover': { color: '#3b82f6', background: 'transparent' } }}
+              startIcon={<CloudUpload sx={{ fontSize: 14 }} />}
+            >
+              or upload from gallery
+              <input type="file" hidden accept="image/*,application/pdf"
+                onChange={(e) => handleReceiptFile(e.target.files?.[0] || null)} />
+            </Button>
+          </Box>
+        </>
+      ) : (
+        <Box>
+          {/* Status: Attached */}
+          <Box sx={{
+            display: 'flex', alignItems: 'center', gap: 1, mb: receiptPreview ? 1 : 0,
+            p: 1, borderRadius: 2, bgcolor: alpha('#10b981', 0.06),
+          }}>
+            <CheckCircle sx={{ color: '#10b981', fontSize: 20 }} />
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="body2" fontWeight={600} color="#059669">
+                Receipt Attached
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {receiptFile.name} ({(receiptFile.size / 1024).toFixed(0)} KB)
+              </Typography>
+            </Box>
+            {/* Replace with new scan */}
+            <Button component="label" size="small" variant="outlined"
+              sx={{ minWidth: 'auto', px: 1.5, fontSize: '0.7rem', borderColor: alpha('#64748b', 0.3), color: '#64748b' }}
+              startIcon={<PhotoCamera sx={{ fontSize: 14 }} />}
+            >
+              Retake
+              <input type="file" hidden accept="image/*" capture="environment"
+                onChange={(e) => handleReceiptFile(e.target.files?.[0] || null)} />
+            </Button>
+            <IconButton size="small" onClick={() => { setReceiptFile(null); setReceiptPreview(null); setOcrAutoFilled(false); setOcrFields([]); }}>
+              <DeleteIcon fontSize="small" sx={{ color: '#94a3b8' }} />
+            </IconButton>
+          </Box>
+
+          {/* Preview */}
+          {receiptPreview && (
+            <Box sx={{ borderRadius: 2, overflow: 'hidden', maxHeight: 120 }}>
+              <img src={receiptPreview} alt="Receipt" style={{ width: '100%', maxHeight: 120, objectFit: 'cover' }} />
+            </Box>
+          )}
+
+          {/* OCR scanning indicator */}
+          {ocrAnalyzing && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1, p: 1, borderRadius: 2, bgcolor: alpha('#3b82f6', 0.05) }}>
+              <CircularProgress size={14} />
+              <Typography variant="caption" color="text.secondary">Reading receipt details...</Typography>
+            </Box>
+          )}
+        </Box>
+      )}
+
+      {/* OCR results */}
+      {ocrAutoFilled && ocrFields.length > 0 && !ocrAnalyzing && (
+        <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
+          <Chip label="Auto-filled" size="small" icon={<AutoFixHigh />} color="success" variant="outlined" sx={{ height: 22, fontSize: '0.7rem' }} />
+          {ocrFields.map((f) => (
+            <Chip key={f} label={f} size="small" color="success" variant="filled"
+              sx={{ height: 22, fontSize: '0.7rem', bgcolor: alpha('#10b981', 0.1), color: '#059669' }} />
+          ))}
+        </Box>
+      )}
+      {receiptFile && !ocrAnalyzing && !ocrAutoFilled && (
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+          Receipt saved. Fill in the details below.
+        </Typography>
+      )}
+    </Box>
+  );
 
   return (
     <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm" fullScreen={isMobile}>
-      <DialogTitle>
+      {/* ─── Title ─── */}
+      <DialogTitle sx={{ pb: 1 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6">{getCategoryTitle()}</Typography>
-          <IconButton onClick={handleClose} size="small">
-            <Close />
-          </IconButton>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{ width: 36, height: 36, borderRadius: 2, background: meta.gradient, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {meta.icon}
+            </Box>
+            <Typography variant="h6" fontWeight={700}>{meta.label}</Typography>
+          </Box>
+          <IconButton onClick={handleClose} size="small"><Close /></IconButton>
         </Box>
       </DialogTitle>
-      <DialogContent>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
+
+      <DialogContent sx={{ pb: 1 }}>
+        {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-          <TextField
-            select
-            fullWidth
-            label="Category"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-          >
-            {CATEGORIES.map((c) => (
-              <MenuItem key={c.value} value={c.value}>
-                {c.icon && <Box component="span" sx={{ mr: 1, display: 'inline-flex' }}>{c.icon}</Box>}
-                {c.label}
-              </MenuItem>
-            ))}
-          </TextField>
 
-          <TextField
-            fullWidth
-            label="Amount ($)"
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            inputProps={{ min: 0, step: 0.01 }}
-            required
-          />
-
-          {/* Fuel-specific fields */}
+          {/* ════════════════════════════════════════════════
+              FUEL
+              ════════════════════════════════════════════════ */}
           {category === 'fuel' && (
             <>
-              <Divider sx={{ my: 0.5 }}><Typography variant="caption" color="text.secondary">Fuel Details</Typography></Divider>
+              {renderReceiptUpload(true)}
+
+              <FormControl fullWidth size="small" required>
+                <InputLabel>Fuel For *</InputLabel>
+                <Select value={vehicleType} onChange={(e) => setVehicleType(e.target.value as 'truck' | 'trailer')} label="Fuel For *">
+                  <MenuItem value="truck">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <LocalShipping sx={{ fontSize: 18, color: '#3b82f6' }} /> Truck
+                    </Box>
+                  </MenuItem>
+                  <MenuItem value="trailer">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <RvHookup sx={{ fontSize: 18, color: '#6366f1' }} /> Trailer (Reefer)
+                    </Box>
+                  </MenuItem>
+                </Select>
+              </FormControl>
+
               <TextField
-                fullWidth
-                label="Fuel Station / Location"
-                value={fuelStation}
-                onChange={(e) => setFuelStation(e.target.value)}
-                placeholder="e.g. Pilot Travel Center, Exit 42"
+                fullWidth label="Odometer / Miles *" type="number"
+                value={odometerMiles} onChange={(e) => setOdometerMiles(e.target.value)}
+                inputProps={{ min: 0 }} required size="small"
+                placeholder="Current odometer reading" helperText="Current mileage at fueling"
               />
+
               <TextField
-                fullWidth
-                label="Fuel Quantity (gallons)"
-                type="number"
-                value={fuelQuantity}
-                onChange={(e) => setFuelQuantity(e.target.value)}
-                inputProps={{ min: 0, step: 0.1 }}
+                fullWidth label="Fuel Quantity (gallons) *" type="number"
+                value={fuelQuantity} onChange={(e) => setFuelQuantity(e.target.value)}
+                inputProps={{ min: 0, step: 0.001 }} required size="small"
+                InputProps={{ endAdornment: ocrFields.includes('Quantity') ? <Chip label="OCR" size="small" sx={{ height: 20, fontSize: '0.65rem' }} color="success" variant="outlined" /> : undefined }}
               />
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                <TextField
-                  fullWidth
-                  label="Odometer Before"
-                  type="number"
-                  value={odometerBefore}
-                  onChange={(e) => setOdometerBefore(e.target.value)}
-                  inputProps={{ min: 0 }}
-                />
-                <TextField
-                  fullWidth
-                  label="Odometer After"
-                  type="number"
-                  value={odometerAfter}
-                  onChange={(e) => setOdometerAfter(e.target.value)}
-                  inputProps={{ min: 0 }}
-                />
-              </Box>
-              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                <Button variant="outlined" component="label" startIcon={<PhotoCamera />} size="small">
-                  {odometerBeforePhoto ? 'Before ✓' : 'Scan Odometer Before'}
-                  <input type="file" hidden accept="image/*" capture="environment" onChange={async (e) => {
-                    const f = e.target.files?.[0] || null;
-                    setOdometerBeforePhoto(f);
-                    if (f) {
-                      try {
-                        const result = await analyze(f);
-                        if (result) {
-                          const ml = extractMileage(result.rawText);
-                          if (ml && !odometerBefore) setOdometerBefore(String(ml));
-                        }
-                      } catch { /* non-critical */ }
-                    }
-                  }} />
-                </Button>
-                <Button variant="outlined" component="label" startIcon={<PhotoCamera />} size="small">
-                  {odometerAfterPhoto ? 'After ✓' : 'Scan Odometer After'}
-                  <input type="file" hidden accept="image/*" capture="environment" onChange={async (e) => {
-                    const f = e.target.files?.[0] || null;
-                    setOdometerAfterPhoto(f);
-                    if (f) {
-                      try {
-                        const result = await analyze(f);
-                        if (result) {
-                          const ml = extractMileage(result.rawText);
-                          if (ml && !odometerAfter) setOdometerAfter(String(ml));
-                        }
-                      } catch { /* non-critical */ }
-                    }
-                  }} />
-                </Button>
-              </Box>
+
+              <TextField
+                fullWidth label="Price / Gal ($)" type="number"
+                value={fuelPricePerGal} onChange={(e) => setFuelPricePerGal(e.target.value)}
+                inputProps={{ min: 0, step: 0.001 }} size="small"
+                InputProps={{ endAdornment: ocrFields.includes('Price/Gal') ? <Chip label="OCR" size="small" sx={{ height: 20, fontSize: '0.65rem' }} color="success" variant="outlined" /> : undefined }}
+              />
+
+              <TextField
+                fullWidth label="Additional Notes (Optional)" multiline rows={2}
+                value={description} onChange={(e) => setDescription(e.target.value)}
+                placeholder="e.g. Station name, who paid if not you, DEF, etc." size="small"
+              />
             </>
           )}
 
-          {/* Maintenance-specific fields */}
+          {/* ════════════════════════════════════════════════
+              TOLL
+              ════════════════════════════════════════════════ */}
+          {category === 'toll' && (
+            <>
+              {renderReceiptUpload(true)}
+
+              <TextField
+                fullWidth label="Amount Paid ($) *" type="number"
+                value={amount} onChange={(e) => setAmount(e.target.value)}
+                inputProps={{ min: 0, step: 0.01 }} required size="small"
+                InputProps={{ endAdornment: ocrFields.includes('Amount') ? <Chip label="OCR" size="small" sx={{ height: 20, fontSize: '0.65rem' }} color="success" variant="outlined" /> : undefined }}
+              />
+
+              <TextField
+                fullWidth label="Additional Notes (Optional)" multiline rows={2}
+                value={description} onChange={(e) => setDescription(e.target.value)}
+                placeholder="e.g. Toll plaza name, who paid if not you, etc." size="small"
+              />
+            </>
+          )}
+
+          {/* ════════════════════════════════════════════════
+              REPAIR / MAINTENANCE
+              ════════════════════════════════════════════════ */}
           {category === 'repair' && (
             <>
-              <Divider sx={{ my: 0.5 }}><Typography variant="caption" color="text.secondary">Maintenance & Repair Details</Typography></Divider>
-              
-              {/* Issue Description */}
+              {/* 1. Receipt (Mandatory) */}
+              {renderReceiptUpload(true)}
+
+              {/* 2. Photo of the Issue */}
+              <Box sx={{
+                p: 2, borderRadius: 3,
+                border: `2px dashed ${repairIssuePhoto ? alpha('#f59e0b', 0.5) : alpha('#64748b', 0.25)}`,
+                background: repairIssuePhoto ? alpha('#f59e0b', 0.04) : alpha('#64748b', 0.02),
+                transition: 'all 0.2s',
+              }}>
+                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  {repairIssuePhoto ? <CheckCircle sx={{ fontSize: 18, color: '#f59e0b' }} /> : <CameraAlt sx={{ fontSize: 18, color: '#64748b' }} />}
+                  Photo of Issue (Optional)
+                </Typography>
+                {!repairIssuePhoto ? (
+                  <Button variant="outlined" component="label" startIcon={<CameraAlt />} size="small" fullWidth
+                    sx={{ borderColor: alpha('#64748b', 0.3), color: '#475569' }}>
+                    Take Photo
+                    <input type="file" hidden accept="image/*" capture="environment"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0] || null;
+                        setRepairIssuePhoto(f);
+                        if (f) { const r = new FileReader(); r.onload = () => setRepairIssuePreview(r.result as string); r.readAsDataURL(f); }
+                        else setRepairIssuePreview(null);
+                      }}
+                    />
+                  </Button>
+                ) : (
+                  <Box>
+                    {repairIssuePreview && (
+                      <Box sx={{ position: 'relative', borderRadius: 2, overflow: 'hidden', maxHeight: 120, mb: 0.5 }}>
+                        <img src={repairIssuePreview} alt="Issue" style={{ width: '100%', maxHeight: 120, objectFit: 'cover' }} />
+                        <IconButton size="small"
+                          onClick={() => { setRepairIssuePhoto(null); setRepairIssuePreview(null); }}
+                          sx={{ position: 'absolute', top: 4, right: 4, bgcolor: 'rgba(0,0,0,0.5)', color: '#fff', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}
+                        >
+                          <Close fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    )}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <CheckCircle sx={{ color: '#f59e0b', fontSize: 16 }} />
+                      <Typography variant="body2" fontWeight={500} sx={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {repairIssuePhoto.name}
+                      </Typography>
+                      <IconButton size="small" onClick={() => { setRepairIssuePhoto(null); setRepairIssuePreview(null); }}>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  </Box>
+                )}
+              </Box>
+
+              {/* 3. What happened */}
               <TextField
-                fullWidth
-                label="What happened? *"
-                multiline
-                rows={2}
-                value={repairDescription}
-                onChange={(e) => setRepairDescription(e.target.value)}
-                placeholder="e.g. Tire blowout on highway, brake pad worn out, engine overheating..."
+                fullWidth label="What happened? *" multiline rows={2}
+                value={repairDescription} onChange={(e) => setRepairDescription(e.target.value)}
+                placeholder="e.g. Tire blowout on highway, brake pad worn out..."
+                size="small"
               />
 
-              {/* Location */}
+              {/* 4. Amount */}
               <TextField
-                fullWidth
-                label="Repair Location"
-                value={repairLocation}
-                onChange={(e) => setRepairLocation(e.target.value)}
-                placeholder="e.g. Joe's Truck Stop, Hwy 40 mile marker 120"
+                fullWidth label="Amount ($) *" type="number"
+                value={amount} onChange={(e) => setAmount(e.target.value)}
+                inputProps={{ min: 0, step: 0.01 }} required size="small"
+                InputProps={{ endAdornment: ocrFields.includes('Amount') ? <Chip label="OCR" size="small" sx={{ height: 20, fontSize: '0.65rem' }} color="success" variant="outlined" /> : undefined }}
               />
 
-              {/* Start & End Time */}
-              <Box sx={{ display: 'flex', gap: 2 }}>
+              {/* 5. Start & End Date */}
+              <Box sx={{ display: 'flex', gap: 1.5 }}>
                 <TextField
-                  fullWidth
-                  label="Start Date & Time *"
-                  type="datetime-local"
-                  value={repairStartTime}
-                  onChange={(e) => setRepairStartTime(e.target.value)}
-                  InputLabelProps={{ shrink: true }}
+                  fullWidth label="Start Date & Time" type="datetime-local"
+                  value={repairStartTime} onChange={(e) => setRepairStartTime(e.target.value)}
+                  InputLabelProps={{ shrink: true }} size="small"
                 />
                 <TextField
-                  fullWidth
-                  label="End Date & Time"
-                  type="datetime-local"
+                  fullWidth label="End Date & Time" type="datetime-local"
                   value={repairEndTime}
                   onChange={(e) => { setRepairEndTime(e.target.value); setRepairCompleted(true); }}
                   InputLabelProps={{ shrink: true }}
-                  helperText={repairCompleted ? 'Repair completed' : 'Fill when repair is done'}
+                  helperText={repairCompleted ? 'Repair completed' : 'Fill when done'}
+                  size="small"
                 />
               </Box>
 
-              {/* Downtime Summary */}
               {repairStartTime && repairEndTime && (() => {
-                const start = new Date(repairStartTime);
-                const end = new Date(repairEndTime);
-                const diffMs = end.getTime() - start.getTime();
-                if (diffMs < 0) return (
-                  <Alert severity="error" sx={{ py: 0.5 }}>
-                    End time must be after start time
-                  </Alert>
-                );
+                const diffMs = new Date(repairEndTime).getTime() - new Date(repairStartTime).getTime();
+                if (diffMs < 0) return <Alert severity="error" sx={{ py: 0.5 }}>End time must be after start time</Alert>;
                 const hours = Math.floor(diffMs / 3600000);
                 const mins = Math.floor((diffMs % 3600000) / 60000);
                 return (
                   <Alert severity="info" sx={{ py: 0.5 }} icon={false}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Typography variant="body2" fontWeight={600}>
-                        Total Downtime: {hours}h {mins}m
-                      </Typography>
-                      <Chip
-                        label={repairCompleted ? 'Repair Complete' : 'In Progress'}
-                        size="small"
-                        color={repairCompleted ? 'success' : 'warning'}
-                        variant="outlined"
-                      />
+                      <Typography variant="body2" fontWeight={600}>Total Downtime: {hours}h {mins}m</Typography>
+                      <Chip label={repairCompleted ? 'Complete' : 'In Progress'} size="small"
+                        color={repairCompleted ? 'success' : 'warning'} variant="outlined" />
                     </Box>
                   </Alert>
                 );
@@ -404,170 +609,47 @@ export const LogExpenseDialog: React.FC<LogExpenseDialogProps> = ({
 
               {repairStartTime && !repairEndTime && (
                 <Alert severity="warning" sx={{ py: 0.5 }}>
-                  <Typography variant="body2">
-                    Repair in progress. Enter end time when the fix is complete.
-                  </Typography>
+                  <Typography variant="body2">Repair in progress. Enter end time when done.</Typography>
                 </Alert>
               )}
 
-              {/* Photo of Issue */}
-              <Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  Photo of the Issue (for proof)
-                </Typography>
-                <Button
-                  variant="outlined"
-                  component="label"
-                  startIcon={<PhotoCamera />}
-                  size="small"
-                  fullWidth
-                >
-                  {repairIssuePhoto ? repairIssuePhoto.name : 'Take Photo of Issue'}
-                  <input
-                    type="file"
-                    hidden
-                    accept="image/*"
-                    capture="environment"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0] || null;
-                      setRepairIssuePhoto(f);
-                      if (f) {
-                        const reader = new FileReader();
-                        reader.onload = () => setRepairIssuePreview(reader.result as string);
-                        reader.readAsDataURL(f);
-                      } else {
-                        setRepairIssuePreview(null);
-                      }
-                    }}
-                  />
-                </Button>
-                {repairIssuePreview && (
-                  <Box sx={{ mt: 1, position: 'relative' }}>
-                    <img src={repairIssuePreview} alt="Issue" style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 8 }} />
-                    <Button
-                      size="small"
-                      onClick={() => { setRepairIssuePhoto(null); setRepairIssuePreview(null); }}
-                      sx={{ position: 'absolute', top: 4, right: 4, bgcolor: 'rgba(0,0,0,0.5)', color: '#fff', minWidth: 'auto', px: 1, '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}
-                    >
-                      ✕
-                    </Button>
-                  </Box>
-                )}
-              </Box>
+              {/* 6. Notes */}
+              <TextField
+                fullWidth label="Additional Notes (Optional)" multiline rows={2}
+                value={description} onChange={(e) => setDescription(e.target.value)}
+                placeholder="e.g. Location, who paid if not you, etc." size="small"
+              />
             </>
           )}
 
-          {/* Generic location for non-fuel */}
-          {category !== 'fuel' && (
-            <TextField
-              fullWidth
-              label="Location (Optional)"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g. Toll plaza, Repair shop"
-            />
+          {/* ════════════════════════════════════════════════
+              OTHER CATEGORIES (scale, parking, lumper, dock_fee, other)
+              ════════════════════════════════════════════════ */}
+          {!['fuel', 'toll', 'repair'].includes(category) && (
+            <>
+              {renderReceiptUpload(false)}
+
+              <TextField
+                fullWidth label="Amount ($) *" type="number"
+                value={amount} onChange={(e) => setAmount(e.target.value)}
+                inputProps={{ min: 0, step: 0.01 }} required size="small"
+                InputProps={{ endAdornment: ocrFields.includes('Amount') ? <Chip label="OCR" size="small" sx={{ height: 20, fontSize: '0.65rem' }} color="success" variant="outlined" /> : undefined }}
+              />
+
+              <TextField
+                fullWidth label="Additional Notes (Optional)" multiline rows={2}
+                value={description} onChange={(e) => setDescription(e.target.value)}
+                placeholder="Any additional details" size="small"
+              />
+            </>
           )}
-
-          {/* Who paid */}
-          <FormControl fullWidth>
-            <InputLabel>Who Paid?</InputLabel>
-            <Select value={paidBy} onChange={(e) => setPaidBy(e.target.value)} label="Who Paid?">
-              {PAYER_OPTIONS.map((p) => (
-                <MenuItem key={p.value} value={p.value}>{p.label}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          {paidBy === 'driver' && (
-            <Alert severity="warning" sx={{ py: 0.5 }}>
-              This expense will be marked for reimbursement.
-            </Alert>
-          )}
-
-          <TextField
-            fullWidth
-            label="Additional Notes (Optional)"
-            multiline
-            rows={2}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Any additional details"
-          />
-
-          <Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              Receipt Photo / Scan {ocrAnalyzing && '— 🔍 Analyzing...'}
-            </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Button
-                variant="outlined"
-                component="label"
-                startIcon={ocrAnalyzing ? <CircularProgress size={16} /> : <PhotoCamera />}
-                disabled={loading || ocrAnalyzing}
-              >
-                {receiptFile ? receiptFile.name : 'Scan or Upload Receipt'}
-                <input
-                  type="file"
-                  hidden
-                  accept="image/*,application/pdf"
-                  capture="environment"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0] || null;
-                    setReceiptFile(file);
-                    setOcrAutoFilled(false);
-                    if (file) {
-                      try {
-                        const result = await analyze(file);
-                        if (result) {
-                          // Auto-fill amount from receipt
-                          const extractedAmt = result.extractedFields?.amount
-                            ? parseFloat(result.extractedFields.amount.replace(/[^0-9.]/g, ''))
-                            : extractAmount(result.rawText);
-                          if (extractedAmt && !amount) {
-                            setAmount(String(extractedAmt));
-                            setOcrAutoFilled(true);
-                          }
-                          // Auto-fill vendor/station for fuel
-                          if (category === 'fuel' && result.extractedFields?.shipper && !fuelStation) {
-                            setFuelStation(result.extractedFields.shipper);
-                          }
-                          // Auto-fill location
-                          if (!location && (result.extractedFields?.shipper || result.extractedFields?.consignee)) {
-                            setLocation(result.extractedFields.shipper || result.extractedFields.consignee || '');
-                          }
-                        }
-                      } catch { /* OCR failure is non-critical */ }
-                    }
-                  }}
-                />
-              </Button>
-              {receiptFile && (
-                <Typography variant="caption" color="text.secondary">
-                  ({(receiptFile.size / 1024).toFixed(0)} KB)
-                </Typography>
-              )}
-              {ocrAutoFilled && (
-                <Chip label="OCR" size="small" icon={<AutoFixHigh />} color="success" variant="outlined" />
-              )}
-            </Box>
-            {ocrAutoFilled && (
-              <Typography variant="caption" color="success.main" sx={{ mt: 0.5, display: 'block' }}>
-                ✅ Amount auto-filled from receipt — verify and edit if needed
-              </Typography>
-            )}
-            {receiptFile && !ocrAnalyzing && !ocrAutoFilled && (
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                Upload a clear photo for auto-fill, or enter details manually
-              </Typography>
-            )}
-          </Box>
         </Box>
       </DialogContent>
-      <DialogActions sx={{ px: { xs: 2, sm: 3 }, pb: 2 }}>
-        <Button onClick={handleClose} disabled={loading}>
-          Cancel
-        </Button>
-        <Button variant="contained" onClick={handleSubmit} disabled={loading || !amount}>
-          {loading ? <CircularProgress size={16} /> : 'Log Expense'}
+
+      <DialogActions sx={{ px: { xs: 2, sm: 3 }, pb: 2, pt: 1 }}>
+        <Button onClick={handleClose} disabled={loading}>Cancel</Button>
+        <Button variant="contained" onClick={handleSubmit} disabled={loading || !isValid}>
+          {loading ? <CircularProgress size={16} /> : 'Submit'}
         </Button>
       </DialogActions>
     </Dialog>

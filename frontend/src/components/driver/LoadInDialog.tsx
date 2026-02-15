@@ -16,15 +16,17 @@ import {
   ToggleButtonGroup,
   TextField,
   Chip,
+  InputAdornment,
 } from '@mui/material';
 import {
   Close,
-  CloudUpload,
   CheckCircle,
   Receipt,
   LocalShipping,
   InsertPhoto,
   AutoFixHigh,
+  PhotoCamera,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { loadApi } from '@/api/all.api';
 import { useDocumentOCR, extractAmount } from '@/hooks/useDocumentOCR';
@@ -57,7 +59,6 @@ export const LoadInDialog: React.FC<LoadInDialogProps> = ({
   const [lumperReceipt, setLumperReceipt] = useState<File | null>(null);
   const [lumperReceiptPreview, setLumperReceiptPreview] = useState<string | null>(null);
   const [lumperReceiptUrl, setLumperReceiptUrl] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
   const [ocrAutoFilled, setOcrAutoFilled] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -73,6 +74,7 @@ export const LoadInDialog: React.FC<LoadInDialogProps> = ({
       setLumperReceiptUrl(null);
       setError(null);
       setSuccess(false);
+      setOcrAutoFilled(false);
     }
   }, [open]);
 
@@ -81,6 +83,7 @@ export const LoadInDialog: React.FC<LoadInDialogProps> = ({
     if (!file) return;
     setLumperReceipt(file);
     setOcrAutoFilled(false);
+
     if (file.type.startsWith('image/')) {
       const reader = new FileReader();
       reader.onload = () => setLumperReceiptPreview(reader.result as string);
@@ -90,31 +93,22 @@ export const LoadInDialog: React.FC<LoadInDialogProps> = ({
     }
     e.target.value = '';
 
-    // Auto-analyze receipt with OCR to extract amount
+    // Auto-set lumper fee to yes since they're scanning a receipt
+    setHasLumperFee(true);
+
+    // Auto-analyze receipt with OCR
     try {
       const result = await analyze(file);
       if (result) {
+        // Extract amount
         const amount = extractAmount(result.rawText);
-        if (amount && !lumperAmount) {
+        if (amount && amount > 0) {
           setLumperAmount(String(amount));
           setOcrAutoFilled(true);
         }
       }
     } catch { /* OCR failure is non-critical */ }
-  }, [analyze, lumperAmount]);
-
-  const handleUploadReceipt = useCallback(async () => {
-    if (!lumperReceipt) return;
-    try {
-      setUploading(true);
-      const url = await loadApi.uploadLoadDocument(load.id || (load as any)._id, lumperReceipt);
-      setLumperReceiptUrl(url);
-    } catch (err: any) {
-      setError('Failed to upload receipt: ' + (err?.message || 'Unknown error'));
-    } finally {
-      setUploading(false);
-    }
-  }, [lumperReceipt, load]);
+  }, [analyze]);
 
   const handleConfirmLoaded = async () => {
     try {
@@ -123,6 +117,14 @@ export const LoadInDialog: React.FC<LoadInDialogProps> = ({
 
       // If lumper fee exists, log it as an expense first
       if (hasLumperFee && lumperAmount && Number(lumperAmount) > 0) {
+        // Auto-upload receipt if not already uploaded
+        if (lumperReceipt && !lumperReceiptUrl) {
+          try {
+            const url = await loadApi.uploadLoadDocument(load.id || (load as any)._id, lumperReceipt);
+            setLumperReceiptUrl(url);
+          } catch { /* non-critical */ }
+        }
+
         try {
           await loadApi.addExpense(load.id || (load as any)._id, {
             category: 'lumper',
@@ -165,6 +167,15 @@ export const LoadInDialog: React.FC<LoadInDialogProps> = ({
     onClose();
   };
 
+  const clearReceipt = () => {
+    setLumperReceipt(null);
+    setLumperReceiptPreview(null);
+    setLumperReceiptUrl(null);
+    setLumperAmount('');
+    setOcrAutoFilled(false);
+    setHasLumperFee(null);
+  };
+
   if (success) {
     return (
       <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm" fullScreen={isMobile}>
@@ -177,6 +188,14 @@ export const LoadInDialog: React.FC<LoadInDialogProps> = ({
             <Typography variant="body1" color="text.secondary" textAlign="center">
               The shipment has been loaded onto your truck.
             </Typography>
+            {hasLumperFee && parseFloat(lumperAmount) > 0 && (
+              <Chip
+                label={`Lumper Fee: $${parseFloat(lumperAmount).toFixed(2)} (${lumperPaidBy})`}
+                color="warning"
+                variant="outlined"
+                sx={{ fontWeight: 700 }}
+              />
+            )}
             <Typography variant="body2" color="text.secondary" textAlign="center">
               Next: Upload Bill of Lading (BOL) before departing
             </Typography>
@@ -205,179 +224,276 @@ export const LoadInDialog: React.FC<LoadInDialogProps> = ({
           </Alert>
         )}
 
-        {/* Load Info */}
-        <Box sx={{ bgcolor: 'action.hover', borderRadius: 2, p: 2, mb: 3 }}>
-          <Typography variant="subtitle2" color="primary" fontWeight={700}>
-            Load #{load.loadNumber}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {(load as any)?.pickupLocation?.city || 'Pickup'} → {(load as any)?.deliveryLocation?.city || 'Delivery'}
-          </Typography>
-        </Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
 
-        {/* Step 1: Lumper Fee Question */}
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-            Was there a Lumper Fee?
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            If a lumper service was used for loading, record the fee and receipt.
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button
-              fullWidth
-              variant={hasLumperFee === true ? 'contained' : 'outlined'}
-              color={hasLumperFee === true ? 'warning' : 'inherit'}
-              onClick={() => setHasLumperFee(true)}
-              sx={{ py: 1.5, fontWeight: 600, fontSize: 15 }}
-            >
-              Yes, there was a lumper fee
-            </Button>
-            <Button
-              fullWidth
-              variant={hasLumperFee === false ? 'contained' : 'outlined'}
-              color={hasLumperFee === false ? 'success' : 'inherit'}
-              onClick={() => setHasLumperFee(false)}
-              sx={{ py: 1.5, fontWeight: 600, fontSize: 15 }}
-            >
-              No lumper fee
-            </Button>
-          </Box>
-        </Box>
+          {/* ── STEP 1: Scan Lumper Receipt FIRST ── */}
+          {!lumperReceipt && hasLumperFee === null && (
+            <>
+              <Box sx={{
+                border: `2px dashed rgba(245,158,11,0.5)`,
+                borderRadius: 3, p: 3, textAlign: 'center',
+                bgcolor: 'rgba(245,158,11,0.03)',
+              }}>
+                <Receipt sx={{ fontSize: 40, color: '#f59e0b', mb: 1 }} />
+                <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 0.5 }}>
+                  Scan Lumper Receipt
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Take a photo or upload the lumper receipt to auto-fill fee details
+                </Typography>
+                <Button
+                  variant="contained"
+                  color="warning"
+                  startIcon={<PhotoCamera />}
+                  onClick={() => fileInputRef.current?.click()}
+                  sx={{ fontWeight: 700, py: 1.5, px: 3, borderRadius: 2, fontSize: '0.95rem' }}
+                >
+                  Scan / Upload Receipt
+                </Button>
+              </Box>
 
-        {/* Step 2: Lumper Fee Details */}
-        {hasLumperFee === true && (
-          <Box sx={{
-            border: '1px solid',
-            borderColor: 'warning.main',
-            borderRadius: 2,
-            p: 2,
-            mb: 3,
-            bgcolor: 'rgba(255,152,0,0.04)',
-          }}>
-            <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Receipt fontSize="small" color="warning" /> Lumper Fee Details
-            </Typography>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  — or —
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                  <Button
+                    variant="outlined"
+                    color="warning"
+                    size="small"
+                    onClick={() => setHasLumperFee(true)}
+                    sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2 }}
+                  >
+                    Enter manually
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => setHasLumperFee(false)}
+                    sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2 }}
+                  >
+                    No lumper fee
+                  </Button>
+                </Box>
+              </Box>
+            </>
+          )}
 
-            {/* Amount */}
-            <TextField
-              fullWidth
-              label="Lumper Fee Amount"
-              type="number"
-              value={lumperAmount}
-              onChange={(e) => { setLumperAmount(e.target.value); setOcrAutoFilled(false); }}
-              placeholder="Enter amount"
-              sx={{ mb: 2 }}
-              helperText={
-                ocrAnalyzing ? '🔍 Scanning receipt...' :
-                ocrAutoFilled ? '✅ Auto-filled from receipt — verify and edit if needed' :
-                undefined
-              }
-              InputProps={{
-                startAdornment: <Typography sx={{ mr: 0.5, fontWeight: 600 }}>$</Typography>,
-                endAdornment: ocrAutoFilled ? (
-                  <Chip label="OCR" size="small" icon={<AutoFixHigh />} color="success" variant="outlined" />
-                ) : ocrAnalyzing ? (
-                  <CircularProgress size={18} />
-                ) : undefined,
-              }}
-            />
-
-            {/* Who Paid */}
-            <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>Who paid the lumper fee?</Typography>
-            <ToggleButtonGroup
-              value={lumperPaidBy}
-              exclusive
-              onChange={(_, v) => v && setLumperPaidBy(v)}
-              fullWidth
-              size="small"
-              sx={{ mb: 2 }}
-            >
-              <ToggleButton value="driver" sx={{ textTransform: 'none', fontWeight: 600 }}>
-                🚛 Driver (Reimburse)
-              </ToggleButton>
-              <ToggleButton value="broker" sx={{ textTransform: 'none', fontWeight: 600 }}>
-                🏢 Broker/Shipper
-              </ToggleButton>
-              <ToggleButton value="owner" sx={{ textTransform: 'none', fontWeight: 600 }}>
-                👤 Dispatcher/Owner
-              </ToggleButton>
-            </ToggleButtonGroup>
-
-            {lumperPaidBy === 'driver' && (
-              <Alert severity="info" sx={{ mb: 2 }}>
-                This amount will be marked for reimbursement to you.
-              </Alert>
-            )}
-
-            {/* Receipt Upload */}
-            <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>Upload Lumper Receipt</Typography>
-            {!lumperReceipt ? (
-              <Button
-                fullWidth
-                variant="outlined"
-                onClick={() => fileInputRef.current?.click()}
-                startIcon={<CloudUpload />}
-                sx={{
-                  py: 3,
-                  borderStyle: 'dashed',
-                  borderWidth: 2,
-                }}
-              >
-                Take Photo or Upload Receipt
-              </Button>
-            ) : (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1.5, bgcolor: 'action.hover', borderRadius: 1.5 }}>
+          {/* ── Receipt scanned: show preview + auto-filled details ── */}
+          {lumperReceipt && hasLumperFee === true && (
+            <Box sx={{
+              border: '2px solid',
+              borderColor: ocrAutoFilled ? '#22c55e' : 'warning.main',
+              borderRadius: 3, overflow: 'hidden',
+              bgcolor: ocrAutoFilled ? 'rgba(34,197,94,0.03)' : 'rgba(255,152,0,0.03)',
+            }}>
+              {/* Receipt Preview Header */}
+              <Box sx={{
+                display: 'flex', alignItems: 'center', gap: 1, p: 1.5,
+                bgcolor: ocrAutoFilled ? 'rgba(34,197,94,0.08)' : 'rgba(255,152,0,0.08)',
+                borderBottom: '1px solid',
+                borderColor: ocrAutoFilled ? 'rgba(34,197,94,0.2)' : 'rgba(255,152,0,0.2)',
+              }}>
                 {lumperReceiptPreview ? (
                   <img src={lumperReceiptPreview} alt="Receipt" style={{
-                    width: 56, height: 56, borderRadius: 8, objectFit: 'cover',
+                    width: 48, height: 48, borderRadius: 8, objectFit: 'cover',
                   }} />
                 ) : (
                   <InsertPhoto sx={{ fontSize: 40, color: 'text.secondary' }} />
                 )}
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body2" fontWeight={600} noWrap>{lumperReceipt.name}</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {(lumperReceipt.size / 1024).toFixed(0)} KB
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <CheckCircle sx={{ fontSize: 16, color: '#22c55e' }} />
+                    <Typography variant="body2" fontWeight={700} color="success.main">
+                      Receipt Attached
+                    </Typography>
+                  </Box>
+                  <Typography variant="caption" color="text.secondary" noWrap>
+                    {lumperReceipt.name} ({(lumperReceipt.size / 1024).toFixed(0)} KB)
                   </Typography>
                 </Box>
-                {!lumperReceiptUrl ? (
-                  <Button
-                    size="small"
-                    variant="contained"
-                    onClick={handleUploadReceipt}
-                    disabled={uploading}
-                    startIcon={uploading ? <CircularProgress size={14} /> : <CloudUpload />}
-                  >
-                    {uploading ? 'Uploading...' : 'Upload'}
-                  </Button>
-                ) : (
-                  <Chip label="Uploaded" color="success" size="small" icon={<CheckCircle />} />
-                )}
-                <IconButton size="small" onClick={() => {
-                  setLumperReceipt(null);
-                  setLumperReceiptPreview(null);
-                  setLumperReceiptUrl(null);
-                }}>
-                  <Close fontSize="small" />
+                <IconButton size="small" onClick={() => fileInputRef.current?.click()} title="Rescan">
+                  <PhotoCamera fontSize="small" />
+                </IconButton>
+                <IconButton size="small" onClick={clearReceipt} title="Remove">
+                  <DeleteIcon fontSize="small" sx={{ color: '#94a3b8' }} />
                 </IconButton>
               </Box>
-            )}
-          </Box>
-        )}
 
-        {/* Confirmation */}
-        {hasLumperFee !== null && (
-          <Alert severity="success" sx={{ mb: 1 }}>
-            <Typography variant="body2" fontWeight={600}>
-              Ready to confirm loading
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {hasLumperFee ? `Lumper fee: $${lumperAmount || 0} (paid by ${lumperPaidBy})` : 'No lumper fee'}.
-              {' '}After confirming, you will need to upload the Bill of Lading (BOL).
-            </Typography>
-          </Alert>
-        )}
+              {/* OCR scanning indicator */}
+              {ocrAnalyzing && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 2 }}>
+                  <CircularProgress size={18} />
+                  <Typography variant="body2" color="text.secondary">Reading receipt details...</Typography>
+                </Box>
+              )}
+
+              {/* Auto-filled Details */}
+              <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {ocrAutoFilled && (
+                  <Alert severity="success" sx={{ py: 0.5 }} icon={<AutoFixHigh />}>
+                    <Typography variant="body2" fontWeight={600}>
+                      Amount auto-detected — verify below
+                    </Typography>
+                  </Alert>
+                )}
+
+                {/* Amount */}
+                <TextField
+                  fullWidth size="small"
+                  label="Lumper Fee Amount *"
+                  type="number"
+                  value={lumperAmount}
+                  onChange={(e) => { setLumperAmount(e.target.value); setOcrAutoFilled(false); }}
+                  placeholder="Enter amount"
+                  required
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                    endAdornment: ocrAutoFilled ? (
+                      <Chip label="OCR" size="small" icon={<AutoFixHigh />} color="success" variant="outlined" sx={{ height: 24 }} />
+                    ) : undefined,
+                  }}
+                  inputProps={{ min: 0, step: 0.01 }}
+                />
+
+                {/* Who Paid */}
+                <Box>
+                  <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>Who paid?</Typography>
+                  <ToggleButtonGroup
+                    value={lumperPaidBy}
+                    exclusive
+                    onChange={(_, v) => v && setLumperPaidBy(v)}
+                    fullWidth
+                    size="small"
+                  >
+                    <ToggleButton value="driver" sx={{ textTransform: 'none', fontWeight: 600, fontSize: 12 }}>
+                      Driver (Reimburse)
+                    </ToggleButton>
+                    <ToggleButton value="broker" sx={{ textTransform: 'none', fontWeight: 600, fontSize: 12 }}>
+                      Broker/Shipper
+                    </ToggleButton>
+                    <ToggleButton value="owner" sx={{ textTransform: 'none', fontWeight: 600, fontSize: 12 }}>
+                      Dispatcher/Owner
+                    </ToggleButton>
+                  </ToggleButtonGroup>
+                </Box>
+
+                {lumperPaidBy === 'driver' && (
+                  <Alert severity="info" sx={{ py: 0.5 }}>
+                    This amount will be marked for reimbursement to you.
+                  </Alert>
+                )}
+              </Box>
+            </Box>
+          )}
+
+          {/* ── Manual entry (no scan) ── */}
+          {!lumperReceipt && hasLumperFee === true && (
+            <Box sx={{
+              border: '1px solid',
+              borderColor: 'warning.main',
+              borderRadius: 3, p: 2,
+              bgcolor: 'rgba(255,152,0,0.04)',
+            }}>
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Receipt fontSize="small" color="warning" /> Lumper Fee Details
+              </Typography>
+
+              {/* Scan option */}
+              <Button
+                fullWidth
+                variant="outlined"
+                color="warning"
+                startIcon={<PhotoCamera />}
+                onClick={() => fileInputRef.current?.click()}
+                sx={{ mb: 2, py: 1.5, borderStyle: 'dashed', fontWeight: 600 }}
+              >
+                Scan Receipt to Auto-Fill
+              </Button>
+
+              {/* Amount */}
+              <TextField
+                fullWidth size="small"
+                label="Lumper Fee Amount *"
+                type="number"
+                value={lumperAmount}
+                onChange={(e) => setLumperAmount(e.target.value)}
+                placeholder="Enter amount"
+                sx={{ mb: 2 }}
+                InputProps={{
+                  startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                }}
+                inputProps={{ min: 0, step: 0.01 }}
+              />
+
+              {/* Who Paid */}
+              <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>Who paid?</Typography>
+              <ToggleButtonGroup
+                value={lumperPaidBy}
+                exclusive
+                onChange={(_, v) => v && setLumperPaidBy(v)}
+                fullWidth
+                size="small"
+                sx={{ mb: 1 }}
+              >
+                <ToggleButton value="driver" sx={{ textTransform: 'none', fontWeight: 600, fontSize: 12 }}>
+                  Driver (Reimburse)
+                </ToggleButton>
+                <ToggleButton value="broker" sx={{ textTransform: 'none', fontWeight: 600, fontSize: 12 }}>
+                  Broker/Shipper
+                </ToggleButton>
+                <ToggleButton value="owner" sx={{ textTransform: 'none', fontWeight: 600, fontSize: 12 }}>
+                  Dispatcher/Owner
+                </ToggleButton>
+              </ToggleButtonGroup>
+
+              {lumperPaidBy === 'driver' && (
+                <Alert severity="info" sx={{ py: 0.5, mt: 1 }}>
+                  This amount will be marked for reimbursement to you.
+                </Alert>
+              )}
+
+              <Button
+                size="small"
+                sx={{ mt: 1, color: 'text.secondary', textTransform: 'none' }}
+                onClick={() => { setHasLumperFee(null); setLumperAmount(''); }}
+              >
+                Go back
+              </Button>
+            </Box>
+          )}
+
+          {/* ── No lumper fee confirmation ── */}
+          {hasLumperFee === false && (
+            <Alert severity="success" sx={{ borderRadius: 2 }}>
+              <Typography variant="body2" fontWeight={600}>
+                No lumper fee — ready to confirm loading.
+              </Typography>
+              <Button
+                size="small"
+                sx={{ mt: 0.5, textTransform: 'none', p: 0 }}
+                onClick={() => setHasLumperFee(null)}
+              >
+                Go back
+              </Button>
+            </Alert>
+          )}
+
+          {/* ── Ready to confirm ── */}
+          {hasLumperFee !== null && (
+            <Alert severity="info" sx={{ borderRadius: 2, py: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                {hasLumperFee && lumperAmount
+                  ? `Lumper fee: $${parseFloat(lumperAmount).toFixed(2)} (paid by ${lumperPaidBy}).`
+                  : hasLumperFee
+                  ? 'Enter lumper fee amount above.'
+                  : 'No lumper fee.'
+                }
+                {' '}After confirming, upload the Bill of Lading (BOL).
+              </Typography>
+            </Alert>
+          )}
+        </Box>
       </DialogContent>
 
       <DialogActions sx={{ px: { xs: 2, sm: 3 }, pb: { xs: 2, sm: 2 } }}>
@@ -386,7 +502,7 @@ export const LoadInDialog: React.FC<LoadInDialogProps> = ({
           variant="contained"
           color="success"
           onClick={handleConfirmLoaded}
-          disabled={loading || hasLumperFee === null || (hasLumperFee === true && !lumperAmount)}
+          disabled={loading || hasLumperFee === null || (hasLumperFee === true && (!lumperAmount || parseFloat(lumperAmount) <= 0))}
           startIcon={loading ? <CircularProgress size={16} /> : <CheckCircle />}
           sx={{ fontWeight: 700 }}
         >
@@ -398,6 +514,7 @@ export const LoadInDialog: React.FC<LoadInDialogProps> = ({
         ref={fileInputRef}
         type="file"
         accept="image/*,application/pdf"
+        capture="environment"
         style={{ display: 'none' }}
         onChange={handleFileSelect}
       />

@@ -13,12 +13,27 @@ import {
   Info,
   RateReview,
   Payments,
+  SwapHoriz,
 } from '@mui/icons-material';
 import { GridActionsCellItem } from '@mui/x-data-grid';
 import type { Load } from '@/api/load.api';
 import type { Driver } from '@/api/driver.api';
 import type { Truck } from '@/api/truck.api';
 import type { Trailer } from '@/api/trailer.api';
+
+// Smart location formatter — handles city/state, address, or name fields
+function fmtLocation(loc: any): string {
+  if (!loc) return '-';
+  if (loc.city && loc.city.trim()) return `${loc.city}, ${loc.state || ''}`.replace(/,\s*$/, '');
+  if (loc.address && loc.address.trim()) {
+    // Truncate long addresses
+    return loc.address.length > 35 ? loc.address.substring(0, 35) + '...' : loc.address;
+  }
+  if (loc.name && loc.name.trim()) {
+    return loc.name.length > 35 ? loc.name.substring(0, 35) + '...' : loc.name;
+  }
+  return '-';
+}
 
 const STATUS_COLORS: Record<string, 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'> = {
   booked: 'default',
@@ -40,6 +55,7 @@ type ColumnFactoryParams = {
   onUnassign: (load: Load) => void;
   onOpenNotes: (notes: string, title: string) => void;
   onConfirmRate?: (load: Load) => void;
+  onEditAssignment?: (load: Load) => void;
   onViewTripDetails?: (load: Load) => void;
   onReviewCompletion?: (load: Load) => void;
   onManagePayment?: (load: Load) => void;
@@ -48,6 +64,7 @@ type ColumnFactoryParams = {
 export function getLoadsGridColumns(params: ColumnFactoryParams & { t: (key: string, opts?: { defaultValue?: string }) => string }): GridColDef[] {
   const { t, onView, onEdit, onDelete, onAssign, onUnassign, onOpenNotes } = params;
   const onConfirmRate = params.onConfirmRate ?? null;
+  const onEditAssignment = params.onEditAssignment ?? null;
   const onViewTripDetails = params.onViewTripDetails ?? null;
   const onReviewCompletion = params.onReviewCompletion ?? null;
   const onManagePayment = params.onManagePayment ?? null;
@@ -72,14 +89,12 @@ export function getLoadsGridColumns(params: ColumnFactoryParams & { t: (key: str
       valueGetter: (p) => {
         if (!p.row) return '-';
         const loc = p.row.pickupLocation || p.row.origin;
-        if (!loc) return '-';
-        return `${loc.city || ''}, ${loc.state || ''}`.trim() || '-';
+        return fmtLocation(loc);
       },
       renderCell: (p) => {
         if (!p.row) return '-';
         const loc = p.row.pickupLocation || p.row.origin;
-        if (!loc?.city) return '-';
-        return `${loc.city}, ${loc.state || ''}`;
+        return fmtLocation(loc);
       },
     },
     {
@@ -90,14 +105,12 @@ export function getLoadsGridColumns(params: ColumnFactoryParams & { t: (key: str
       valueGetter: (p) => {
         if (!p.row) return '-';
         const loc = p.row.deliveryLocation || p.row.destination;
-        if (!loc) return '-';
-        return `${loc.city || ''}, ${loc.state || ''}`.trim() || '-';
+        return fmtLocation(loc);
       },
       renderCell: (p) => {
         if (!p.row) return '-';
         const loc = p.row.deliveryLocation || p.row.destination;
-        if (!loc?.city) return '-';
-        return `${loc.city}, ${loc.state || ''}`;
+        return fmtLocation(loc);
       },
     },
     {
@@ -232,22 +245,38 @@ export function getLoadsGridColumns(params: ColumnFactoryParams & { t: (key: str
             <GridActionsCellItem key={`${rowId}-tripDetails`} icon={<Info />} label="Trip Details" onClick={() => onViewTripDetails(row)} />
           );
         }
-        if (row.status === 'booked' && onConfirmRate) {
+        // Confirm Rate: available for booked loads and assigned loads (triggers driver notification)
+        if ((row.status === 'booked' || row.status === 'assigned') && onConfirmRate) {
           actions.push(
             <GridActionsCellItem
               key={`${rowId}-confirmRate`}
               icon={<CheckCircle />}
-              label={t('loads.confirmRate', { defaultValue: 'Confirm Rate' })}
+              label={row.status === 'assigned'
+                ? t('loads.confirmRateNotify', { defaultValue: 'Confirm Rate & Notify Driver' })
+                : t('loads.confirmRate', { defaultValue: 'Confirm Rate' })}
               onClick={() => onConfirmRate(row)}
             />
           );
         }
+        // Assign Driver: booked or rate_confirmed (no driver yet)
         if (row.status === 'booked' || row.status === 'rate_confirmed') {
           actions.push(
             <GridActionsCellItem key={`${rowId}-assign`} icon={<Assignment />} label={t('loads.assignDriver')} onClick={() => onAssign(row)} />
           );
         }
-        if (row.status === 'assigned' || row.status === 'trip_accepted') {
+        // Edit Assignment: change driver/truck/trailer before rate confirmation
+        if (row.status === 'assigned' && onEditAssignment) {
+          actions.push(
+            <GridActionsCellItem
+              key={`${rowId}-editAssignment`}
+              icon={<SwapHoriz />}
+              label={t('loads.editAssignment', { defaultValue: 'Edit Assignment' })}
+              onClick={() => onEditAssignment(row)}
+            />
+          );
+        }
+        // Unassign/Reassign
+        if (row.status === 'assigned' || row.status === 'rate_confirmed' || row.status === 'trip_accepted') {
           actions.push(
             <GridActionsCellItem
               key={`${rowId}-unassign`}
@@ -295,6 +324,6 @@ export function useLoadsGridColumns(params: ColumnFactoryParams): GridColDef[] {
   return useMemo(
     () => getLoadsGridColumns({ ...params, t }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, params.onView, params.onEdit, params.onDelete, params.onAssign, params.onUnassign, params.onOpenNotes, params.onConfirmRate, params.onViewTripDetails, params.onReviewCompletion, params.onManagePayment]
+    [t, params.onView, params.onEdit, params.onDelete, params.onAssign, params.onUnassign, params.onOpenNotes, params.onConfirmRate, params.onEditAssignment, params.onViewTripDetails, params.onReviewCompletion, params.onManagePayment]
   );
 }

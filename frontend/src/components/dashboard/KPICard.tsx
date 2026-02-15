@@ -45,15 +45,15 @@ export const KPICard = memo(({
         height: '100%',
         background: theme.palette.mode === 'dark'
           ? alpha(bgColor, 0.15)
-          : `linear-gradient(135deg, ${alpha(bgColor, 0.08)} 0%, ${alpha(bgColor, 0.03)} 100%)`,
-        border: `1px solid ${alpha(bgColor, 0.15)}`,
+          : '#ffffff',
+        border: `1px solid ${alpha(bgColor, 0.12)}`,
         overflow: 'hidden',
         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         cursor: 'default',
         '&:hover': {
-          transform: 'translateY(-4px)',
-          boxShadow: `0 12px 28px ${alpha(bgColor, 0.2)}`,
-          border: `1px solid ${alpha(bgColor, 0.3)}`,
+          transform: 'translateY(-3px)',
+          boxShadow: `0 12px 28px ${alpha(bgColor, 0.15)}`,
+          border: `1px solid ${alpha(bgColor, 0.25)}`,
         },
         '&::before': {
           content: '""',
@@ -70,12 +70,23 @@ export const KPICard = memo(({
       <Box
         sx={{
           position: 'absolute',
-          top: -20,
-          right: -20,
-          width: 80,
-          height: 80,
+          top: -25,
+          right: -25,
+          width: 90,
+          height: 90,
           borderRadius: '50%',
-          background: alpha(bgColor, 0.06),
+          background: alpha(bgColor, 0.04),
+        }}
+      />
+      <Box
+        sx={{
+          position: 'absolute',
+          bottom: -15,
+          left: -15,
+          width: 50,
+          height: 50,
+          borderRadius: '50%',
+          background: alpha(bgColor, 0.03),
         }}
       />
 
@@ -84,7 +95,7 @@ export const KPICard = memo(({
           <Typography
             variant="caption"
             sx={{
-              fontWeight: 600,
+              fontWeight: 700,
               textTransform: 'uppercase',
               letterSpacing: '0.5px',
               color: bgColor,
@@ -100,7 +111,7 @@ export const KPICard = memo(({
               mt: 0.5,
               mb: 0.5,
               lineHeight: 1.1,
-              fontSize: { xs: '1.6rem', sm: '1.8rem' },
+              fontSize: { xs: '1.5rem', sm: '1.7rem' },
               color: 'text.primary',
             }}
           >
@@ -131,6 +142,7 @@ export const KPICard = memo(({
           </Box>
         )}
       </Box>
+
       {trend !== undefined && (
         <Box display="flex" alignItems="center" mt={1.5} sx={{ position: 'relative', zIndex: 1 }}>
           <Box
@@ -139,9 +151,9 @@ export const KPICard = memo(({
               alignItems: 'center',
               gap: 0.3,
               bgcolor: trend >= 0 ? alpha('#22c55e', 0.1) : alpha('#ef4444', 0.1),
-              borderRadius: 1,
+              borderRadius: 1.5,
               px: 0.8,
-              py: 0.2,
+              py: 0.3,
             }}
           >
             {trend > 0 ? (

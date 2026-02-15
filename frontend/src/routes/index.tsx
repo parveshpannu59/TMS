@@ -1,43 +1,3 @@
-// import React, { Suspense, lazy } from 'react';
-// import { Routes, Route, Navigate } from 'react-router-dom';
-// import { ProtectedRoute } from '@components/auth/ProtectedRoute';
-// import { LoadingSpinner } from '@components/common/LoadingSpinner';
-
-// const Login = lazy(() => import('@pages/Login'));
-// const Dashboard = lazy(() => import('@pages/Dashboard'));
-// const UsersPage = lazy(() => import('@pages/UsersPage'));
-
-// export const AppRoutes: React.FC = () => {
-//   return (
-//     <Suspense fallback={<LoadingSpinner />}>
-//       <Routes>
-//         <Route path="/login" element={<Login />} />
-
-//         <Route
-//           path="/dashboard"
-//           element={
-//             <ProtectedRoute>
-//               <Dashboard />
-//             </ProtectedRoute>
-//           }
-//         />
-
-//         <Route
-//           path="/users"
-//           element={
-//             <ProtectedRoute>
-//               <UsersPage />
-//             </ProtectedRoute>
-//           }
-//         />
-
-//         <Route path="/" element={<Navigate to="/dashboard" replace />} />
-
-//         <Route path="*" element={<Navigate to="/dashboard" replace />} />
-//       </Routes>
-//     </Suspense>
-//   );
-// };
 import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '@components/auth/ProtectedRoute';
@@ -72,10 +32,16 @@ const DriverSettingsMobile = lazy(() => import('../pages/driver/DriverSettingsMo
 import { DriverMobileProvider } from '../contexts/DriverMobileContext';
 import { isDriverAuthenticated } from '../utils/mobileAuth';
 
+// ─── Unified owner/dispatcher layout shell ──────
+const OwnerShell = lazy(() => import('../layouts/OwnerShell'));
+
 function roleIsDriver() {
   try {
+    // Only consider it a driver session if the driver-specific mobile auth exists
+    // AND a valid session token exists (prevents stale localStorage after logout)
+    const hasSessionToken = !!sessionStorage.getItem('auth_token');
     const raw = localStorage.getItem('driver_mobile_auth_v1');
-    if (!raw) return false;
+    if (!raw || !hasSessionToken) return false;
     const data = JSON.parse(raw);
     const role = data?.role || data?.user?.role || data?.user?.userType;
     return role === 'driver';
@@ -94,141 +60,39 @@ export const AppRoutes = () => {
   return (
     <Suspense fallback={<LoadingFallback fullScreen message="Loading application..." />}>
       <Routes>
+        {/* ─── Public ── */}
         <Route path="/login" element={<Login />} />
-        <Route
-          path="/dashboard"
-          element={
-            roleIsDriver() ? (
-              <Navigate to="/driver/mobile/dashboard" replace />
-            ) : (
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            )
-          }
-        />
-        <Route
-          path="/users"
-          element={
-            <ProtectedRoute>
-              <UsersPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/loads"
-          element={
-            <ProtectedRoute>
-              <LoadsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/vehicles"
-          element={
-            <ProtectedRoute>
-              <VehiclesPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/trucks"
-          element={
-            <ProtectedRoute>
-              <TrucksPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/trailers"
-          element={
-            <ProtectedRoute>
-              <TrailersPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/drivers"
-          element={
-            <ProtectedRoute>
-              <DriversPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/trips"
-          element={
-            <ProtectedRoute>
-              <TripManagementDashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/accounting"
-          element={
-            <ProtectedRoute>
-              <AccountingPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/settings"
-          element={
-            <ProtectedRoute>
-              <SettingsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/messages"
-          element={
-            <ProtectedRoute>
-              <MessagesPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/history"
-          element={
-            <ProtectedRoute>
-              <ActivityHistoryPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/maintenance"
-          element={
-            <ProtectedRoute>
-              <MaintenancePage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/resources"
-          element={
-            <ProtectedRoute>
-              <ResourcesPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/driver"
-          element={
-            <ProtectedRoute>
-              <DriverDashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/assignments"
-          element={
-            <ProtectedRoute>
-              <PendingAssignmentsPage />
-            </ProtectedRoute>
-          }
-        />
 
-        {/* Mobile-only driver routes */}
+        {/* ─── Owner / Dispatcher pages — all share OwnerShell layout ── */}
+        <Route
+          element={
+            <ProtectedRoute>
+              <OwnerShell />
+            </ProtectedRoute>
+          }
+        >
+          <Route
+            path="/dashboard"
+            element={roleIsDriver() ? <Navigate to="/driver/mobile/dashboard" replace /> : <Dashboard />}
+          />
+          <Route path="/users" element={<UsersPage />} />
+          <Route path="/loads" element={<LoadsPage />} />
+          <Route path="/vehicles" element={<VehiclesPage />} />
+          <Route path="/trucks" element={<TrucksPage />} />
+          <Route path="/trailers" element={<TrailersPage />} />
+          <Route path="/drivers" element={<DriversPage />} />
+          <Route path="/trips" element={<TripManagementDashboard />} />
+          <Route path="/accounting" element={<AccountingPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/messages" element={<MessagesPage />} />
+          <Route path="/history" element={<ActivityHistoryPage />} />
+          <Route path="/maintenance" element={<MaintenancePage />} />
+          <Route path="/resources" element={<ResourcesPage />} />
+          <Route path="/driver" element={<DriverDashboard />} />
+          <Route path="/assignments" element={<PendingAssignmentsPage />} />
+        </Route>
+
+        {/* ─── Mobile-only driver routes ── */}
         <Route path="/driver/login" element={<DriverLoginMobile />} />
         <Route
           path="/driver/mobile"
@@ -248,6 +112,8 @@ export const AppRoutes = () => {
           <Route path="messages" element={<DriverMessagesMobile />} />
           <Route path="settings" element={<DriverSettingsMobile />} />
         </Route>
+
+        {/* ─── Fallbacks ── */}
         <Route path="/" element={roleIsDriver() ? <Navigate to="/driver/mobile/dashboard" replace /> : <Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

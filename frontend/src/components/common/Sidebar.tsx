@@ -7,12 +7,9 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  Toolbar,
   Box,
-  Divider,
   Typography,
   useTheme,
-  alpha,
   Avatar,
 } from '@mui/material';
 import {
@@ -22,7 +19,6 @@ import {
   DirectionsCar,
   Assignment,
   AccountBalance,
-  RvHookup,
   Build,
   Assessment,
   History,
@@ -32,6 +28,7 @@ import {
 } from '@mui/icons-material';
 import { Link, Badge } from '@mui/material';
 import { useAuth } from '@hooks/useAuth';
+import { getApiOrigin } from '@/api/client';
 import { UserRole } from '../../types/user.types';
 import { useTranslation } from 'react-i18next';
 import { messageApi } from '@/api/message.api';
@@ -46,86 +43,20 @@ interface MenuItem {
   roles: UserRole[];
 }
 
-// Menu items will be created inside component to use translations
 const getMenuItems = (t: (key: string) => string): MenuItem[] => [
-  {
-    text: t('navigation.dashboard'),
-    icon: <Dashboard />,
-    path: '/dashboard',
-    roles: [UserRole.OWNER, UserRole.DISPATCHER, UserRole.DRIVER, UserRole.ACCOUNTANT],
-  },
-  {
-    text: 'Pending Assignments', // TODO: Add to translations
-    icon: <Assignment />,
-    path: '/assignments',
-    roles: [UserRole.DRIVER],
-  },
-  {
-    text: t('navigation.users'),
-    icon: <People />,
-    path: '/users',
-    roles: [UserRole.OWNER],
-  },
-  {
-    text: t('navigation.loads'),
-    icon: <Assignment />,
-    path: '/loads',
-    roles: [UserRole.OWNER, UserRole.DISPATCHER],
-  },
-  {
-    text: t('navigation.drivers'),
-    icon: <LocalShipping />,
-    path: '/drivers',
-    roles: [UserRole.OWNER, UserRole.DISPATCHER],
-  },
-  {
-    text: t('navigation.tripManagement'),
-    icon: <Assignment />,
-    path: '/trips',
-    roles: [UserRole.OWNER, UserRole.DISPATCHER],
-  },
-  {
-    text: 'Vehicles', // Unified trucks + trailers
-    icon: <DirectionsCar />,
-    path: '/vehicles',
-    roles: [UserRole.OWNER, UserRole.DISPATCHER],
-  },
-  {
-    text: t('navigation.accounting'),
-    icon: <AccountBalance />,
-    path: '/accounting',
-    roles: [UserRole.OWNER, UserRole.ACCOUNTANT],
-  },
-  {
-    text: t('navigation.maintenance'),
-    icon: <Build />,
-    path: '/maintenance',
-    roles: [UserRole.OWNER, UserRole.DISPATCHER],
-  },
-  {
-    text: t('navigation.resources'),
-    icon: <Assessment />,
-    path: '/resources',
-    roles: [UserRole.OWNER, UserRole.DISPATCHER],
-  },
-  {
-    text: 'Messages',
-    icon: <Chat />,
-    path: '/messages',
-    roles: [UserRole.OWNER, UserRole.DISPATCHER],
-  },
-  {
-    text: t('navigation.activityHistory'),
-    icon: <History />,
-    path: '/history',
-    roles: [UserRole.OWNER, UserRole.DISPATCHER],
-  },
-  {
-    text: t('navigation.settings'),
-    icon: <Settings />,
-    path: '/settings',
-    roles: [UserRole.OWNER, UserRole.DISPATCHER, UserRole.DRIVER, UserRole.ACCOUNTANT],
-  },
+  { text: t('navigation.dashboard'), icon: <Dashboard />, path: '/dashboard', roles: [UserRole.OWNER, UserRole.DISPATCHER, UserRole.DRIVER, UserRole.ACCOUNTANT] },
+  { text: 'Pending Assignments', icon: <Assignment />, path: '/assignments', roles: [UserRole.DRIVER] },
+  { text: t('navigation.users'), icon: <People />, path: '/users', roles: [UserRole.OWNER] },
+  { text: t('navigation.loads'), icon: <Assignment />, path: '/loads', roles: [UserRole.OWNER, UserRole.DISPATCHER] },
+  { text: t('navigation.drivers'), icon: <LocalShipping />, path: '/drivers', roles: [UserRole.OWNER, UserRole.DISPATCHER] },
+  { text: t('navigation.tripManagement'), icon: <Assignment />, path: '/trips', roles: [UserRole.OWNER, UserRole.DISPATCHER] },
+  { text: 'Vehicles', icon: <DirectionsCar />, path: '/vehicles', roles: [UserRole.OWNER, UserRole.DISPATCHER] },
+  { text: t('navigation.accounting'), icon: <AccountBalance />, path: '/accounting', roles: [UserRole.OWNER, UserRole.ACCOUNTANT] },
+  { text: t('navigation.maintenance'), icon: <Build />, path: '/maintenance', roles: [UserRole.OWNER, UserRole.DISPATCHER] },
+  { text: t('navigation.resources'), icon: <Assessment />, path: '/resources', roles: [UserRole.OWNER, UserRole.DISPATCHER] },
+  { text: 'Messages', icon: <Chat />, path: '/messages', roles: [UserRole.OWNER, UserRole.DISPATCHER] },
+  { text: t('navigation.activityHistory'), icon: <History />, path: '/history', roles: [UserRole.OWNER, UserRole.DISPATCHER] },
+  { text: t('navigation.settings'), icon: <Settings />, path: '/settings', roles: [UserRole.OWNER, UserRole.DISPATCHER, UserRole.DRIVER, UserRole.ACCOUNTANT] },
 ];
 
 interface SidebarProps {
@@ -134,6 +65,14 @@ interface SidebarProps {
   onMobileClose?: () => void;
   onDesktopClose?: () => void;
 }
+
+// ── Dark Navy Sidebar ──────────────────────────────
+const NAVY = '#0f172a';
+const NAVY_LIGHT = '#1e293b';
+const NAVY_BORDER = 'rgba(148,163,184,0.08)';
+const TEXT_DIM = 'rgba(148,163,184,0.7)';
+const TEXT_LIGHT = '#e2e8f0';
+const ACCENT = '#3b82f6';
 
 export const Sidebar: React.FC<SidebarProps> = React.memo(
   ({ mobileOpen = false, desktopOpen = true, onMobileClose, onDesktopClose: _onDesktopClose }) => {
@@ -144,35 +83,15 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(
     const { t } = useTranslation();
     const { subscribe } = usePusherContext();
 
-    // Unread message count for badge
     const [msgUnread, setMsgUnread] = useState(0);
     const fetchUnread = useCallback(() => {
       messageApi.getUnreadCount().then(res => setMsgUnread(res.count || 0)).catch(() => {});
     }, []);
 
-    useEffect(() => {
-      fetchUnread();
-      const id = setInterval(fetchUnread, 30000);
-      return () => clearInterval(id);
-    }, [fetchUnread]);
-
-    // Refresh on Pusher message event
-    useEffect(() => {
-      const unsub = subscribe('message-new', () => fetchUnread());
-      return unsub;
-    }, [subscribe, fetchUnread]);
-
-    // Refresh when messages are read (from chat component)
-    useEffect(() => {
-      const handler = () => fetchUnread();
-      window.addEventListener('messages-read', handler);
-      return () => window.removeEventListener('messages-read', handler);
-    }, [fetchUnread]);
-
-    // Also refresh badge on route changes (especially navigating to/from messages)
-    useEffect(() => {
-      fetchUnread();
-    }, [location.pathname, fetchUnread]);
+    useEffect(() => { fetchUnread(); const id = setInterval(fetchUnread, 30000); return () => clearInterval(id); }, [fetchUnread]);
+    useEffect(() => { const unsub = subscribe('message-new', () => fetchUnread()); return unsub; }, [subscribe, fetchUnread]);
+    useEffect(() => { const h = () => fetchUnread(); window.addEventListener('messages-read', h); return () => window.removeEventListener('messages-read', h); }, [fetchUnread]);
+    useEffect(() => { fetchUnread(); }, [location.pathname, fetchUnread]);
 
     const filteredMenuItems = useMemo(() => {
       if (!user) return [];
@@ -182,119 +101,100 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(
     const handleNavigation = useCallback(
       (path: string) => {
         navigate(path);
-        // Close sidebar on mobile after navigation
-        if (onMobileClose) {
-          onMobileClose();
-        }
+        if (onMobileClose) onMobileClose();
       },
       [navigate, onMobileClose]
     );
 
     const drawerContent = (
-      <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
-        <Toolbar 
-          sx={{ 
-            background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
-            color: 'white',
-            justifyContent: 'center',
-            minHeight: '64px !important',
-            boxShadow: '0 2px 8px rgba(37, 99, 235, 0.2)',
-          }}
-        >
-          <Typography 
-            variant="h5" 
-            noWrap 
-            component="div"
-            sx={{ 
-              fontWeight: 700,
-              letterSpacing: 0.5,
-              fontSize: '1.5rem',
-            }}
-          >
-            TMS
-          </Typography>
-        </Toolbar>
-        <Divider />
-        <Box sx={{ flexGrow: 1, overflowY: 'auto', overflowX: 'hidden', py: 1.5 }}>
+      <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: NAVY }}>
+        {/* Logo */}
+        <Box sx={{
+          px: 2.5, py: 2.5,
+          display: 'flex', alignItems: 'center', gap: 1.5,
+          borderBottom: `1px solid ${NAVY_BORDER}`,
+        }}>
+          <Box sx={{
+            width: 40, height: 40, borderRadius: '12px',
+            background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 4px 14px rgba(59,130,246,0.3)',
+          }}>
+            <LocalShipping sx={{ fontSize: 22, color: '#fff' }} />
+          </Box>
+          <Box>
+            <Typography sx={{ fontWeight: 800, color: '#fff', fontSize: '1.15rem', letterSpacing: '-0.5px', lineHeight: 1.1 }}>
+              Haulxp
+            </Typography>
+            <Typography sx={{ color: TEXT_DIM, fontSize: '0.62rem', fontWeight: 500, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
+              TMS Platform
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Nav items */}
+        <Box sx={{
+          flexGrow: 1,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          py: 1.5,
+          /* Invisible scrollbar */
+          scrollbarWidth: 'none',          /* Firefox */
+          msOverflowStyle: 'none',         /* IE / Edge */
+          '&::-webkit-scrollbar': {        /* Chrome / Safari */
+            display: 'none',
+          },
+        }}>
           <List sx={{ px: 1.5 }}>
             {filteredMenuItems.map((item) => {
               const isSelected = location.pathname === item.path;
               return (
-                <ListItem 
-                  key={item.text} 
-                  disablePadding
-                  sx={{ mb: 0.5 }}
-                >
+                <ListItem key={item.text} disablePadding sx={{ mb: 0.3 }}>
                   <ListItemButton
                     selected={isSelected}
                     onClick={() => handleNavigation(item.path)}
                     sx={{
-                      borderRadius: 2,
-                      minHeight: 44,
-                      px: 2,
-                      transition: 'all 0.2s ease',
+                      borderRadius: '10px',
+                      minHeight: 42,
+                      px: 1.5,
+                      transition: 'all 0.15s',
+                      color: isSelected ? '#fff' : TEXT_DIM,
+                      bgcolor: isSelected ? 'rgba(59,130,246,0.15)' : 'transparent',
                       '&.Mui-selected': {
-                        bgcolor: alpha(theme.palette.primary.main, 0.15),
-                        color: 'primary.main',
-                        fontWeight: 600,
+                        bgcolor: 'rgba(59,130,246,0.15)',
+                        color: '#fff',
+                        '&:hover': { bgcolor: 'rgba(59,130,246,0.2)' },
+                        '& .MuiListItemIcon-root': { color: ACCENT },
                         '&::before': {
-                          content: '""',
-                          position: 'absolute',
-                          left: 0,
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          width: 3,
-                          height: '60%',
-                          bgcolor: 'primary.main',
-                          borderRadius: '0 2px 2px 0',
-                        },
-                        '&:hover': {
-                          bgcolor: alpha(theme.palette.primary.main, 0.2),
-                        },
-                        '& .MuiListItemIcon-root': {
-                          color: 'primary.main',
+                          content: '""', position: 'absolute',
+                          left: 0, top: '50%', transform: 'translateY(-50%)',
+                          width: 3, height: '55%',
+                          bgcolor: ACCENT, borderRadius: '0 3px 3px 0',
                         },
                       },
                       '&:hover': {
-                        bgcolor: alpha(theme.palette.primary.main, 0.08),
-                        transform: 'translateX(2px)',
-                      },
-                      '@media (prefers-reduced-motion: reduce)': {
-                        transition: 'none',
-                        '&:hover': {
-                          transform: 'none',
-                        },
+                        bgcolor: 'rgba(148,163,184,0.06)',
+                        color: TEXT_LIGHT,
+                        '& .MuiListItemIcon-root': { color: TEXT_LIGHT },
                       },
                     }}
                   >
-                    <ListItemIcon
-                      sx={{
-                        minWidth: 40,
-                        color: isSelected ? 'primary.main' : 'text.secondary',
-                        transition: 'color 0.2s ease',
-                      }}
-                    >
+                    <ListItemIcon sx={{ minWidth: 36, color: isSelected ? ACCENT : TEXT_DIM, transition: 'color 0.15s', '& svg': { fontSize: 20 } }}>
                       {item.path === '/messages' && msgUnread > 0 ? (
                         <Badge
                           badgeContent={msgUnread > 99 ? '99+' : msgUnread}
                           color="error"
-                          sx={{
-                            '& .MuiBadge-badge': {
-                              fontSize: 10, fontWeight: 800,
-                              minWidth: 18, height: 18,
-                              borderRadius: 9,
-                            },
-                          }}
+                          sx={{ '& .MuiBadge-badge': { fontSize: 9, fontWeight: 800, minWidth: 16, height: 16, borderRadius: 8 } }}
                         >
                           {item.icon}
                         </Badge>
                       ) : item.icon}
                     </ListItemIcon>
-                    <ListItemText 
+                    <ListItemText
                       primary={item.text}
                       primaryTypographyProps={{
-                        fontSize: '0.9375rem',
-                        fontWeight: isSelected ? 600 : (item.path === '/messages' && msgUnread > 0 ? 700 : 500),
+                        fontSize: '0.85rem',
+                        fontWeight: isSelected ? 600 : (item.path === '/messages' && msgUnread > 0 ? 600 : 400),
                       }}
                     />
                   </ListItemButton>
@@ -303,82 +203,76 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(
             })}
           </List>
         </Box>
-        <Divider />
-        <Box sx={{ px: 2, py: 1, borderTop: `1px solid ${theme.palette.divider}` }}>
+
+        {/* Help */}
+        <Box sx={{ px: 2.5, py: 1.5, borderTop: `1px solid ${NAVY_BORDER}` }}>
           <Link
             href="mailto:support@yourdomain.com"
             target="_blank"
             rel="noopener noreferrer"
             sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              color: 'text.secondary',
-              textDecoration: 'none',
-              fontSize: '0.8125rem',
-              '&:hover': { color: 'primary.main' },
+              display: 'flex', alignItems: 'center', gap: 1,
+              color: TEXT_DIM, textDecoration: 'none', fontSize: '0.78rem',
+              '&:hover': { color: ACCENT },
             }}
           >
-            <HelpOutline sx={{ fontSize: 18 }} />
+            <HelpOutline sx={{ fontSize: 16 }} />
             {t('driverSettings.helpSupport', { defaultValue: 'Help & Support' })}
           </Link>
         </Box>
-        <Box 
-          sx={{ 
-            p: 2, 
-            bgcolor: alpha(theme.palette.primary.main, 0.04),
-            borderTop: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
-            <Avatar 
-              sx={{ 
-                bgcolor: 'primary.main',
-                width: 36,
-                height: 36,
-                fontWeight: 600,
-                fontSize: '0.875rem',
+
+        {/* User card */}
+        <Box sx={{
+          px: 2, py: 2,
+          borderTop: `1px solid ${NAVY_BORDER}`,
+          bgcolor: NAVY_LIGHT,
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Avatar
+              src={
+                user?.profilePicture
+                  ? (user.profilePicture.startsWith('http')
+                      ? user.profilePicture
+                      : `${getApiOrigin()}${user.profilePicture}`)
+                  : undefined
+              }
+              sx={{
+                width: 36, height: 36, fontWeight: 700, fontSize: '0.85rem',
+                background: user?.profilePicture ? 'transparent' : 'linear-gradient(135deg, #3b82f6, #6366f1)',
+                boxShadow: '0 2px 10px rgba(59,130,246,0.25)',
               }}
             >
-              {user?.name?.charAt(0).toUpperCase() || 'U'}
+              {!user?.profilePicture && (user?.name?.charAt(0).toUpperCase() || 'U')}
             </Avatar>
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography 
-                variant="body2" 
-                fontWeight={600}
-                sx={{ 
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-            {user?.name}
-          </Typography>
-          <Typography 
-            variant="caption" 
-            color="text.secondary" 
-                sx={{ 
-                  textTransform: 'capitalize',
-                  fontSize: '0.75rem',
-                  display: 'block',
-                }}
-          >
-            {user?.role}
-          </Typography>
+              <Typography sx={{
+                color: '#fff', fontWeight: 600, fontSize: '0.85rem',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {user?.name}
+              </Typography>
+              <Typography sx={{ color: TEXT_DIM, fontSize: '0.72rem', textTransform: 'capitalize' }}>
+                {user?.role}
+              </Typography>
             </Box>
           </Box>
         </Box>
       </Box>
     );
 
+    const drawerPaperSx = {
+      boxSizing: 'border-box',
+      width: DRAWER_WIDTH,
+      backgroundImage: 'none',
+      bgcolor: NAVY,
+      border: 'none',
+    };
+
     return (
       <Box
         component="nav"
-        sx={{ 
-          width: { 
-            xs: 0,
-            sm: desktopOpen ? DRAWER_WIDTH : 0 
-          }, 
+        sx={{
+          width: { xs: 0, sm: desktopOpen ? DRAWER_WIDTH : 0 },
           flexShrink: { sm: 0 },
           transition: theme.transitions.create('width', {
             easing: theme.transitions.easing.sharp,
@@ -392,33 +286,22 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(
           variant="temporary"
           open={mobileOpen}
           onClose={onMobileClose}
-          ModalProps={{
-            keepMounted: true, // Better mobile performance
-          }}
+          ModalProps={{ keepMounted: true }}
           sx={{
             display: { xs: 'block', sm: 'none' },
-            '& .MuiDrawer-paper': {
-              boxSizing: 'border-box',
-              width: DRAWER_WIDTH,
-              backgroundImage: 'none',
-              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
-              borderRight: `1px solid ${theme.palette.divider}`,
-            },
+            '& .MuiDrawer-paper': { ...drawerPaperSx, boxShadow: '4px 0 20px rgba(0,0,0,0.3)' },
           }}
         >
           {drawerContent}
         </Drawer>
-        {/* Desktop drawer - now uses persistent variant */}
+        {/* Desktop drawer */}
         <Drawer
           variant="persistent"
           open={desktopOpen}
           sx={{
             display: { xs: 'none', sm: 'block' },
             '& .MuiDrawer-paper': {
-              boxSizing: 'border-box',
-              width: DRAWER_WIDTH,
-              backgroundImage: 'none',
-              borderRight: `1px solid ${theme.palette.divider}`,
+              ...drawerPaperSx,
               boxShadow: 'none',
               transition: theme.transitions.create('width', {
                 easing: theme.transitions.easing.sharp,

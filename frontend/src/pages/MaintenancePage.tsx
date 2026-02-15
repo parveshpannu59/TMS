@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Box,
   Card,
-  CardContent,
   Typography,
   Grid,
   Chip,
@@ -37,7 +36,7 @@ import {
   AttachMoney,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
-import { DashboardLayout } from '@layouts/DashboardLayout';
+import { StatsCard } from '@/components/common/StatsCard';
 import { useTranslation } from 'react-i18next';
 
 interface MaintenanceRecord {
@@ -247,129 +246,83 @@ const MaintenancePage: React.FC = () => {
   };
 
   return (
-    <DashboardLayout>
-      <Box sx={{ p: 3 }}>
-        {/* Header */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Box>
-            <Typography variant="h4" fontWeight={700} gutterBottom>
-              <Build sx={{ mr: 1, verticalAlign: 'middle' }} />
-              Vehicle Maintenance
-            </Typography>
-            <Typography color="text.secondary">
-              Track and manage vehicle maintenance schedules
-            </Typography>
+    <Box className="page-fixed-layout">
+        {/* Fixed Header Section */}
+        <Box className="page-fixed-header">
+          {/* Page Header */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box sx={{
+                width: 44, height: 44, borderRadius: 2.5,
+                background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 4px 14px rgba(245,158,11,0.3)',
+              }}>
+                <Build sx={{ fontSize: 24, color: 'white' }} />
+              </Box>
+              <Box>
+                <Typography variant="h4" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+                  Vehicle Maintenance
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3 }}>
+                  Track and manage vehicle maintenance schedules
+                </Typography>
+              </Box>
+            </Box>
+            <Button variant="contained" startIcon={<Add />} onClick={handleOpenDialog}>
+              Schedule Maintenance
+            </Button>
           </Box>
-          <Button variant="contained" startIcon={<Add />} onClick={handleOpenDialog}>
-            Schedule Maintenance
-          </Button>
+
+          {/* Alerts */}
+          {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+          {/* Stats Cards */}
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid item xs={6} sm={4} md={2.4}>
+              <StatsCard title="Scheduled" value={stats.scheduled} icon={<Schedule />} color="#06b6d4" />
+            </Grid>
+            <Grid item xs={6} sm={4} md={2.4}>
+              <StatsCard title="In Progress" value={stats.inProgress} icon={<Build />} color="#f59e0b" />
+            </Grid>
+            <Grid item xs={6} sm={4} md={2.4}>
+              <StatsCard title="Overdue" value={stats.overdue} icon={<Warning />} color="#ef4444" />
+            </Grid>
+            <Grid item xs={6} sm={4} md={2.4}>
+              <StatsCard title="Completed" value={stats.completed} icon={<CheckCircle />} color="#10b981" />
+            </Grid>
+            <Grid item xs={6} sm={4} md={2.4}>
+              <StatsCard title="Total Cost" value={`$${stats.totalCost.toLocaleString()}`} icon={<AttachMoney />} color="#3b82f6" />
+            </Grid>
+          </Grid>
         </Box>
 
-        {/* Alerts */}
-        {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        {/* Scrollable Content Section */}
+        <Box className="page-scrollable-content">
+          {/* Tabs */}
+          <Card>
+            <Tabs value={tabValue} onChange={(_, val) => setTabValue(val)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+              <Tab label={`All (${maintenanceRecords.length})`} />
+              <Tab label={`Scheduled (${stats.scheduled})`} />
+              <Tab label={`In Progress (${stats.inProgress})`} />
+              <Tab label={`Overdue (${stats.overdue})`} />
+              <Tab label={`Completed (${stats.completed})`} />
+            </Tabs>
 
-        {/* Stats Cards */}
-        <Grid container spacing={3} sx={{ mb: 3 }}>
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <Schedule sx={{ mr: 1, color: 'info.main' }} />
-                  <Typography variant="body2" color="text.secondary">
-                    Scheduled
-                  </Typography>
-                </Box>
-                <Typography variant="h4" fontWeight={700}>
-                  {stats.scheduled}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <Build sx={{ mr: 1, color: 'warning.main' }} />
-                  <Typography variant="body2" color="text.secondary">
-                    In Progress
-                  </Typography>
-                </Box>
-                <Typography variant="h4" fontWeight={700}>
-                  {stats.inProgress}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <Warning sx={{ mr: 1, color: 'error.main' }} />
-                  <Typography variant="body2" color="text.secondary">
-                    Overdue
-                  </Typography>
-                </Box>
-                <Typography variant="h4" fontWeight={700}>
-                  {stats.overdue}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <CheckCircle sx={{ mr: 1, color: 'success.main' }} />
-                  <Typography variant="body2" color="text.secondary">
-                    Completed
-                  </Typography>
-                </Box>
-                <Typography variant="h4" fontWeight={700}>
-                  {stats.completed}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <AttachMoney sx={{ mr: 1, color: 'primary.main' }} />
-                  <Typography variant="body2" color="text.secondary">
-                    Total Cost
-                  </Typography>
-                </Box>
-                <Typography variant="h4" fontWeight={700}>
-                  ${stats.totalCost.toLocaleString()}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-
-        {/* Tabs */}
-        <Card>
-          <Tabs value={tabValue} onChange={(_, val) => setTabValue(val)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
-            <Tab label={`All (${maintenanceRecords.length})`} />
-            <Tab label={`Scheduled (${stats.scheduled})`} />
-            <Tab label={`In Progress (${stats.inProgress})`} />
-            <Tab label={`Overdue (${stats.overdue})`} />
-            <Tab label={`Completed (${stats.completed})`} />
-          </Tabs>
-
-          {/* Data Grid */}
-          <Box sx={{ height: 500 }}>
+            {/* Data Grid */}
             <DataGrid
               rows={filteredRecords}
               columns={columns}
-              pageSize={10}
-              rowsPerPageOptions={[10, 25, 50]}
-              disableSelectionOnClick
+              density="compact"
+              autoHeight
+              pageSizeOptions={[10, 25, 50]}
+              initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
+              disableRowSelectionOnClick
               sx={{ border: 'none' }}
             />
-          </Box>
-        </Card>
+          </Card>
+        </Box>
 
         {/* Dialog for Add/Edit */}
         <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
@@ -427,7 +380,6 @@ const MaintenancePage: React.FC = () => {
           </DialogActions>
         </Dialog>
       </Box>
-    </DashboardLayout>
   );
 };
 

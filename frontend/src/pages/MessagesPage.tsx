@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { Box, Typography, Avatar, IconButton, Badge, TextField, InputAdornment, Chip, CircularProgress, Tooltip, Checkbox, Button, AvatarGroup, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { Search, Send, AttachFile, Image as ImageIcon, Close, ArrowBack, Add, Circle, InsertDriveFile, Download, Group as GroupIcon, PersonAdd } from '@mui/icons-material';
-import { DashboardLayout } from '@/layouts/DashboardLayout';
 import { messageApi } from '@/api/message.api';
 import { getApiOrigin } from '@/api/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -1239,8 +1238,8 @@ function MessagesPageContent() {
 
 export default function MessagesPage() {
   return (
-    <DashboardLayout>
+    <>
       <MessagesPageContent />
-    </DashboardLayout>
+    </>
   );
 }

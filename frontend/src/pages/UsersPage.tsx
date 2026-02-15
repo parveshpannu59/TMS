@@ -12,8 +12,6 @@ import {
   DialogActions,
   Alert,
   Grid,
-  Card,
-  CardContent,
   TextField,
   MenuItem,
   InputAdornment,
@@ -33,16 +31,16 @@ import {
 import { userApi } from '@api/user.api';
 import type { User, UserStats } from '../types/user.types';
 import type { ApiError } from '../types/api.types';
+import { StatsCard } from '@/components/common/StatsCard';
 import { CreateUserDialog } from '@components/users/CreateUserDialog';
 import { EditUserDialog } from '@components/users/EditUserDialog';
 import { ChangePasswordDialog } from '@components/users/ChangePasswordDialog';
-import { DashboardLayout } from '@layouts/DashboardLayout';
 import { format } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 
 export const UsersPage: React.FC = () => {
   const { t } = useTranslation();
-  const [users, setUsers] = useState<User[]>([]);
+  const [_users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,55 +56,42 @@ export const UsersPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [roleFilter, setRoleFilter] = useState<string>('all');
 
-  const fetchUsers = useCallback(async () => {
+  // Server-side pagination
+  const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 10 });
+  const [totalRows, setTotalRows] = useState(0);
+
+  const fetchUsers = useCallback(async (pagModel?: { page: number; pageSize: number }) => {
     try {
       setLoading(true);
       setError(null);
+      const p = pagModel ?? paginationModel;
+      const params: any = {
+        page: p.page + 1,
+        limit: p.pageSize,
+      };
+      if (statusFilter !== 'all') params.status = statusFilter;
+      if (roleFilter !== 'all') params.role = roleFilter;
+      if (searchTerm) params.search = searchTerm;
+
       const [usersResponse, statsData] = await Promise.all([
-        userApi.getAllUsers({ page: 1, limit: 1000 }),
+        userApi.getAllUsers(params),
         userApi.getUserStats(),
       ]);
       // Extract users array from paginated response
       setUsers(usersResponse.data || []);
+      setFilteredUsers(usersResponse.data || []);
+      setTotalRows(usersResponse.pagination?.total ?? (usersResponse.data || []).length);
       setStats(statsData);
     } catch (err: any) {
       setError(err.message || 'Failed to load users');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [paginationModel, statusFilter, roleFilter, searchTerm]);
 
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
-
-  // Apply filters
-  useEffect(() => {
-    let result = [...users];
-
-    // Search filter
-    if (searchTerm) {
-      const lowerSearch = searchTerm.toLowerCase();
-      result = result.filter(
-        (user) =>
-          user.name.toLowerCase().includes(lowerSearch) ||
-          user.email.toLowerCase().includes(lowerSearch) ||
-          (user.phone && user.phone.toLowerCase().includes(lowerSearch))
-      );
-    }
-
-    // Status filter
-    if (statusFilter !== 'all') {
-      result = result.filter((user) => user.status === statusFilter);
-    }
-
-    // Role filter
-    if (roleFilter !== 'all') {
-      result = result.filter((user) => user.role === roleFilter);
-    }
-
-    setFilteredUsers(result);
-  }, [users, searchTerm, statusFilter, roleFilter]);
 
   const handleEdit = useCallback((user: User) => {
     setSelectedUser(user);
@@ -262,214 +247,183 @@ export const UsersPage: React.FC = () => {
   );
 
   return (
-    <DashboardLayout>
-      <Box sx={{ 
-        height: 'calc(100vh - 120px)', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        p: 3
-      }}>
-        {/* Compact Header */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Box>
-            <Typography variant="h5" component="h1" fontWeight={700} sx={{ mb: 0.5 }}>
-          {t('users.title')}
-        </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {t('users.subtitle')}
-            </Typography>
+    <Box className="page-fixed-layout">
+      {/* Fixed Header Section */}
+      <Box className="page-fixed-header">
+        {/* Page Header */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{
+              width: 44, height: 44, borderRadius: 2.5,
+              background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 14px rgba(59,130,246,0.3)',
+            }}>
+              <People sx={{ fontSize: 24, color: 'white' }} />
+            </Box>
+            <Box>
+              <Typography variant="h4" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+                {t('users.title')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3 }}>
+                {t('users.subtitle')}
+              </Typography>
+            </Box>
           </Box>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={() => setCreateDialogOpen(true)}
-            sx={{ minWidth: 140 }}
-        >
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => setCreateDialogOpen(true)}
+          >
             {t('users.addUser')}
-        </Button>
-      </Box>
+          </Button>
+        </Box>
 
-        {/* Compact Stats Row */}
-      {stats && (
+        {/* Stats Row */}
+        {stats && (
           <Grid container spacing={2} sx={{ mb: 2 }}>
             <Grid item xs={6} sm={3}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box>
-                      <Typography variant="h4" fontWeight={700} sx={{ mb: 0.5 }}>
-                        {stats.totalUsers}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                  {t('users.totalUsers')}
-                </Typography>
-                    </Box>
-                    <People sx={{ fontSize: 32, color: 'primary.main', opacity: 0.2 }} />
-                  </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+              <StatsCard
+                title={t('users.totalUsers')}
+                value={stats.totalUsers}
+                icon={<People />}
+                color="#3b82f6"
+              />
+            </Grid>
             <Grid item xs={6} sm={3}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box>
-                      <Typography variant="h4" fontWeight={700} sx={{ mb: 0.5, color: 'success.main' }}>
-                        {stats.activeUsers}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                  {t('users.activeUsers')}
-                </Typography>
-                    </Box>
-                    <CheckCircle sx={{ fontSize: 32, color: 'success.main', opacity: 0.2 }} />
-                  </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+              <StatsCard
+                title={t('users.activeUsers')}
+                value={stats.activeUsers}
+                icon={<CheckCircle />}
+                color="#10b981"
+              />
+            </Grid>
             <Grid item xs={6} sm={3}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box>
-                      <Typography variant="h4" fontWeight={700} sx={{ mb: 0.5, color: 'error.main' }}>
-                        {stats.inactiveUsers}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                  {t('users.inactiveUsers')}
-                </Typography>
-                    </Box>
-                    <Cancel sx={{ fontSize: 32, color: 'error.main', opacity: 0.2 }} />
-                  </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+              <StatsCard
+                title={t('users.inactiveUsers')}
+                value={stats.inactiveUsers}
+                icon={<Cancel />}
+                color="#ef4444"
+              />
+            </Grid>
             <Grid item xs={6} sm={3}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box>
-                      <Typography variant="h4" fontWeight={700} sx={{ mb: 0.5, color: 'secondary.main' }}>
-                        {stats.roleStats?.owner || 0}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                  {t('users.owners')}
-                </Typography>
-                    </Box>
-                    <People sx={{ fontSize: 32, color: 'secondary.main', opacity: 0.2 }} />
-                  </Box>
-              </CardContent>
-            </Card>
+              <StatsCard
+                title={t('users.owners')}
+                value={stats.roleStats?.owner || 0}
+                icon={<People />}
+                color="#6366f1"
+              />
+            </Grid>
           </Grid>
-        </Grid>
-      )}
+        )}
 
-      {error && (
+        {error && (
           <Alert 
             severity="error" 
             sx={{ mb: 2 }} 
             onClose={() => setError(null)}
             variant="outlined"
           >
-          {error}
-        </Alert>
-      )}
+            {error}
+          </Alert>
+        )}
 
         {/* Search and Filters */}
-        <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
-          <TextField
-            placeholder={t('users.searchPlaceholder')}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ flex: 1, minWidth: 300 }}
-            size="small"
-          />
-          
-          <TextField
-            select
-            label="Status"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            sx={{ minWidth: 150 }}
-            size="small"
-          >
-            <MenuItem value="all">{t('users.allStatus')}</MenuItem>
-            <MenuItem value="active">Active</MenuItem>
-            <MenuItem value="inactive">Inactive</MenuItem>
-          </TextField>
-
-          <TextField
-            select
-            label="Role"
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-            sx={{ minWidth: 150 }}
-            size="small"
-          >
-            <MenuItem value="all">{t('users.allRoles')}</MenuItem>
-            <MenuItem value="owner">Owner</MenuItem>
-            <MenuItem value="dispatcher">Dispatcher</MenuItem>
-            <MenuItem value="accountant">Accountant</MenuItem>
-            <MenuItem value="driver">Driver</MenuItem>
-          </TextField>
-
-          {(searchTerm || statusFilter !== 'all' || roleFilter !== 'all') && (
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<FilterList />}
-              onClick={() => {
-                setSearchTerm('');
-                setStatusFilter('all');
-                setRoleFilter('all');
+        <Paper sx={{ p: 2, mb: 2, borderRadius: 3, border: '1px solid rgba(226,232,240,0.8)' }}>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+            <TextField
+              placeholder={t('users.searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search sx={{ color: 'text.secondary' }} />
+                  </InputAdornment>
+                ),
               }}
+              sx={{ flex: 1, minWidth: 300 }}
+              size="small"
+            />
+            
+            <TextField
+              select
+              label="Status"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              sx={{ minWidth: 150 }}
+              size="small"
             >
-              Clear
-            </Button>
-          )}
-        </Box>
+              <MenuItem value="all">{t('users.allStatus')}</MenuItem>
+              <MenuItem value="active">Active</MenuItem>
+              <MenuItem value="inactive">Inactive</MenuItem>
+            </TextField>
 
-        {/* Compact DataGrid - Takes remaining space */}
+            <TextField
+              select
+              label="Role"
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              sx={{ minWidth: 150 }}
+              size="small"
+            >
+              <MenuItem value="all">{t('users.allRoles')}</MenuItem>
+              <MenuItem value="owner">Owner</MenuItem>
+              <MenuItem value="dispatcher">Dispatcher</MenuItem>
+              <MenuItem value="accountant">Accountant</MenuItem>
+              <MenuItem value="driver">Driver</MenuItem>
+            </TextField>
+
+            {(searchTerm || statusFilter !== 'all' || roleFilter !== 'all') && (
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<FilterList />}
+                onClick={() => {
+                  setSearchTerm('');
+                  setStatusFilter('all');
+                  setRoleFilter('all');
+                }}
+              >
+                Clear
+              </Button>
+            )}
+          </Box>
+        </Paper>
+      </Box>
+
+      {/* Table Section */}
+      <Box className="page-scrollable-content">
         <Paper 
           sx={{ 
-            minHeight: 600,
-            maxHeight: 900,
-            height: filteredUsers.length > 0 ? Math.min(900, Math.max(600, filteredUsers.length * 52 + 150)) : 600,
-            display: 'flex',
-            flexDirection: 'column',
             border: '1px solid',
             borderColor: 'divider',
             borderRadius: 2,
             overflow: 'hidden',
           }}
         >
-        <DataGrid
-          rows={filteredUsers}
-          columns={columns}
-          loading={loading}
+          <DataGrid
+            rows={filteredUsers}
+            columns={columns}
+            loading={loading}
+            density="compact"
+            autoHeight
+            // Server-side pagination
+            paginationMode="server"
+            rowCount={totalRows}
+            paginationModel={paginationModel}
+            onPaginationModelChange={(model) => {
+              setPaginationModel(model);
+              fetchUsers(model);
+            }}
             pageSizeOptions={[10, 25, 50, 100]}
-          initialState={{
-            pagination: {
-                paginationModel: { pageSize: 10 },
-            },
-          }}
-          disableRowSelectionOnClick
-          autoHeight={false}
-          sx={{
+            disableRowSelectionOnClick
+            sx={{
               border: 'none',
-              height: '100%',
               width: '100%',
-            '& .MuiDataGrid-cell': {
-                padding: '8px 16px',
-                fontSize: '0.875rem',
+              '& .MuiDataGrid-cell': {
+                padding: '8px 12px',
+                fontSize: '0.8125rem',
               },
               '& .MuiDataGrid-columnHeaders': {
                 fontSize: '0.8125rem',
@@ -480,13 +434,11 @@ export const UsersPage: React.FC = () => {
                 '&:hover': {
                   backgroundColor: 'action.hover',
                 },
-            },
-            '& .MuiDataGrid-virtualScroller': {
-              overflow: 'auto',
-            },
-          }}
-        />
-      </Paper>
+              },
+            }}
+          />
+        </Paper>
+      </Box>
 
       <CreateUserDialog
         open={createDialogOpen}
@@ -528,7 +480,6 @@ export const UsersPage: React.FC = () => {
         </DialogActions>
       </Dialog>
     </Box>
-    </DashboardLayout>
   );
 };
 

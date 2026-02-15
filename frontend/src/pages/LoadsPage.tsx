@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box, Alert, Dialog, DialogTitle, DialogContent, DialogActions,
   Button, TextField, Typography, Divider, Chip, Grid, CircularProgress,
@@ -7,7 +7,7 @@ import {
   CheckCircle, MonetizationOn, LocalShipping, AccessTime,
   RateReview, Payments,
 } from '@mui/icons-material';
-import { DashboardLayout } from '@/layouts/DashboardLayout';
+import { useSearchParams } from 'react-router-dom';
 import { Load, LoadFormData, loadApi } from '@/api/load.api';
 import { ConfirmRateDialog } from '@/components/dialogs/ConfirmRateDialog';
 import { useLoadsPage } from '@/hooks/useLoadsPage';
@@ -284,6 +284,7 @@ function ManagePaymentDialog({
 
 const LoadsPage: React.FC = () => {
   const { t } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
@@ -296,6 +297,9 @@ const LoadsPage: React.FC = () => {
     loading,
     error: apiError,
     stats,
+    totalRows,
+    paginationModel,
+    handlePaginationModelChange,
     fetchLoads,
     fetchResources,
     assignLoad,
@@ -335,6 +339,42 @@ const LoadsPage: React.FC = () => {
     setApiError(v);
   };
 
+  // Auto-open assign dialog when navigated with ?reassign=loadId (e.g. from declined notification)
+  useEffect(() => {
+    const reassignId = searchParams.get('reassign');
+    if (reassignId && loads.length > 0 && !openAssignDialog) {
+      const target = loads.find((l: Load) => l._id === reassignId);
+      if (target) {
+        handleOpenAssignDialog(target);
+        // Remove the param so it doesn't re-trigger
+        searchParams.delete('reassign');
+        setSearchParams(searchParams, { replace: true });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loads, searchParams]);
+
+  // Edit assignment handler — update driver/truck/trailer/rate on assigned loads
+  const handleEditAssignment = async () => {
+    if (!assigningLoad) return;
+    try {
+      const driverId = selectedDriver ? ((selectedDriver as any)._id ?? (selectedDriver as any).id ?? '') : undefined;
+      const truckId = selectedTruck ? ((selectedTruck as any)._id ?? (selectedTruck as any).id ?? '') : undefined;
+      const trailerId = selectedTrailer ? ((selectedTrailer as any)._id ?? (selectedTrailer as any).id ?? '') : undefined;
+      handleCloseAssignDialog();
+      await loadApi.editAssignment(assigningLoad._id, {
+        ...(driverId ? { driverId } : {}),
+        ...(truckId ? { truckId } : {}),
+        ...(trailerId ? { trailerId } : {}),
+      });
+      setSuccess('Assignment updated successfully!');
+      fetchLoads();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: unknown) {
+      setErrorState(err instanceof Error ? err.message : 'Failed to edit assignment');
+    }
+  };
+
   const handleOpenDialog = (load?: Load) => {
     setEditingLoad(load ?? null);
     setOpenDialog(true);
@@ -363,14 +403,18 @@ const LoadsPage: React.FC = () => {
   };
 
   const handleAssignLoad = async () => {
-    if (!assigningLoad || !selectedDriver || !selectedTruck || !selectedTrailer) {
-      setErrorState('Please select Driver, Truck, and Trailer');
+    if (!assigningLoad || !selectedDriver) {
+      setErrorState('Please select a Driver');
+      return;
+    }
+    if (!selectedTruck && !selectedTrailer) {
+      setErrorState('Please select either a Truck or Trailer');
       return;
     }
     try {
       const driverId = (selectedDriver as { _id?: string; id?: string })._id ?? (selectedDriver as { _id?: string; id?: string }).id ?? '';
-      const truckId = (selectedTruck as { _id?: string; id?: string })._id ?? (selectedTruck as { _id?: string; id?: string }).id ?? '';
-      const trailerId = (selectedTrailer as { _id?: string; id?: string })._id ?? (selectedTrailer as { _id?: string; id?: string }).id ?? '';
+      const truckId = selectedTruck ? ((selectedTruck as { _id?: string; id?: string })._id ?? (selectedTruck as { _id?: string; id?: string }).id ?? '') : '';
+      const trailerId = selectedTrailer ? ((selectedTrailer as { _id?: string; id?: string })._id ?? (selectedTrailer as { _id?: string; id?: string }).id ?? '') : '';
       // Close dialog immediately, then assign in background
       handleCloseAssignDialog();
       await assignLoad(assigningLoad._id, { driverId, truckId, trailerId });
@@ -416,168 +460,182 @@ const LoadsPage: React.FC = () => {
   };
 
   return (
-    <DashboardLayout>
-      <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Box className="page-fixed-layout">
+      <Box className="page-fixed-header">
         <LoadsHeader onAddLoad={() => handleOpenDialog()} />
 
-        <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
-          {errorState && (
-            <Alert severity="error" onClose={() => setErrorState(null)} sx={{ mb: 2 }} variant="outlined">
-              {errorState}
-            </Alert>
-          )}
-          {success && (
-            <Alert severity="success" onClose={() => setSuccess(null)} sx={{ mb: 2 }} variant="outlined">
-              {success}
-            </Alert>
-          )}
+        {errorState && (
+          <Alert severity="error" onClose={() => setErrorState(null)} sx={{ mb: 2 }} variant="outlined">
+            {errorState}
+          </Alert>
+        )}
+        {success && (
+          <Alert severity="success" onClose={() => setSuccess(null)} sx={{ mb: 2 }} variant="outlined">
+            {success}
+          </Alert>
+        )}
 
-          {loads.length > 0 && (
-            <LoadsStats
-              total={stats.total}
-              booked={stats.booked}
-              inTransit={stats.inTransit}
-              delivered={stats.delivered}
-              completed={stats.completed}
-              totalRevenue={stats.totalRevenue}
-            />
-          )}
-
-          <LoadsFilters
-            searchTerm={searchTerm}
-            statusFilter={statusFilter}
-            priorityFilter={priorityFilter}
-            onSearchChange={setSearchTerm}
-            onStatusChange={setStatusFilter}
-            onPriorityChange={setPriorityFilter}
-            onClear={() => {
-              setSearchTerm('');
-              setStatusFilter('all');
-              setPriorityFilter('all');
-            }}
+        {loads.length > 0 && (
+          <LoadsStats
+            total={stats.total}
+            booked={stats.booked}
+            inTransit={stats.inTransit}
+            delivered={stats.delivered}
+            completed={stats.completed}
+            totalRevenue={stats.totalRevenue}
           />
+        )}
 
-          <LoadsDataGrid
-            loads={loads}
-            filteredLoads={filteredLoads}
-            loading={loading}
-            onView={(load) => {
-              setDetailsLoad(load);
-              setOpenDetailsDialog(true);
-            }}
-            onEdit={(load) => handleOpenDialog(load)}
-            onDelete={handleDelete}
-            onAssign={handleOpenAssignDialog}
-            onUnassign={handleUnassignLoad}
-            onOpenNotes={(notes, title) => {
-              setSelectedNotes(notes);
-              setNotesTitle(title);
-              setOpenNotesDialog(true);
-            }}
-            onConfirmRate={(load) => {
-              setConfirmingRateLoad(load);
-              setOpenConfirmRateDialog(true);
-            }}
-            onViewTripDetails={(load) => {
-              setDetailsLoad(load);
-              setOpenDetailsDialog(true);
-            }}
-            onReviewCompletion={(load) => {
-              setReviewingLoad(load);
-              setOpenReviewDialog(true);
-            }}
-            onManagePayment={(load) => {
-              setPaymentLoad(load);
-              setOpenPaymentDialog(true);
-            }}
-            onAddLoad={() => handleOpenDialog()}
-          />
-
-          <LoadsCreateEditDialog
-            open={openDialog}
-            onClose={handleCloseDialog}
-            editingLoad={editingLoad}
-            onCreateLoad={async (data) => {
-              await createLoad(data as unknown as LoadFormData);
-            }}
-            onUpdateLoad={async (id, data) => {
-              await updateLoad(id, data as Partial<LoadFormData>);
-            }}
-            onSuccess={(mode) => {
-              fetchLoads();
-              if (mode === 'create') handleCreateSuccess();
-              else handleUpdateSuccess();
-            }}
-          />
-
-          <ConfirmRateDialog
-            open={openConfirmRateDialog}
-            onClose={() => {
-              setOpenConfirmRateDialog(false);
-              setConfirmingRateLoad(null);
-            }}
-            load={confirmingRateLoad}
-            onSuccess={() => {
-              setOpenConfirmRateDialog(false);
-              setConfirmingRateLoad(null);
-              setSuccess(t('loads.rateConfirmed', { defaultValue: 'Rate confirmed successfully' }));
-              fetchLoads();
-              setTimeout(() => setSuccess(null), 3000);
-            }}
-          />
-
-          <LoadsAssignDialog
-            open={openAssignDialog}
-            onClose={handleCloseAssignDialog}
-            load={assigningLoad}
-            drivers={drivers}
-            trucks={trucks}
-            trailers={trailers}
-            selectedDriver={selectedDriver}
-            selectedTruck={selectedTruck}
-            selectedTrailer={selectedTrailer}
-            onDriverChange={setSelectedDriver}
-            onTruckChange={setSelectedTruck}
-            onTrailerChange={setSelectedTrailer}
-            onAssign={handleAssignLoad}
-          />
-
-          <LoadsNotesDialog open={openNotesDialog} onClose={() => setOpenNotesDialog(false)} title={notesTitle} notes={selectedNotes} />
-
-          <LoadDetailsDialog
-            open={openDetailsDialog}
-            onClose={() => { setOpenDetailsDialog(false); setDetailsLoad(null); }}
-            load={detailsLoad}
-          />
-
-          <ReviewCompletionDialog
-            open={openReviewDialog}
-            onClose={() => { setOpenReviewDialog(false); setReviewingLoad(null); }}
-            load={reviewingLoad}
-            onSuccess={() => {
-              setOpenReviewDialog(false);
-              setReviewingLoad(null);
-              setSuccess('Load completion confirmed and payment approved!');
-              fetchLoads();
-              setTimeout(() => setSuccess(null), 4000);
-            }}
-          />
-
-          <ManagePaymentDialog
-            open={openPaymentDialog}
-            onClose={() => { setOpenPaymentDialog(false); setPaymentLoad(null); }}
-            load={paymentLoad}
-            onSuccess={() => {
-              setOpenPaymentDialog(false);
-              setPaymentLoad(null);
-              setSuccess('Payment marked as paid!');
-              fetchLoads();
-              setTimeout(() => setSuccess(null), 4000);
-            }}
-          />
-        </Box>
+        <LoadsFilters
+          searchTerm={searchTerm}
+          statusFilter={statusFilter}
+          priorityFilter={priorityFilter}
+          onSearchChange={setSearchTerm}
+          onStatusChange={setStatusFilter}
+          onPriorityChange={setPriorityFilter}
+          onClear={() => {
+            setSearchTerm('');
+            setStatusFilter('all');
+            setPriorityFilter('all');
+          }}
+        />
       </Box>
-    </DashboardLayout>
+
+      <Box className="page-scrollable-content">
+        <LoadsDataGrid
+          loads={loads}
+          filteredLoads={filteredLoads}
+          loading={loading}
+          totalRows={totalRows}
+          paginationModel={paginationModel}
+          onPaginationModelChange={handlePaginationModelChange}
+          onView={(load) => {
+            setDetailsLoad(load);
+            setOpenDetailsDialog(true);
+          }}
+          onEdit={(load) => handleOpenDialog(load)}
+          onDelete={handleDelete}
+          onAssign={handleOpenAssignDialog}
+          onUnassign={handleUnassignLoad}
+          onOpenNotes={(notes, title) => {
+            setSelectedNotes(notes);
+            setNotesTitle(title);
+            setOpenNotesDialog(true);
+          }}
+          onConfirmRate={(load) => {
+            setConfirmingRateLoad(load);
+            setOpenConfirmRateDialog(true);
+          }}
+          onEditAssignment={(load) => {
+            // Re-use the assign dialog for editing existing assignments
+            setAssigningLoad(load);
+            // Pre-fill with current assignment (will be handled in dialog)
+            setSelectedDriver(null);
+            setSelectedTruck(null);
+            setSelectedTrailer(null);
+            fetchResources();
+            setOpenAssignDialog(true);
+          }}
+          onViewTripDetails={(load) => {
+            setDetailsLoad(load);
+            setOpenDetailsDialog(true);
+          }}
+          onReviewCompletion={(load) => {
+            setReviewingLoad(load);
+            setOpenReviewDialog(true);
+          }}
+          onManagePayment={(load) => {
+            setPaymentLoad(load);
+            setOpenPaymentDialog(true);
+          }}
+          onAddLoad={() => handleOpenDialog()}
+        />
+      </Box>
+
+      <LoadsCreateEditDialog
+        open={openDialog}
+        onClose={handleCloseDialog}
+        editingLoad={editingLoad}
+        onCreateLoad={async (data) => {
+          await createLoad(data as unknown as LoadFormData);
+        }}
+        onUpdateLoad={async (id, data) => {
+          await updateLoad(id, data as Partial<LoadFormData>);
+        }}
+        onSuccess={(mode) => {
+          fetchLoads();
+          if (mode === 'create') handleCreateSuccess();
+          else handleUpdateSuccess();
+        }}
+      />
+
+      <ConfirmRateDialog
+        open={openConfirmRateDialog}
+        onClose={() => {
+          setOpenConfirmRateDialog(false);
+          setConfirmingRateLoad(null);
+        }}
+        load={confirmingRateLoad}
+        onSuccess={() => {
+          setOpenConfirmRateDialog(false);
+          setConfirmingRateLoad(null);
+          setSuccess(t('loads.rateConfirmed', { defaultValue: 'Rate confirmed successfully' }));
+          fetchLoads();
+          setTimeout(() => setSuccess(null), 3000);
+        }}
+      />
+
+      <LoadsAssignDialog
+        open={openAssignDialog}
+        onClose={handleCloseAssignDialog}
+        load={assigningLoad}
+        drivers={drivers}
+        trucks={trucks}
+        trailers={trailers}
+        selectedDriver={selectedDriver}
+        selectedTruck={selectedTruck}
+        selectedTrailer={selectedTrailer}
+        onDriverChange={setSelectedDriver}
+        onTruckChange={setSelectedTruck}
+        onTrailerChange={setSelectedTrailer}
+        onAssign={assigningLoad?.status === 'assigned' ? handleEditAssignment : handleAssignLoad}
+        mode={assigningLoad?.status === 'assigned' ? 'edit' : 'assign'}
+      />
+
+      <LoadsNotesDialog open={openNotesDialog} onClose={() => setOpenNotesDialog(false)} title={notesTitle} notes={selectedNotes} />
+
+      <LoadDetailsDialog
+        open={openDetailsDialog}
+        onClose={() => { setOpenDetailsDialog(false); setDetailsLoad(null); }}
+        load={detailsLoad}
+      />
+
+      <ReviewCompletionDialog
+        open={openReviewDialog}
+        onClose={() => { setOpenReviewDialog(false); setReviewingLoad(null); }}
+        load={reviewingLoad}
+        onSuccess={() => {
+          setOpenReviewDialog(false);
+          setReviewingLoad(null);
+          setSuccess('Load completion confirmed and payment approved!');
+          fetchLoads();
+          setTimeout(() => setSuccess(null), 4000);
+        }}
+      />
+
+      <ManagePaymentDialog
+        open={openPaymentDialog}
+        onClose={() => { setOpenPaymentDialog(false); setPaymentLoad(null); }}
+        load={paymentLoad}
+        onSuccess={() => {
+          setOpenPaymentDialog(false);
+          setPaymentLoad(null);
+          setSuccess('Payment marked as paid!');
+          fetchLoads();
+          setTimeout(() => setSuccess(null), 4000);
+        }}
+      />
+    </Box>
   );
 };
 

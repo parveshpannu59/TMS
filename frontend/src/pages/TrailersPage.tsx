@@ -17,7 +17,6 @@ import {
 import { DataGrid, GridColDef, GridActionsCellItem } from '@mui/x-data-grid';
 import { Add, Edit, Delete, RvHookup, Search, FilterList } from '@mui/icons-material';
 import { InputAdornment } from '@mui/material';
-import { DashboardLayout } from '@layouts/DashboardLayout';
 import { EmptyState } from '@/components/common/EmptyState';
 import { trailerApi, Trailer, TrailerFormData } from '@/api/trailer.api';
 import { useForm, Controller } from 'react-hook-form';
@@ -352,8 +351,7 @@ const TrailersPage: React.FC = () => {
   ];
 
   return (
-    <DashboardLayout>
-      <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <RvHookup sx={{ fontSize: 32, color: 'primary.main' }} />
@@ -687,7 +685,6 @@ const TrailersPage: React.FC = () => {
           </DialogActions>
         </Dialog>
       </Box>
-    </DashboardLayout>
   );
 };
 

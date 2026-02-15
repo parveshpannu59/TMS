@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   Box,
   Card,
-  CardContent,
   Typography,
   Grid,
   Button,
@@ -43,7 +42,7 @@ import {
   Assignment,
   Menu as MenuIcon,
 } from '@mui/icons-material';
-import { DashboardLayout } from '@layouts/DashboardLayout';
+import { StatsCard } from '@/components/common/StatsCard';
 import { useTranslation } from 'react-i18next';
 
 interface Resource {
@@ -206,18 +205,27 @@ const ResourcesPage: React.FC = () => {
   };
 
   return (
-    <DashboardLayout>
-      <Box sx={{ p: 3 }}>
-        {/* Header */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Box>
-            <Typography variant="h4" fontWeight={700} gutterBottom>
-              <Assessment sx={{ mr: 1, verticalAlign: 'middle' }} />
-              Resources & Documents
-            </Typography>
-            <Typography color="text.secondary">
-              Access company documents, policies, training materials, and forms
-            </Typography>
+    <Box className="page-fixed-layout">
+      <Box className="page-fixed-header">
+        {/* Page Header */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{
+              width: 44, height: 44, borderRadius: 2.5,
+              background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 14px rgba(139,92,246,0.3)',
+            }}>
+              <Assessment sx={{ fontSize: 24, color: 'white' }} />
+            </Box>
+            <Box>
+              <Typography variant="h4" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+                Resources & Documents
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3 }}>
+                Access company documents, policies, training materials, and forms
+              </Typography>
+            </Box>
           </Box>
           <Button variant="contained" startIcon={<Add />} onClick={() => setOpenDialog(true)}>
             Upload Resource
@@ -228,81 +236,21 @@ const ResourcesPage: React.FC = () => {
         {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
         {/* Stats Cards */}
-        <Grid container spacing={3} sx={{ mb: 3 }}>
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <Folder sx={{ mr: 1, color: 'primary.main' }} />
-                  <Typography variant="body2" color="text.secondary">
-                    Total Resources
-                  </Typography>
-                </Box>
-                <Typography variant="h4" fontWeight={700}>
-                  {stats.total}
-                </Typography>
-              </CardContent>
-            </Card>
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          <Grid item xs={6} sm={4} md={2.4}>
+            <StatsCard title="Total Resources" value={stats.total} icon={<Folder />} color="#3b82f6" />
           </Grid>
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <Article sx={{ mr: 1, color: 'info.main' }} />
-                  <Typography variant="body2" color="text.secondary">
-                    Documents
-                  </Typography>
-                </Box>
-                <Typography variant="h4" fontWeight={700}>
-                  {stats.documents}
-                </Typography>
-              </CardContent>
-            </Card>
+          <Grid item xs={6} sm={4} md={2.4}>
+            <StatsCard title="Documents" value={stats.documents} icon={<Article />} color="#06b6d4" />
           </Grid>
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <Gavel sx={{ mr: 1, color: 'warning.main' }} />
-                  <Typography variant="body2" color="text.secondary">
-                    Policies
-                  </Typography>
-                </Box>
-                <Typography variant="h4" fontWeight={700}>
-                  {stats.policies}
-                </Typography>
-              </CardContent>
-            </Card>
+          <Grid item xs={6} sm={4} md={2.4}>
+            <StatsCard title="Policies" value={stats.policies} icon={<Gavel />} color="#f59e0b" />
           </Grid>
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <School sx={{ mr: 1, color: 'success.main' }} />
-                  <Typography variant="body2" color="text.secondary">
-                    Training
-                  </Typography>
-                </Box>
-                <Typography variant="h4" fontWeight={700}>
-                  {stats.training}
-                </Typography>
-              </CardContent>
-            </Card>
+          <Grid item xs={6} sm={4} md={2.4}>
+            <StatsCard title="Training" value={stats.training} icon={<School />} color="#10b981" />
           </Grid>
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <Assignment sx={{ mr: 1, color: 'secondary.main' }} />
-                  <Typography variant="body2" color="text.secondary">
-                    Forms
-                  </Typography>
-                </Box>
-                <Typography variant="h4" fontWeight={700}>
-                  {stats.forms}
-                </Typography>
-              </CardContent>
-            </Card>
+          <Grid item xs={6} sm={4} md={2.4}>
+            <StatsCard title="Forms" value={stats.forms} icon={<Assignment />} color="#6366f1" />
           </Grid>
         </Grid>
 
@@ -324,8 +272,12 @@ const ResourcesPage: React.FC = () => {
               />
             ))}
           </Tabs>
+        </Card>
+      </Box>
 
-          {/* Resources List */}
+      <Box className="page-scrollable-content">
+        {/* Resources List */}
+        <Card>
           <List sx={{ p: 2 }}>
             {filteredResources.length === 0 ? (
               <Box sx={{ textAlign: 'center', py: 8 }}>
@@ -397,6 +349,7 @@ const ResourcesPage: React.FC = () => {
             )}
           </List>
         </Card>
+      </Box>
 
         {/* Upload Dialog */}
         <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
@@ -439,7 +392,6 @@ const ResourcesPage: React.FC = () => {
           </DialogActions>
         </Dialog>
       </Box>
-    </DashboardLayout>
   );
 };
 
