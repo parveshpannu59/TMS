@@ -32,7 +32,6 @@ import {
   Visibility as ViewIcon,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridActionsCellItem } from '@mui/x-data-grid';
-import { DashboardLayout } from '@layouts/DashboardLayout';
 import { vehicleApi, Vehicle, CreateVehicleData } from '@/api/vehicle.api';
 import { getApiOrigin } from '@/api/client';
 import { useTranslation } from 'react-i18next';
@@ -306,86 +305,90 @@ const VehiclesPage: React.FC = () => {
   ];
 
   return (
-    <DashboardLayout>
-      <Box sx={{ p: 3 }}>
+    <Box className="page-fixed-layout">
         {/* Page Header */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Box sx={{
-              width: 44, height: 44, borderRadius: 2.5,
-              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 4px 14px rgba(99,102,241,0.3)',
-            }}>
-              <LocalShipping sx={{ fontSize: 24, color: 'white' }} />
+        <Box className="page-fixed-header">
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box sx={{
+                width: 44, height: 44, borderRadius: 2.5,
+                background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 4px 14px rgba(99,102,241,0.3)',
+              }}>
+                <LocalShipping sx={{ fontSize: 24, color: 'white' }} />
+              </Box>
+              <Box>
+                <Typography variant="h4" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+                  Vehicles
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3 }}>
+                  Manage your fleet of trucks and trailers
+                </Typography>
+              </Box>
             </Box>
-            <Box>
-              <Typography variant="h4" fontWeight={700} sx={{ lineHeight: 1.2 }}>
-                Vehicles
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3 }}>
-                Manage your fleet of trucks and trailers
-              </Typography>
-            </Box>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={handleAddOpen}
+            >
+              Add Vehicle
+            </Button>
           </Box>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleAddOpen}
-          >
-            Add Vehicle
-          </Button>
+
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+              {error}
+            </Alert>
+          )}
+
+          {success && (
+            <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>
+              {success}
+            </Alert>
+          )}
+
+          <Card sx={{ mb: 2, p: 2, border: '1px solid rgba(226,232,240,0.8)' }}>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
+                Filter by Type:
+              </Typography>
+              <ToggleButtonGroup
+                value={vehicleTypeFilter}
+                exclusive
+                onChange={(_, value) => value && setVehicleTypeFilter(value)}
+                size="small"
+              >
+                <ToggleButton value="all">All</ToggleButton>
+                <ToggleButton value="truck">Trucks</ToggleButton>
+                <ToggleButton value="trailer">Trailers</ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+          </Card>
         </Box>
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
-
-        {success && (
-          <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>
-            {success}
-          </Alert>
-        )}
-
-        <Card sx={{ mb: 2, p: 2, border: '1px solid rgba(226,232,240,0.8)' }}>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
-              Filter by Type:
-            </Typography>
-            <ToggleButtonGroup
-              value={vehicleTypeFilter}
-              exclusive
-              onChange={(_, value) => value && setVehicleTypeFilter(value)}
-              size="small"
-            >
-              <ToggleButton value="all">All</ToggleButton>
-              <ToggleButton value="truck">Trucks</ToggleButton>
-              <ToggleButton value="trailer">Trailers</ToggleButton>
-            </ToggleButtonGroup>
-          </Box>
-        </Card>
-
-        <Card sx={{ border: '1px solid rgba(226,232,240,0.8)' }}>
-          <DataGrid
-            rows={vehicles}
-            columns={columns}
-            loading={loading}
-            getRowId={(row) => row._id || row.id}
-            autoHeight
-            paginationMode="server"
-            rowCount={totalRows}
-            paginationModel={paginationModel}
-            onPaginationModelChange={(model) => {
-              setPaginationModel(model);
-              fetchVehicles(model);
-            }}
-            pageSizeOptions={[10, 25, 50]}
-            disableRowSelectionOnClick
-            sx={{ border: 'none' }}
-          />
-        </Card>
+        <Box className="page-scrollable-content">
+          <Card sx={{ border: '1px solid rgba(226,232,240,0.8)' }}>
+            <DataGrid
+              rows={vehicles}
+              columns={columns}
+              loading={loading}
+              density="compact"
+              autoHeight
+              getRowId={(row) => row._id || row.id}
+              paginationMode="server"
+              rowCount={totalRows}
+              paginationModel={paginationModel}
+              onPaginationModelChange={(model) => {
+                setPaginationModel(model);
+                fetchVehicles(model);
+              }}
+              pageSizeOptions={[10, 25, 50]}
+              disableRowSelectionOnClick
+              sx={{ border: 'none' }}
+            />
+          </Card>
+        </Box>
 
         {/* Add/Edit Dialog */}
         <Dialog
@@ -591,7 +594,6 @@ const VehiclesPage: React.FC = () => {
           vehicle={documentsVehicle}
         />
       </Box>
-    </DashboardLayout>
   );
 };
 

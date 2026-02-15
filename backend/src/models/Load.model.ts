@@ -67,10 +67,12 @@ interface IDriverFormDetails {
   pickupPlace: string;
   pickupDate: Date;
   pickupLocation: string;
-  dropoffReferenceNumber: string;
-  dropoffTime: Date;
-  dropoffLocation: string;
-  dropoffDate: Date;
+  // Drop-off fields are optional — filled when driver ends the trip
+  dropoffReferenceNumber?: string;
+  dropoffTime?: Date;
+  dropoffLocation?: string;
+  dropoffDate?: Date;
+  dropoffPlace?: string;
 }
 
 interface ITripStartDetails {
@@ -116,10 +118,13 @@ interface IAccessorialCharge {
 }
 
 interface IShipperCheckInDetails {
-  poNumber: string;
-  loadNumber: string;
-  referenceNumber: string;
+  poNumber?: string;
+  loadNumber?: string;
+  referenceNumber?: string;
   checkInAt: Date;
+  latePassAmount?: number;
+  latePassPhoto?: string;
+  hasLatePass?: boolean;
 }
 
 interface IShipperLoadInDetails {
@@ -240,9 +245,10 @@ export interface ILoad extends Document {
 
 const LocationSchema = new Schema({
   address: { type: String, required: true },
-  city: { type: String, required: true },
-  state: { type: String, required: true },
-  pincode: { type: String, required: true },
+  name: { type: String },
+  city: { type: String, default: '' },
+  state: { type: String, default: '' },
+  pincode: { type: String, default: '' },
   lat: { type: Number },
   lng: { type: Number },
 });
@@ -275,9 +281,9 @@ const DocumentsSchema = new Schema({
 });
 
 const BrokerConfirmationDetailsSchema = new Schema({
-  pickupAddress: { type: LocationSchema, required: true },
-  deliveryAddress: { type: LocationSchema, required: true },
-  miles: { type: Number, required: true, min: 0 },
+  pickupAddress: { type: Schema.Types.Mixed },
+  deliveryAddress: { type: Schema.Types.Mixed },
+  miles: { type: Number, default: 0, min: 0 },
 });
 
 const DriverFormDetailsSchema = new Schema({
@@ -287,10 +293,12 @@ const DriverFormDetailsSchema = new Schema({
   pickupPlace: { type: String, required: true },
   pickupDate: { type: Date, required: true },
   pickupLocation: { type: String, required: true },
-  dropoffReferenceNumber: { type: String, required: true },
-  dropoffTime: { type: Date, required: true },
-  dropoffLocation: { type: String, required: true },
-  dropoffDate: { type: Date, required: true },
+  // Drop-off fields are optional — filled when driver ends the trip
+  dropoffReferenceNumber: { type: String },
+  dropoffTime: { type: Date },
+  dropoffLocation: { type: String },
+  dropoffDate: { type: Date },
+  dropoffPlace: { type: String },
 });
 
 const TripStartDetailsSchema = new Schema({
@@ -318,10 +326,13 @@ const TripCompletionDetailsSchema = new Schema({
 });
 
 const ShipperCheckInDetailsSchema = new Schema({
-  poNumber: { type: String, required: true },
-  loadNumber: { type: String, required: true },
-  referenceNumber: { type: String, required: true },
+  poNumber: { type: String },
+  loadNumber: { type: String },
+  referenceNumber: { type: String },
   checkInAt: { type: Date, required: true },
+  latePassAmount: { type: Number, default: 0 },
+  latePassPhoto: { type: String },
+  hasLatePass: { type: Boolean, default: false },
 });
 
 const ShipperLoadInDetailsSchema = new Schema({

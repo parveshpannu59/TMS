@@ -35,7 +35,6 @@ import {
   PlayArrow,
   Pause,
 } from '@mui/icons-material';
-import { DashboardLayout } from '@layouts/DashboardLayout';
 import { format } from 'date-fns';
 import { activityLogApi } from '@api/activityLog.api';
 import { ActivityLog, ActivityAction, ActivityEntity } from '@/types/activityLog.types';
@@ -154,8 +153,7 @@ const ActivityHistoryPage: React.FC = () => {
   };
 
   return (
-    <DashboardLayout>
-      <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
           <Box sx={{
             width: 44, height: 44, borderRadius: 2.5,
@@ -336,7 +334,6 @@ const ActivityHistoryPage: React.FC = () => {
           )}
         </Card>
       </Box>
-    </DashboardLayout>
   );
 };
 

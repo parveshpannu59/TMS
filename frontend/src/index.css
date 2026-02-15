@@ -72,6 +72,28 @@ a:hover {
   background: var(--fp-slate-400);
 }
 
+/* ── Invisible scrollbar (for table containers) ──────────────── */
+.invisible-scroll {
+  overflow-y: auto !important;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+.invisible-scroll::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/Opera */
+}
+
+/* ── Page layout: full page scroll ──────────────────────────── */
+.page-fixed-layout {
+  padding: 20px 24px 24px 24px;
+}
+.page-fixed-header {
+  /* header section — just spacing below */
+  margin-bottom: 16px;
+}
+.page-scrollable-content {
+  /* table section — no special overflow, page scrolls naturally */
+}
+
 /* ── DataGrid global polish ─────────────────────────────────── */
 .MuiDataGrid-root {
   border: none !important;

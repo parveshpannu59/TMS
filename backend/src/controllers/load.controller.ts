@@ -405,13 +405,18 @@ export class LoadController {
   // Assign load to driver, truck, and trailer
   static assignLoad = asyncHandler(async (req: Request, res: Response) => {
     const loadId = String(req.params.id);
-    const { driverId, truckId, trailerId } = req.body;
+    const driverId = req.body.driverId || '';
+    const truckId = req.body.truckId || undefined;       // sanitize empty strings to undefined
+    const trailerId = req.body.trailerId || undefined;   // sanitize empty strings to undefined
     const companyId = req.user?.companyId ?? req.user?.id;
     const userId = req.user!.id;
     
-    // Validate all three are provided (mandatory)
-    if (!driverId || !truckId || !trailerId) {
-      throw ApiError.badRequest('Driver, Truck, and Trailer are all required for assignment');
+    // Driver is mandatory; truck or trailer — at least one required
+    if (!driverId) {
+      throw ApiError.badRequest('Driver is required for assignment');
+    }
+    if (!truckId && !trailerId) {
+      throw ApiError.badRequest('Either a Truck or Trailer must be selected');
     }
     
     // Find the load
@@ -420,28 +425,30 @@ export class LoadController {
       throw ApiError.notFound('Load not found');
     }
     
-    // Validate driver, truck, and trailer exist and are available
-    // Note: Driver model uses 'createdBy' instead of 'companyId'
-    const [driver, truck, trailer] = await Promise.all([
-      Driver.findOne({ _id: driverId, createdBy: companyId }),
-      Truck.findOne({ _id: truckId, companyId }),
-      Trailer.findOne({ _id: trailerId, companyId }),
-    ]);
-    
+    // Validate driver exists
+    const driver = await Driver.findOne({ _id: driverId, createdBy: companyId });
     if (!driver) throw ApiError.notFound('Driver not found');
-    if (!truck) throw ApiError.notFound('Truck not found');
-    if (!trailer) throw ApiError.notFound('Trailer not found');
-    
-    // Check availability - drivers can be assigned if ACTIVE, OFF_DUTY, or WAITING_FOR_APPROVAL
+
+    // Check driver availability
     const assignableStatuses = [DriverStatus.ACTIVE, DriverStatus.OFF_DUTY, DriverStatus.WAITING_FOR_APPROVAL];
     if (!assignableStatuses.includes(driver.status as DriverStatus)) {
       throw ApiError.badRequest('Driver is not available (current status: ' + driver.status + ')');
     }
-    if (truck.status !== 'available') {
-      throw ApiError.badRequest('Truck is not available');
+
+    // Validate truck if provided
+    let truck: any = null;
+    if (truckId) {
+      truck = await Truck.findOne({ _id: truckId, companyId });
+      if (!truck) throw ApiError.notFound('Truck not found');
+      if (truck.status !== 'available') throw ApiError.badRequest('Truck is not available');
     }
-    if (trailer.status !== 'available') {
-      throw ApiError.badRequest('Trailer is not available');
+
+    // Validate trailer if provided
+    let trailer: any = null;
+    if (trailerId) {
+      trailer = await Trailer.findOne({ _id: trailerId, companyId });
+      if (!trailer) throw ApiError.notFound('Trailer not found');
+      if (trailer.status !== 'available') throw ApiError.badRequest('Trailer is not available');
     }
     
     // Check if rate has been confirmed before assigning
@@ -449,76 +456,69 @@ export class LoadController {
       throw ApiError.badRequest('Load must be in booked or rate_confirmed status before assignment');
     }
     
-    // Assign the load - this creates a trip
+    // Assign the load — status is ASSIGNED (pending driver acceptance)
+    // Driver/Truck/Trailer statuses are NOT changed yet — they update only when driver ACCEPTS
     load.driverId = driverId;
-    load.truckId = truckId;
-    load.trailerId = trailerId;
+    if (truckId) load.truckId = truckId;
+    if (trailerId) load.trailerId = trailerId;
     load.status = LoadStatus.ASSIGNED;
+
+    const vehicleParts = [];
+    if (truck) vehicleParts.push(`Truck: ${truck.unitNumber}`);
+    if (trailer) vehicleParts.push(`Trailer: ${trailer.unitNumber}`);
+
     load.statusHistory.push({
       status: LoadStatus.ASSIGNED,
       timestamp: new Date(),
-      notes: `Trip created and assigned to Driver: ${driver.name}, Truck: ${truck.unitNumber}, Trailer: ${trailer.unitNumber}`,
+      notes: `Load assigned to Driver: ${driver.name}${vehicleParts.length ? ', ' + vehicleParts.join(', ') : ''} — awaiting driver acceptance`,
       updatedBy: userId,
     } as any);
+
+    // Reserve truck/trailer so they can't be double-assigned, but driver stays available until they accept
+    const savePromises: Promise<any>[] = [load.save()];
+
+    if (truck) {
+      truck.status = 'assigned'; // reserved, not yet on_road
+      truck.currentLoadId = load._id.toString();
+      truck.currentDriverId = driverId;
+      savePromises.push(truck.save());
+    }
+
+    if (trailer) {
+      trailer.status = 'assigned'; // reserved, not yet on_road
+      trailer.currentLoadId = load._id.toString();
+      if (truckId) trailer.currentTruckId = truckId;
+      savePromises.push(trailer.save());
+    }
     
-    // Update driver, truck, and trailer status
-    driver.status = DriverStatus.ON_TRIP;
-    driver.currentLoadId = load._id.toString();
-    truck.status = 'on_road';
-    truck.currentLoadId = load._id.toString();
-    truck.currentDriverId = driverId;
-    trailer.status = 'on_road';
-    trailer.currentLoadId = load._id.toString();
-    trailer.currentTruckId = truckId;
+    await Promise.all(savePromises);
     
-    await Promise.all([
-      load.save(),
-      driver.save(),
-      truck.save(),
-      trailer.save(),
-    ]);
-    
-    // Create Assignment record (tracks accept/reject workflow)
+    // Create Assignment record and notify driver immediately
     try {
       const assignment = await AssignmentService.createAssignment({
         loadId,
-        driverId: driverId,
-        truckId: truckId,
-        trailerId: trailerId,
+        driverId,
+        truckId: truckId || undefined,
+        trailerId: trailerId || undefined,
         assignedBy: userId,
-        expiresIn: 24, // 24 hours to accept/reject
+        expiresIn: 24,
       });
       
       console.log('✅ Assignment created:', {
-        _id: assignment._id,
-        loadId: assignment.loadId,
-        driverId: assignment.driverId,
-        status: assignment.status,
-        expiresAt: assignment.expiresAt,
+        _id: assignment._id, loadId, driverId, status: assignment.status,
       });
       
-      // Get driver's user account
-      let driverUserId = driver.userId; // If driver has userId field from earlier fix
-      
-      console.log('🔍 Driver linked userId:', driverUserId);
-      
+      // Resolve driver's user account for notification
+      let driverUserId = driver.userId;
       if (!driverUserId && driver.email) {
-        const driverUser = await User.findOne({ email: driver.email, role: 'driver' });
-        if (driverUser) {
-          driverUserId = driverUser._id.toString();
-          console.log('✅ Found driver user by email:', driverUserId);
-        }
+        const u = await User.findOne({ email: driver.email, role: 'driver' });
+        if (u) driverUserId = u._id.toString();
       }
-      
       if (!driverUserId && driver.phone) {
-        const driverUser = await User.findOne({ phone: driver.phone, role: 'driver' });
-        if (driverUser) {
-          driverUserId = driverUser._id.toString();
-          console.log('✅ Found driver user by phone:', driverUserId);
-        }
+        const u = await User.findOne({ phone: driver.phone, role: 'driver' });
+        if (u) driverUserId = u._id.toString();
       }
       
-      // Send notification to driver if user account found
       if (driverUserId) {
         await notifyLoadAssigned(
           companyId as string,
@@ -528,8 +528,8 @@ export class LoadController {
           loadId,
           assignment._id.toString()
         );
-
-        // ─── 🔔 Pusher: Instant assignment notification ──────
+        
+        // Pusher instant notification
         try {
           const { broadcastAssignment } = require('../services/pusher.service');
           const pickup = (load as any).pickupLocation;
@@ -538,7 +538,7 @@ export class LoadController {
             assignmentId: assignment._id.toString(),
             loadId,
             loadNumber: load.loadNumber,
-            driverId: driverId,
+            driverId,
             driverName: driver.name,
             pickup: [pickup?.city, pickup?.state].filter(Boolean).join(', ') || 'Pickup',
             delivery: [delivery?.city, delivery?.state].filter(Boolean).join(', ') || 'Delivery',
@@ -546,16 +546,99 @@ export class LoadController {
             timestamp: new Date().toISOString(),
             action: 'new',
           });
-        } catch (pusherErr) { console.warn('Pusher assignment broadcast failed:', pusherErr); }
+        } catch (pusherErr) { console.warn('Pusher broadcast failed:', pusherErr); }
+        
+        console.log('✅ Driver notified:', driverUserId);
       } else {
-        console.warn(`Driver ${driver.name} not linked to user account - notification not sent`);
+        console.warn(`Driver ${driver.name} not linked to user account — notification not sent`);
       }
     } catch (assignError) {
-      // Log error but don't fail the assignment
       console.error('Failed to create assignment or send notification:', assignError);
     }
     
-    return ApiResponse.success(res, load, 'Load assigned successfully. Driver has been notified to accept or reject.');
+    return ApiResponse.success(res, load, 'Load assigned successfully. Driver has been notified.');
+  });
+
+  // Edit assignment — change driver, truck, trailer, or rate on an assigned (not yet rate-confirmed) load
+  static editAssignment = asyncHandler(async (req: Request, res: Response) => {
+    const loadId = String(req.params.id);
+    const { driverId: newDriverId, truckId: newTruckId, trailerId: newTrailerId, rate: newRate } = req.body;
+    const companyId = req.user?.companyId ?? req.user?.id;
+    const userId = req.user!.id;
+
+    const load = await Load.findOne({ _id: loadId, companyId });
+    if (!load) throw ApiError.notFound('Load not found');
+
+    // Only allow editing when load is assigned (before rate confirmation / driver notification)
+    if (load.status !== LoadStatus.ASSIGNED) {
+      throw ApiError.badRequest('Can only edit assignment before rate is confirmed');
+    }
+
+    const oldDriverId = load.driverId?.toString();
+    const oldTruckId = load.truckId?.toString();
+    const oldTrailerId = load.trailerId?.toString();
+
+    // Free old truck/trailer if being replaced
+    if (oldTruckId && newTruckId && oldTruckId !== newTruckId) {
+      await Truck.findByIdAndUpdate(oldTruckId, { status: 'available', $unset: { currentLoadId: 1, currentDriverId: 1 } });
+    }
+    if (oldTrailerId && newTrailerId && oldTrailerId !== newTrailerId) {
+      await Trailer.findByIdAndUpdate(oldTrailerId, { status: 'available', $unset: { currentLoadId: 1, currentTruckId: 1 } });
+    }
+
+    // Update driver
+    if (newDriverId && newDriverId !== oldDriverId) {
+      const driver = await Driver.findOne({ _id: newDriverId, createdBy: companyId });
+      if (!driver) throw ApiError.notFound('Driver not found');
+      load.driverId = newDriverId;
+    }
+
+    // Update truck
+    if (newTruckId) {
+      const truck = await Truck.findOne({ _id: newTruckId, companyId });
+      if (!truck) throw ApiError.notFound('Truck not found');
+      truck.status = 'assigned';
+      truck.currentLoadId = loadId;
+      truck.currentDriverId = load.driverId?.toString() || '';
+      await truck.save();
+      load.truckId = newTruckId;
+      // Clear trailer if switching to truck
+      if (oldTrailerId && !newTrailerId) {
+        await Trailer.findByIdAndUpdate(oldTrailerId, { status: 'available', $unset: { currentLoadId: 1, currentTruckId: 1 } });
+        load.trailerId = undefined as any;
+      }
+    }
+
+    // Update trailer
+    if (newTrailerId) {
+      const trailer = await Trailer.findOne({ _id: newTrailerId, companyId });
+      if (!trailer) throw ApiError.notFound('Trailer not found');
+      trailer.status = 'assigned';
+      trailer.currentLoadId = loadId;
+      await trailer.save();
+      load.trailerId = newTrailerId;
+      // Clear truck if switching to trailer
+      if (oldTruckId && !newTruckId) {
+        await Truck.findByIdAndUpdate(oldTruckId, { status: 'available', $unset: { currentLoadId: 1, currentDriverId: 1 } });
+        load.truckId = undefined as any;
+      }
+    }
+
+    // Update rate
+    if (newRate !== undefined && Number(newRate) > 0) {
+      load.rate = Number(newRate);
+    }
+
+    load.statusHistory.push({
+      status: LoadStatus.ASSIGNED,
+      timestamp: new Date(),
+      notes: 'Assignment details updated by dispatcher',
+      updatedBy: userId,
+    } as any);
+
+    await load.save();
+
+    return ApiResponse.success(res, load, 'Assignment updated successfully');
   });
 
   // Unassign/Reject load from driver (Owner/Dispatcher can reassign to another driver)
@@ -571,9 +654,9 @@ export class LoadController {
       throw ApiError.notFound('Load not found');
     }
 
-    // Can only unassign if load is ASSIGNED or TRIP_ACCEPTED status
-    if (load.status !== LoadStatus.ASSIGNED && load.status !== LoadStatus.TRIP_ACCEPTED) {
-      throw ApiError.badRequest('Load must be assigned or trip accepted to unassign');
+    // Can only unassign if load is ASSIGNED, RATE_CONFIRMED, or TRIP_ACCEPTED status
+    if (load.status !== LoadStatus.ASSIGNED && load.status !== LoadStatus.RATE_CONFIRMED && load.status !== LoadStatus.TRIP_ACCEPTED) {
+      throw ApiError.badRequest('Load must be assigned, rate confirmed, or trip accepted to unassign');
     }
 
     // Get driver, truck, trailer info before unassigning
@@ -659,7 +742,7 @@ export class LoadController {
   static VALID_TRANSITIONS: Record<string, string[]> = {
     [LoadStatus.BOOKED]: [LoadStatus.RATE_CONFIRMED, LoadStatus.ASSIGNED, LoadStatus.CANCELLED],
     [LoadStatus.RATE_CONFIRMED]: [LoadStatus.ASSIGNED, LoadStatus.CANCELLED],
-    [LoadStatus.ASSIGNED]: [LoadStatus.TRIP_ACCEPTED, LoadStatus.BOOKED, LoadStatus.CANCELLED],
+    [LoadStatus.ASSIGNED]: [LoadStatus.RATE_CONFIRMED, LoadStatus.TRIP_ACCEPTED, LoadStatus.BOOKED, LoadStatus.CANCELLED],
     [LoadStatus.TRIP_ACCEPTED]: [LoadStatus.TRIP_STARTED, LoadStatus.ASSIGNED, LoadStatus.CANCELLED],
     [LoadStatus.TRIP_STARTED]: [LoadStatus.SHIPPER_CHECK_IN, LoadStatus.CANCELLED],
     [LoadStatus.SHIPPER_CHECK_IN]: [LoadStatus.SHIPPER_LOAD_IN, LoadStatus.CANCELLED],
@@ -779,7 +862,45 @@ export class LoadController {
     const notifCompanyId = companyId || load.companyId;
     if (notifCompanyId) {
       try {
-        if (status === LoadStatus.DELIVERED || status === LoadStatus.COMPLETED) {
+        if (status === LoadStatus.DELIVERED) {
+          // Find driver name for notification
+          let drvName = 'Driver';
+          try {
+            const drvDoc = await Driver.findById(load.driverId).select('name').lean();
+            if (drvDoc?.name) drvName = drvDoc.name;
+          } catch { /* fallback */ }
+
+          // Targeted notification to the person who assigned the load
+          const assignmentDoc = await Assignment.findOne({
+            loadId: id,
+            status: 'accepted',
+          }).sort({ createdAt: -1 }).lean() as any;
+
+          const targetUser = assignmentDoc?.assignedBy || load.createdBy;
+          if (targetUser) {
+            const n = new Notification({
+              companyId: notifCompanyId as any,
+              userId: targetUser as any,
+              type: NotificationType.SUCCESS,
+              priority: NotificationPriority.HIGH,
+              title: 'Trip Completed — Approval Required',
+              message: `${drvName} has completed Load #${load.loadNumber}. Please review and approve to initiate payment.`,
+              metadata: {
+                loadId: id,
+                loadNumber: load.loadNumber,
+                driverId: load.driverId?.toString() || '',
+                driverName: drvName,
+                status: 'delivered',
+                requiresApproval: true,
+              },
+              read: false,
+            });
+            await n.save();
+          }
+
+          // Note: company-wide notification removed to prevent duplicates
+        }
+        if (status === LoadStatus.COMPLETED) {
           await notifyLoadCompleted(notifCompanyId, load.loadNumber);
         }
         if (status === LoadStatus.CANCELLED) {
@@ -848,10 +969,11 @@ export class LoadController {
     return ApiResponse.success(res, null, 'Load deleted successfully');
   });
 
-  // Broker confirms rate and provides details
+  // Broker/Dispatcher confirms rate and provides details
+  // If load is in 'assigned' status (has driver), also creates Assignment + notifies driver
   static confirmRate = asyncHandler(async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const { trackingLink, pickupAddress, deliveryAddress, miles } = req.body;
+    const id = String(req.params.id);
+    const { trackingLink, pickupAddress, deliveryAddress, miles, rate } = req.body;
     const companyId = req.user?.companyId ?? req.user?.id;
     const userId = req.user!.id;
     
@@ -861,13 +983,28 @@ export class LoadController {
       throw ApiError.notFound('Load not found');
     }
     
-    if (load.status !== LoadStatus.BOOKED) {
-      throw ApiError.badRequest('Rate can only be confirmed for booked loads');
+    // Allow confirming rate for both booked and assigned loads
+    if (load.status !== LoadStatus.BOOKED && load.status !== LoadStatus.ASSIGNED) {
+      throw ApiError.badRequest('Rate can only be confirmed for booked or assigned loads');
     }
     
-    // Validate required fields
-    if (!pickupAddress || !deliveryAddress || !miles) {
-      throw ApiError.badRequest('Pickup address, delivery address, and miles are required');
+    // Validate — only pickup and delivery locations are required
+    if (!pickupAddress && !deliveryAddress) {
+      throw ApiError.badRequest('Pickup and delivery locations are required');
+    }
+
+    // Normalize location: accept string or object
+    const normalizeLocation = (loc: any) => {
+      if (typeof loc === 'string') return { address: loc, name: loc };
+      return loc;
+    };
+    
+    const normalizedPickup = pickupAddress ? normalizeLocation(pickupAddress) : undefined;
+    const normalizedDelivery = deliveryAddress ? normalizeLocation(deliveryAddress) : undefined;
+
+    // Update rate if provided
+    if (rate && Number(rate) > 0) {
+      load.rate = Number(rate);
     }
     
     // Update load with broker confirmation details
@@ -875,19 +1012,19 @@ export class LoadController {
     load.brokerConfirmedRate = true;
     load.brokerConfirmedAt = new Date();
     load.brokerConfirmationDetails = {
-      pickupAddress,
-      deliveryAddress,
-      miles,
+      pickupAddress: normalizedPickup || pickupAddress,
+      deliveryAddress: normalizedDelivery || deliveryAddress,
+      miles: miles || 0,
     };
     
     // Update pickup and delivery locations if provided (with geocoding)
-    if (pickupAddress) {
-      load.pickupLocation = await ensureLocationCoords(pickupAddress);
+    if (normalizedPickup) {
+      load.pickupLocation = await ensureLocationCoords(normalizedPickup);
     }
-    if (deliveryAddress) {
-      load.deliveryLocation = await ensureLocationCoords(deliveryAddress);
+    if (normalizedDelivery) {
+      load.deliveryLocation = await ensureLocationCoords(normalizedDelivery);
     }
-    if (miles) {
+    if (miles && miles > 0) {
       load.distance = miles;
     }
     
@@ -895,13 +1032,63 @@ export class LoadController {
     load.statusHistory.push({
       status: LoadStatus.RATE_CONFIRMED,
       timestamp: new Date(),
-      notes: `Rate confirmed by broker.${trackingLink ? ` Tracking link: ${trackingLink}` : ''}`,
+      notes: `Rate confirmed.${trackingLink ? ` Tracking link: ${trackingLink}` : ''}`,
       updatedBy: userId,
     } as any);
     
     await load.save();
     
-    return ApiResponse.success(res, load, 'Rate confirmed successfully');
+    // If load has a driver assigned and NO assignment record exists yet, create one and notify
+    const driverId = load.driverId?.toString();
+    if (driverId) {
+      try {
+        // Check if an assignment already exists (created during assignLoad)
+        const existingAssignment = await import('../models/Assignment').then(
+          m => m.default.findOne({ loadId: id, driverId, status: 'pending' })
+        );
+        
+        if (!existingAssignment) {
+          // No assignment yet — create one and notify driver
+          const truckId = load.truckId?.toString() || undefined;
+          const trailerId = load.trailerId?.toString() || undefined;
+          
+          const assignment = await AssignmentService.createAssignment({
+            loadId: id,
+            driverId,
+            truckId,
+            trailerId,
+            assignedBy: userId,
+            expiresIn: 24,
+          });
+          
+          console.log('✅ Assignment created after rate confirmation:', {
+            _id: assignment._id, loadNumber: load.loadNumber, driverId,
+          });
+          
+          const driver = await Driver.findById(driverId);
+          if (driver) {
+            let driverUserId = driver.userId;
+            if (!driverUserId && driver.email) {
+              const u = await User.findOne({ email: driver.email, role: 'driver' });
+              if (u) driverUserId = u._id.toString();
+            }
+            if (!driverUserId && driver.phone) {
+              const u = await User.findOne({ phone: driver.phone, role: 'driver' });
+              if (u) driverUserId = u._id.toString();
+            }
+            if (driverUserId) {
+              await notifyLoadAssigned(companyId as string, driverUserId, load.loadNumber, driver.name, id, assignment._id.toString());
+            }
+          }
+        } else {
+          console.log('ℹ️ Assignment already exists for this load — skipping duplicate creation');
+        }
+      } catch (assignError) {
+        console.error('Failed during rate confirmation assignment check:', assignError);
+      }
+    }
+    
+    return ApiResponse.success(res, load, 'Rate confirmed successfully.');
   });
 
   // Driver accepts trip
@@ -965,6 +1152,7 @@ export class LoadController {
       dropoffTime,
       dropoffLocation,
       dropoffDate,
+      dropoffPlace,
     } = req.body;
     const companyId = req.user?.companyId ?? req.user?.id;
     const userId = req.user!.id;
@@ -1022,11 +1210,11 @@ export class LoadController {
     
     console.log('✅ All checks passed, updating load...');
     
-    // Validate required fields
+    // Validate required fields — only pickup details are mandatory
+    // Drop-off details are filled when the driver ends the trip
     if (!loadNumber || !pickupReferenceNumber || !pickupTime || !pickupPlace || 
-        !pickupDate || !pickupLocation || !dropoffReferenceNumber || 
-        !dropoffTime || !dropoffLocation || !dropoffDate) {
-      throw ApiError.badRequest('All form fields are required');
+        !pickupDate || !pickupLocation) {
+      throw ApiError.badRequest('Pickup details are required');
     }
     
     // Combine date + time into valid Date objects
@@ -1039,7 +1227,7 @@ export class LoadController {
       return new Date(`${dateStr}T${timeStr}:00`);
     };
 
-    // Update load with driver form details
+    // Update load with driver form details (drop-off is optional — filled at end trip)
     load.driverFormDetails = {
       loadNumber,
       pickupReferenceNumber,
@@ -1047,11 +1235,12 @@ export class LoadController {
       pickupPlace,
       pickupDate: new Date(pickupDate),
       pickupLocation,
-      dropoffReferenceNumber,
-      dropoffTime: buildDateTime(dropoffDate, dropoffTime),
-      dropoffLocation,
-      dropoffDate: new Date(dropoffDate),
-    };
+      dropoffReferenceNumber: dropoffReferenceNumber || '',
+      dropoffTime: dropoffTime && dropoffDate ? buildDateTime(dropoffDate, dropoffTime) : undefined,
+      dropoffLocation: dropoffLocation || '',
+      dropoffDate: dropoffDate ? new Date(dropoffDate) : undefined,
+      dropoffPlace: dropoffPlace || '',
+    } as any;
     
     // Form submission should NOT change the status — the driver must explicitly "Start Trip"
     // Just log that the form was submitted
@@ -1154,7 +1343,7 @@ export class LoadController {
   // Driver checks in at shipper location
   static shipperCheckIn = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { poNumber, loadNumber, referenceNumber } = req.body;
+    const { latePassAmount, latePassPhoto, hasLatePass } = req.body;
     const userId = req.user!.id;
 
     let query: any = { _id: id };
@@ -1183,30 +1372,29 @@ export class LoadController {
       throw ApiError.forbidden('Only the assigned driver can perform this action');
     }
     
-    // At least one identifier should be provided (PO, load number, or reference)
-    if (!poNumber && !loadNumber && !referenceNumber) {
-      throw ApiError.badRequest('At least one identifier (PO number, load number, or reference number) is required');
-    }
-    
     const { latitude, longitude } = req.body;
     
     load.status = LoadStatus.SHIPPER_CHECK_IN;
     load.shipperCheckInDetails = {
-      poNumber: poNumber || '',
-      loadNumber: loadNumber || load.loadNumber || '',
-      referenceNumber: referenceNumber || '',
+      poNumber: '',
+      loadNumber: load.loadNumber || '',
+      referenceNumber: '',
       checkInAt: new Date(),
-    };
+      latePassAmount: hasLatePass ? parseFloat(latePassAmount) || 0 : 0,
+      latePassPhoto: latePassPhoto || '',
+      hasLatePass: !!hasLatePass,
+    } as any;
     
     // Store check-in location if provided
     if (latitude && longitude) {
       (load as any).shipperCheckInLocation = { latitude, longitude, timestamp: new Date() };
     }
     
+    const latePassNote = hasLatePass && latePassAmount > 0 ? ` Late Pass: $${latePassAmount}` : '';
     load.statusHistory.push({
       status: LoadStatus.SHIPPER_CHECK_IN,
       timestamp: new Date(),
-      notes: `Checked in at shipper.${poNumber ? ` PO: ${poNumber}` : ''}${referenceNumber ? ` Ref: ${referenceNumber}` : ''}`,
+      notes: `Checked in at shipper.${latePassNote}`,
       updatedBy: userId,
       lat: latitude || undefined,
       lng: longitude || undefined,
@@ -1570,25 +1758,61 @@ export class LoadController {
     // ─── Notify owner/dispatcher that trip is delivered and needs review ───
     const companyId = load.companyId;
     if (companyId) {
+      // Find the driver name for the notification message
+      let driverName = 'Driver';
       try {
-        const { createNotification, NotificationType, NotificationPriority } = require('../services/notification.service');
-        await createNotification({
-          companyId,
-          type: NotificationType.SUCCESS,
-          priority: NotificationPriority.HIGH,
-          title: '🚚 Trip Delivered — Review Required',
-          message: `Load #${load.loadNumber} has been delivered by driver. Total: $${totalPayment}. Please review and confirm completion to initiate payment.`,
-          metadata: { loadId: id, loadNumber: load.loadNumber, totalPayment, totalExpenses },
-        });
-      } catch { /* non-critical */ }
+        const driverDoc = await Driver.findById(load.driverId).select('name').lean();
+        if (driverDoc?.name) driverName = driverDoc.name;
+      } catch { /* use fallback */ }
 
+      // 1) Targeted notification: find the person who assigned this load and notify them directly
+      try {
+        const assignmentDoc = await Assignment.findOne({
+          loadId: id,
+          status: 'accepted',
+        }).sort({ createdAt: -1 }).lean() as any;
+
+        const targetUserId = assignmentDoc?.assignedBy || load.createdBy;
+
+        if (targetUserId) {
+          const notif = new Notification({
+            companyId: companyId as any,
+            userId: targetUserId as any,
+            type: NotificationType.SUCCESS,
+            priority: NotificationPriority.HIGH,
+            title: 'Trip Completed — Approval Required',
+            message: `${driverName} has completed Load #${load.loadNumber}. Please review and approve to initiate payment.`,
+            metadata: {
+              loadId: id,
+              loadNumber: load.loadNumber,
+              driverId: load.driverId?.toString() || '',
+              driverName,
+              totalPayment,
+              totalExpenses,
+              status: 'delivered',
+              requiresApproval: true,
+            },
+            actionUrl: `/loads`,
+            read: false,
+          });
+          await notif.save();
+        }
+      } catch (err) {
+        console.warn('Failed to create targeted delivery notification:', err);
+      }
+
+      // Note: company-wide notification removed to prevent duplicates.
+      // The targeted notification above is sufficient — owners/dispatchers
+      // who assigned the load will see it directly.
+
+      // 3) Pusher real-time broadcast
       try {
         const { broadcastStatusChange } = require('../services/pusher.service');
         await broadcastStatusChange(companyId, {
           loadId: id,
           loadNumber: load.loadNumber,
           driverId: load.driverId?.toString() || '',
-          driverName: (req.user as any)?.name || 'Driver',
+          driverName,
           previousStatus: LoadStatus.RECEIVER_OFFLOAD,
           newStatus: LoadStatus.DELIVERED,
           timestamp: new Date().toISOString(),

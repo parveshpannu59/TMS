@@ -36,6 +36,12 @@ export const loadService = {
   unassignLoad: (id: string, reason?: string): Promise<Load> =>
     loadApi.unassignLoad(id, reason),
 
+  editAssignment: (
+    id: string,
+    data: { driverId?: string; truckId?: string; trailerId?: string; rate?: number }
+  ): Promise<Load> =>
+    loadApi.editAssignment(id, data),
+
   confirmRate: (
     id: string,
     data: {

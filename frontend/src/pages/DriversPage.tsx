@@ -18,7 +18,6 @@ import {
 import { DataGrid, GridColDef, GridActionsCellItem } from '@mui/x-data-grid';
 import { Add, Edit, Delete, LocalShipping, Search, FilterList } from '@mui/icons-material';
 import { InputAdornment } from '@mui/material';
-import { DashboardLayout } from '@layouts/DashboardLayout';
 import { EmptyState } from '@/components/common/EmptyState';
 import { driverApi, Driver, DriverFormData } from '@/api/driver.api';
 import { userApi } from '@/api/user.api';
@@ -570,10 +569,10 @@ const DriversPage: React.FC = () => {
   ];
 
   return (
-    <DashboardLayout>
-      <Box sx={{ p: 3 }}>
+    <Box className="page-fixed-layout">
+      <Box className="page-fixed-header">
         {/* Page Header */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Box sx={{
               width: 44, height: 44, borderRadius: 2.5,
@@ -614,7 +613,7 @@ const DriversPage: React.FC = () => {
         )}
 
         {/* Search and Filters */}
-        <Card sx={{ mb: 2, p: 2, border: '1px solid rgba(226,232,240,0.8)' }}>
+        <Card sx={{ mb: 0, p: 2, border: '1px solid rgba(226,232,240,0.8)' }}>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
             <TextField
               placeholder={t('drivers.searchPlaceholder', { defaultValue: 'Search by name, email, phone, or license#...' })}
@@ -660,7 +659,9 @@ const DriversPage: React.FC = () => {
             )}
           </Box>
         </Card>
+      </Box>
 
+      <Box className="page-scrollable-content">
         <Card sx={{ border: '1px solid rgba(226,232,240,0.8)' }}>
           {!loading && filteredDrivers.length === 0 ? (
             <EmptyState
@@ -671,27 +672,23 @@ const DriversPage: React.FC = () => {
               onAction={drivers.length === 0 ? () => handleOpenDialog() : undefined}
             />
           ) : (
-            <Box sx={{ minHeight: 900, height: filteredDrivers.length > 10 ? filteredDrivers.length * 52 + 150 : 900 }}>
               <DataGrid
                 rows={filteredDrivers}
                 columns={columns}
                 loading={loading}
+                density="compact"
+                autoHeight
                 getRowId={(row) => row.id || row._id || String(Math.random())}
                 pageSizeOptions={[10, 25, 50]}
                 initialState={{
                   pagination: { paginationModel: { pageSize: 10 } },
                 }}
                 disableRowSelectionOnClick
-                autoHeight={false}
-                sx={{
-                  border: 'none',
-                  height: '100%',
-                  width: '100%',
-                }}
+                sx={{ border: 'none' }}
               />
-            </Box>
           )}
         </Card>
+      </Box>
 
         {/* Add/Edit Dialog */}
         <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
@@ -925,7 +922,6 @@ const DriversPage: React.FC = () => {
           </DialogActions>
         </Dialog>
       </Box>
-    </DashboardLayout>
   );
 };
 

@@ -1,735 +1,679 @@
-import { Suspense, useMemo, useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Box,
-  Grid,
-  Typography,
-  Select,
-  MenuItem,
-  IconButton,
-  Alert,
-  Skeleton,
-  alpha,
-  useTheme,
-  Chip,
-  LinearProgress,
-  Button,
+  Box, Typography, Avatar, Chip, Skeleton, Table, TableHead, TableBody, TableRow, TableCell,
+  Button, alpha,
 } from '@mui/material';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import LocalShippingIcon from '@mui/icons-material/LocalShipping';
-import PeopleIcon from '@mui/icons-material/People';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
-import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
-import RouteIcon from '@mui/icons-material/Route';
-import ReceiptIcon from '@mui/icons-material/Receipt';
-import PendingActionsIcon from '@mui/icons-material/PendingActions';
-import DescriptionIcon from '@mui/icons-material/Description';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import TrendingDownIcon from '@mui/icons-material/TrendingDown';
-import SpeedIcon from '@mui/icons-material/Speed';
-import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import {
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  Tooltip,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
+  TrendingUp, TrendingDown, LocalShipping, People, CheckCircle,
+  Inventory,
+} from '@mui/icons-material';
+import {
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip as ReTooltip,
 } from 'recharts';
+import { useNavigate } from 'react-router-dom';
+import { getApiOrigin } from '@/api/client';
+import { loadApi } from '@/api/all.api';
+import { driverApi } from '@/api/driver.api';
+import { truckApi } from '@/api/truck.api';
+import type { Load } from '@/types/all.types';
+import 'leaflet/dist/leaflet.css';
 
-import { useDashboard } from '../hooks/useDashboard';
-import { useDashboardLayout } from '../hooks/useDashboardLayout';
-import { KPICard } from '../components/dashboard/KPICard';
-import { VehicleStatsCard } from '../components/dashboard/VehicleStatsCard';
-import { LoadStatusChart } from '../components/dashboard/LoadStatusChart';
-import { RecentActivity } from '../components/dashboard/RecentActivity';
-import { CriticalTrips } from '../components/dashboard/CriticalTrips';
-import { useAuth } from '../hooks/useAuth';
-import { DashboardLayout } from '@layouts/DashboardLayout';
-import { useTranslation } from 'react-i18next';
+// ─── Types ─────────────────────────────────────────
+interface DriverInfo {
+  _id: string;
+  name: string;
+  status: string;
+  phone?: string;
+  currentLoadId?: string;
+  loadNumber?: string;
+  truckNumber?: string;
+  profilePicture?: string;
+  lastLocation?: { lat: number; lng: number };
+}
 
-// ─── Mini Donut Component ──────────────────────────
-const MiniDonut = ({
-  data,
-  size = 100,
-  innerRadius = 30,
-  outerRadius = 45,
-  centerLabel,
-  centerValue,
-}: {
-  data: { name: string; value: number; color: string }[];
-  size?: number;
-  innerRadius?: number;
-  outerRadius?: number;
-  centerLabel?: string;
-  centerValue?: string | number;
-}) => {
-  const theme = useTheme();
+// ─── Constants ─────────────────────────────────────
+const ACCENT = '#2563eb';
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  in_transit:       { label: 'In Transit',   color: '#2563eb', bg: '#eff6ff' },
+  trip_started:     { label: 'In Transit',   color: '#2563eb', bg: '#eff6ff' },
+  shipper_check_in: { label: 'At Pickup',    color: '#f59e0b', bg: '#fffbeb' },
+  shipper_load_in:  { label: 'At Pickup',    color: '#f59e0b', bg: '#fffbeb' },
+  shipper_load_out: { label: 'At Pickup',    color: '#f59e0b', bg: '#fffbeb' },
+  receiver_check_in:{ label: 'At Delivery',  color: '#8b5cf6', bg: '#f5f3ff' },
+  receiver_offload: { label: 'At Delivery',  color: '#8b5cf6', bg: '#f5f3ff' },
+  trip_accepted:    { label: 'Pending',      color: '#64748b', bg: '#f8fafc' },
+  assigned:         { label: 'Assigned',     color: '#06b6d4', bg: '#ecfeff' },
+  booked:           { label: 'Booked',       color: '#94a3b8', bg: '#f1f5f9' },
+  delivered:        { label: 'Delivered',     color: '#22c55e', bg: '#f0fdf4' },
+  completed:        { label: 'Completed',    color: '#16a34a', bg: '#f0fdf4' },
+};
+
+const DRIVER_STATUS_PRIORITY: Record<string, number> = {
+  on_trip: 0, in_transit: 1, at_pickup: 2, active: 3, on_duty: 4, waiting_for_approval: 5, off_duty: 6, inactive: 7,
+};
+
+const FLEET_COLORS = ['#2563eb', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'];
+
+// ─── Dashboard Page ────────────────────────────────
+export default function Dashboard() {
+  const navigate = useNavigate();
+
+  // ─── State ──────
+  const [loads, setLoads] = useState<Load[]>([]);
+  const [drivers, setDrivers] = useState<DriverInfo[]>([]);
+  const [trucks, setTrucks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [driverLimit, setDriverLimit] = useState(5);
+  const [loadLimit, setLoadLimit] = useState(5);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const leafletMapRef = useRef<any>(null);
+
+  // ─── Fetch data ──────
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [loadsRes, driversRes, trucksRes] = await Promise.all([
+        loadApi.getAllLoads({ limit: 200 }), // Fetch enough for dashboard overview
+        driverApi.getDrivers(),
+        truckApi.getTrucks().catch(() => []),
+      ]);
+      setLoads(Array.isArray(loadsRes) ? loadsRes : []);
+      setDrivers(Array.isArray(driversRes) ? driversRes as any : []);
+      setTrucks(Array.isArray(trucksRes) ? trucksRes : []);
+    } catch { /* silent */ }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Refresh every 60s
+  useEffect(() => {
+    const id = setInterval(fetchData, 60000);
+    return () => clearInterval(id);
+  }, [fetchData]);
+
+  // ─── Computed: today's loads ──────
+  const todayStart = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
+  const todayLoads = useMemo(() =>
+    loads.filter(l => {
+      // Active loads OR loads created/updated today
+      const activeStatuses = ['assigned', 'trip_accepted', 'trip_started', 'shipper_check_in',
+        'shipper_load_in', 'shipper_load_out', 'in_transit', 'receiver_check_in', 'receiver_offload', 'delivered'];
+      if (activeStatuses.includes(l.status)) return true;
+      const created = new Date(l.createdAt || '');
+      return created >= todayStart;
+    }),
+  [loads, todayStart]);
+
+  // ─── KPI numbers ──────
+  const activeLoads = useMemo(() =>
+    loads.filter(l => ['trip_started', 'shipper_check_in', 'shipper_load_in', 'shipper_load_out',
+      'in_transit', 'receiver_check_in', 'receiver_offload'].includes(l.status)).length,
+  [loads]);
+
+  const availableLoads = useMemo(() =>
+    loads.filter(l => ['booked', 'rate_confirmed'].includes(l.status)).length,
+  [loads]);
+
+  const assignedDrivers = useMemo(() =>
+    drivers.filter(d => ['on_trip', 'on_duty'].includes(d.status)).length,
+  [drivers]);
+
+  const deliveredToday = useMemo(() =>
+    loads.filter(l => l.status === 'delivered' || l.status === 'completed').length,
+  [loads]);
+
+  // ─── Load status counts ──────
+  const statusCounts = useMemo(() => {
+    const c = { inTransit: 0, pending: 0, atPickup: 0, delivered: 0, toDeliver: 0 };
+    loads.forEach(l => {
+      if (['in_transit', 'trip_started'].includes(l.status)) c.inTransit++;
+      else if (['booked', 'assigned', 'trip_accepted', 'rate_confirmed'].includes(l.status)) c.pending++;
+      else if (['shipper_check_in', 'shipper_load_in', 'shipper_load_out'].includes(l.status)) c.atPickup++;
+      else if (['delivered', 'completed'].includes(l.status)) c.delivered++;
+      if (['receiver_check_in', 'receiver_offload'].includes(l.status)) c.toDeliver++;
+    });
+    return c;
+  }, [loads]);
+
+  // ─── Build driver-to-load map for locations & enrichment ──────
+  const driverLoadMap = useMemo(() => {
+    const map = new Map<string, Load>();
+    const activeStatuses = ['assigned', 'trip_accepted', 'trip_started', 'shipper_check_in',
+      'shipper_load_in', 'shipper_load_out', 'in_transit', 'receiver_check_in', 'receiver_offload'];
+    loads.forEach(l => {
+      // driverId could be an ObjectId string or an object with _id
+      const rawDid = (l as any).driverId;
+      const did = typeof rawDid === 'object' && rawDid?._id ? rawDid._id.toString() : rawDid?.toString?.() || rawDid;
+      if (did && activeStatuses.includes(l.status)) {
+        map.set(did, l);
+      }
+    });
+    return map;
+  }, [loads]);
+
+  // ─── Drivers with active trips today (for Driver Activity panel) ──────
+  const todayActiveDrivers = useMemo(() => {
+    return drivers
+      .filter(d => {
+        const did = (d as any).id || (d as any)._id;
+        // Check if driver has an active load (by driverId on load OR by currentLoadId on driver)
+        const hasActiveLoad = driverLoadMap.has(did);
+        const hasCurrentLoad = !!(d as any).currentLoadId;
+        return hasActiveLoad || hasCurrentLoad || d.status === 'on_trip';
+      })
+      .sort((a, b) => (DRIVER_STATUS_PRIORITY[a.status] ?? 99) - (DRIVER_STATUS_PRIORITY[b.status] ?? 99));
+  }, [drivers, driverLoadMap]);
+
+  // ─── Driver locations from active loads (for map) ──────
+  const driverLocations = useMemo(() => {
+    const locs: Array<{ driver: DriverInfo; load: Load; lat: number; lng: number }> = [];
+    drivers.forEach(d => {
+      const did = (d as any).id || (d as any)._id;
+      const load = driverLoadMap.get(did);
+      if (!load) return;
+
+      // Try currentLocation first
+      const cl = (load as any).currentLocation;
+      let lat = 0, lng = 0;
+      if (cl) {
+        lat = cl.lat || cl.latitude || 0;
+        lng = cl.lng || cl.longitude || 0;
+      }
+
+      // Fall back to last entry in locationHistory
+      if (!lat && !lng) {
+        const hist = (load as any).locationHistory;
+        if (Array.isArray(hist) && hist.length > 0) {
+          const last = hist[hist.length - 1];
+          lat = last.lat || last.latitude || 0;
+          lng = last.lng || last.longitude || 0;
+        }
+      }
+
+      // Fall back to statusHistory — GPS coords are logged with each status update
+      if (!lat && !lng) {
+        const sh = (load as any).statusHistory;
+        if (Array.isArray(sh) && sh.length > 0) {
+          // Find the most recent status entry with GPS data
+          for (let i = sh.length - 1; i >= 0; i--) {
+            if (sh[i].lat && sh[i].lng) {
+              lat = sh[i].lat;
+              lng = sh[i].lng;
+              break;
+            }
+          }
+        }
+      }
+
+      // Fall back to pickup location coordinates if available
+      if (!lat && !lng) {
+        const pickup = (load as any).pickupLocation;
+        if (pickup?.coordinates?.length === 2) {
+          lng = pickup.coordinates[0];
+          lat = pickup.coordinates[1];
+        } else if (pickup?.lat && pickup?.lng) {
+          lat = pickup.lat;
+          lng = pickup.lng;
+        }
+      }
+
+      if (lat && lng) {
+        locs.push({ driver: d, load, lat, lng });
+      }
+    });
+    return locs;
+  }, [drivers, driverLoadMap]);
+
+  // ─── Fleet status for donut ──────
+  const fleetData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    trucks.forEach(t => {
+      const s = t.status || 'available';
+      counts[s] = (counts[s] || 0) + 1;
+    });
+    return Object.entries(counts).map(([name, value]) => ({ name: name.replace(/_/g, ' '), value }));
+  }, [trucks]);
+
+  // ─── Active loads for table (no hard limit — lazy loaded in UI) ──────
+  const tableLoads = useMemo(() =>
+    todayLoads.filter(l => !['completed', 'cancelled'].includes(l.status)),
+  [todayLoads]);
+
+  // ─── Map (Leaflet) ──────
+  useEffect(() => {
+    if (!mapRef.current || leafletMapRef.current) return;
+    import('leaflet').then(L => {
+      // Fix default icon issue
+      delete (L.Icon.Default.prototype as any)._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+      });
+
+      const map = L.map(mapRef.current!, { zoomControl: false, attributionControl: false }).setView([39.8, -98.5], 4);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+      leafletMapRef.current = map;
+    });
+    return () => {
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
+      }
+    };
+  }, []);
+
+  // Update map markers from active load locations
+  const markersRef = useRef<any[]>([]);
+  useEffect(() => {
+    const map = leafletMapRef.current;
+    if (!map) return;
+    import('leaflet').then(L => {
+      // Clear old markers
+      markersRef.current.forEach(m => map.removeLayer(m));
+      markersRef.current = [];
+
+      const bounds: [number, number][] = [];
+      driverLocations.forEach(({ driver, load, lat, lng }) => {
+        const sc = STATUS_CONFIG[load.status] || { label: load.status, color: '#64748b' };
+        const profilePic = (driver as any).documents?.photo;
+        const picUrl = profilePic ? (profilePic.startsWith('http') ? profilePic : `${getApiOrigin()}${profilePic}`) : '';
+        const initial = driver.name?.charAt(0)?.toUpperCase() || '?';
+
+        const icon = L.divIcon({
+          className: '',
+          html: `<div style="
+            width:38px;height:38px;border-radius:50%;
+            border:3px solid ${sc.color};
+            box-shadow:0 2px 10px rgba(0,0,0,0.25);
+            background:${picUrl ? `url(${picUrl}) center/cover` : sc.color};
+            display:flex;align-items:center;justify-content:center;
+            font-size:14px;color:#fff;font-weight:700;
+            position:relative;
+          ">${picUrl ? '' : initial}
+            <div style="position:absolute;bottom:-3px;right:-3px;width:12px;height:12px;
+              border-radius:50%;background:${sc.color};border:2px solid #fff;"></div>
+          </div>`,
+          iconSize: [38, 38],
+          iconAnchor: [19, 19],
+        });
+
+        const pickup = (load as any).pickupLocation;
+        const delivery = (load as any).deliveryLocation;
+        const fmtP = pickup?.city || pickup?.address || '—';
+        const fmtD = delivery?.city || delivery?.address || '—';
+
+        const popup = `
+          <div style="min-width:180px;font-family:system-ui,sans-serif;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              ${picUrl
+                ? `<img src="${picUrl}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" />`
+                : `<div style="width:32px;height:32px;border-radius:50%;background:${sc.color};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">${initial}</div>`
+              }
+              <div>
+                <div style="font-weight:700;font-size:13px;">${driver.name}</div>
+                <div style="font-size:11px;color:#64748b;">${driver.phone || ''}</div>
+              </div>
+            </div>
+            <div style="background:${sc.bg || '#f1f5f9'};color:${sc.color};padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700;display:inline-block;margin-bottom:6px;">
+              ${sc.label}
+            </div>
+            <div style="font-size:12px;color:#475569;">
+              <div><b>Load:</b> ${load.loadNumber || '—'}</div>
+              <div><b>From:</b> ${fmtP}</div>
+              <div><b>To:</b> ${fmtD}</div>
+              ${driver.truckNumber ? `<div><b>Truck:</b> ${driver.truckNumber}</div>` : ''}
+            </div>
+          </div>`;
+
+        const marker = L.marker([lat, lng], { icon })
+          .bindPopup(popup, { maxWidth: 250 })
+          .addTo(map);
+        markersRef.current.push(marker);
+        bounds.push([lat, lng]);
+      });
+      if (bounds.length > 0) {
+        map.fitBounds(bounds, { padding: [30, 30], maxZoom: 12 });
+      }
+    });
+  }, [driverLocations]);
+
+  const getDriverStatusLabel = (s: string) => {
+    const map: Record<string, { label: string; color: string }> = {
+      on_trip: { label: 'In Transit', color: '#2563eb' },
+      in_transit: { label: 'In Transit', color: '#2563eb' },
+      active: { label: 'Available', color: '#22c55e' },
+      on_duty: { label: 'On Duty', color: '#22c55e' },
+      off_duty: { label: 'Off Duty', color: '#94a3b8' },
+      waiting_for_approval: { label: 'Pending', color: '#f59e0b' },
+      inactive: { label: 'Inactive', color: '#ef4444' },
+    };
+    return map[s] || { label: s.replace(/_/g, ' '), color: '#64748b' };
+  };
+
+  const fmtLoc = (loc: any) => {
+    if (!loc) return '—';
+    if (loc.city) return `${loc.city}, ${loc.state || ''}`.replace(/,\s*$/, '');
+    if (loc.address) return loc.address.length > 30 ? loc.address.substring(0, 30) + '...' : loc.address;
+    return '—';
+  };
+
+  // ─── Render ──────────────────────────────────────
   return (
-    <Box sx={{ width: size, height: size, position: 'relative' }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={data}
-            cx="50%"
-            cy="50%"
-            innerRadius={innerRadius}
-            outerRadius={outerRadius}
-            paddingAngle={3}
-            dataKey="value"
-            strokeWidth={0}
-          >
-            {data.map((entry, i) => (
-              <Cell key={i} fill={entry.color} />
-            ))}
-          </Pie>
-        </PieChart>
-      </ResponsiveContainer>
-      {centerValue !== undefined && (
-        <Box
-          sx={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            textAlign: 'center',
-          }}
-        >
-          <Typography variant="body2" fontWeight={800} sx={{ lineHeight: 1, fontSize: '0.9rem' }}>
-            {centerValue}
+    <Box sx={{ p: { xs: 2, md: 3 } }}>
+
+        {/* ─── Row 1: Summary KPI Cards ─── */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2,1fr)', md: 'repeat(4,1fr)' }, gap: 2, mb: 3 }}>
+          <KPIBox label="Active Loads" value={activeLoads} icon={<LocalShipping />} color="#2563eb" trend={null} loading={loading} />
+          <KPIBox label="Available Loads" value={availableLoads} icon={<Inventory />} color="#f59e0b" trend={null} loading={loading} />
+          <KPIBox label="Assigned Drivers" value={assignedDrivers} icon={<People />} color="#8b5cf6" trend={null} loading={loading} />
+          <KPIBox label="Deliveries Today" value={deliveredToday} icon={<CheckCircle />} color="#22c55e" trend={null} loading={loading} />
+        </Box>
+
+        {/* ─── Row 2: Map + Load Status + Driver Activity ─── */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1.3fr 0.8fr 0.9fr' }, gap: 2, mb: 3 }}>
+
+          {/* Map */}
+          <Box sx={{ bgcolor: '#fff', borderRadius: 3, overflow: 'hidden', border: '1px solid #e2e8f0', minHeight: 320 }}>
+            <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Typography fontWeight={700} fontSize={14} color="#0f172a">Driver Locations</Typography>
+              <Chip size="small" label={`${driverLocations.length} tracking`}
+                sx={{ height: 22, fontSize: 11, fontWeight: 600, bgcolor: alpha('#22c55e', 0.1), color: '#22c55e' }} />
+            </Box>
+            <Box ref={mapRef} sx={{ height: 280 }} />
+          </Box>
+
+          {/* Load Status Overview */}
+          <Box sx={{ bgcolor: '#fff', borderRadius: 3, border: '1px solid #e2e8f0', p: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            <Typography fontWeight={700} fontSize={14} color="#0f172a">Load Status Overview</Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+              <StatusCard label="In Transit" count={statusCounts.inTransit} color="#2563eb" bg="#eff6ff" />
+              <StatusCard label="Pending" count={statusCounts.pending} color="#f59e0b" bg="#fffbeb" />
+              <StatusCard label="At Pickup" count={statusCounts.atPickup} color="#ef4444" bg="#fef2f2" />
+              <StatusCard label="Delivered" count={statusCounts.delivered} color="#22c55e" bg="#f0fdf4" />
+            </Box>
+            <StatusCard label="To Be Delivered" count={statusCounts.toDeliver} color="#8b5cf6" bg="#f5f3ff" />
+          </Box>
+
+          {/* Driver Activity */}
+          <Box sx={{ bgcolor: '#fff', borderRadius: 3, border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid #f1f5f9' }}>
+              <Typography fontWeight={700} fontSize={14} color="#0f172a">Driver Activity</Typography>
+            </Box>
+            <Box sx={{ flex: 1, overflow: 'auto', px: 1.5, py: 1 }}>
+              {loading ? (
+                Array(4).fill(0).map((_, i) => <Skeleton key={i} height={52} sx={{ borderRadius: 2, mb: 0.5 }} />)
+              ) : todayActiveDrivers.length === 0 ? (
+                <Box sx={{ textAlign: 'center', py: 3 }}>
+                  <Typography fontSize={13} color="text.secondary">No active drivers today</Typography>
+                </Box>
+              ) : (
+                todayActiveDrivers.slice(0, driverLimit).map(d => {
+                  const did = (d as any).id || (d as any)._id;
+                  const st = getDriverStatusLabel(d.status);
+                  const activeLoad = driverLoadMap.get(did);
+                  const loadStatus = activeLoad ? (STATUS_CONFIG[activeLoad.status]?.label || activeLoad.status) : null;
+                  const loadColor = activeLoad ? (STATUS_CONFIG[activeLoad.status]?.color || '#64748b') : null;
+                  // Get profile picture from driver documents
+                  const profilePic = (d as any).documents?.photo || d.profilePicture;
+                  const picUrl = profilePic ? (profilePic.startsWith('http') ? profilePic : `${getApiOrigin()}${profilePic}`) : undefined;
+
+                  return (
+                    <Box key={did} sx={{
+                      display: 'flex', alignItems: 'center', gap: 1.5,
+                      p: 1, borderRadius: 2, mb: 0.5,
+                      '&:hover': { bgcolor: '#f8fafc' }, transition: 'all 0.15s',
+                    }}>
+                      <Box sx={{ position: 'relative' }}>
+                        <Avatar
+                          src={picUrl}
+                          sx={{ width: 36, height: 36, fontSize: 14, fontWeight: 700,
+                            bgcolor: alpha(loadColor || st.color, 0.15), color: loadColor || st.color }}
+                        >
+                          {d.name?.charAt(0)?.toUpperCase() || '?'}
+                        </Avatar>
+                        <Box sx={{
+                          position: 'absolute', bottom: -1, right: -1,
+                          width: 10, height: 10, borderRadius: '50%',
+                          bgcolor: loadColor || st.color, border: '2px solid #fff',
+                        }} />
+                      </Box>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography fontSize={13} fontWeight={600} noWrap>{d.name}</Typography>
+                        <Typography fontSize={11} color="text.secondary" noWrap>
+                          {activeLoad ? `#${activeLoad.loadNumber}` : d.phone || '—'}
+                          {d.truckNumber ? ` | ${d.truckNumber}` : ''}
+                        </Typography>
+                      </Box>
+                      <Chip
+                        label={loadStatus || st.label}
+                        size="small"
+                        sx={{
+                          height: 22, fontSize: 10, fontWeight: 700,
+                          bgcolor: alpha(loadColor || st.color, 0.1), color: loadColor || st.color,
+                          '& .MuiChip-label': { px: 1 },
+                        }}
+                      />
+                    </Box>
+                  );
+                })
+              )}
+              {todayActiveDrivers.length > driverLimit && (
+                <Button
+                  fullWidth size="small"
+                  onClick={() => setDriverLimit(p => p + 5)}
+                  sx={{ mt: 0.5, textTransform: 'none', fontWeight: 600, fontSize: 12, color: ACCENT }}
+                >
+                  Load more ({todayActiveDrivers.length - driverLimit} remaining)
+                </Button>
+              )}
+            </Box>
+          </Box>
+        </Box>
+
+        {/* ─── Row 3: Active Loads Table + Fleet Status ─── */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: 2 }}>
+
+          {/* Active Loads Table */}
+          <Box sx={{ bgcolor: '#fff', borderRadius: 3, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+            <Box sx={{ px: 2.5, py: 1.5, borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Typography fontWeight={700} fontSize={14} color="#0f172a">Active Loads</Typography>
+              <Chip size="small" label={`${Math.min(loadLimit, tableLoads.length)} of ${tableLoads.length} loads`}
+                sx={{ height: 22, fontSize: 11, fontWeight: 600, bgcolor: '#f1f5f9' }} />
+            </Box>
+            <Box sx={{ overflow: 'auto' }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ '& th': { fontWeight: 700, fontSize: 12, color: '#64748b', borderBottom: '1px solid #f1f5f9', py: 1.2, whiteSpace: 'nowrap' } }}>
+                    <TableCell>Load ID</TableCell>
+                    <TableCell>Origin</TableCell>
+                    <TableCell>Destination</TableCell>
+                    <TableCell>Driver</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Pickup</TableCell>
+                    <TableCell>Delivery</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {loading ? (
+                    Array(5).fill(0).map((_, i) => (
+                      <TableRow key={i}>
+                        {Array(7).fill(0).map((_, j) => <TableCell key={j}><Skeleton width={80} /></TableCell>)}
+                      </TableRow>
+                    ))
+                  ) : tableLoads.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} sx={{ textAlign: 'center', py: 4, color: '#94a3b8' }}>
+                        No active loads today
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    tableLoads.slice(0, loadLimit).map(l => {
+                      const sc = STATUS_CONFIG[l.status] || { label: l.status, color: '#64748b', bg: '#f1f5f9' };
+                      // Resolve driver name: could be populated object, string ID, or name field
+                      const rawDid = (l as any).driverId;
+                      let driverName = '—';
+                      if (typeof rawDid === 'object' && rawDid?.name) {
+                        driverName = rawDid.name;
+                      } else if ((l as any).driverName) {
+                        driverName = (l as any).driverName;
+                      } else if (rawDid) {
+                        const match = drivers.find(d => ((d as any).id || (d as any)._id) === rawDid.toString());
+                        if (match) driverName = match.name;
+                      }
+                      return (
+                        <TableRow key={l.id || (l as any)._id} sx={{
+                          '&:hover': { bgcolor: '#fafbfc' },
+                          '& td': { fontSize: 13, py: 1.2, borderBottom: '1px solid #f8fafc' },
+                        }}>
+                          <TableCell>
+                            <Typography fontSize={13} fontWeight={700} color={ACCENT} sx={{ cursor: 'pointer' }}
+                              onClick={() => navigate(`/loads`)}>
+                              {l.loadNumber || '—'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>{fmtLoc((l as any).pickupLocation)}</TableCell>
+                          <TableCell>{fmtLoc((l as any).deliveryLocation)}</TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <Avatar sx={{ width: 22, height: 22, fontSize: 10, bgcolor: alpha(ACCENT, 0.1), color: ACCENT }}>
+                                {typeof driverName === 'string' ? driverName.charAt(0) : '?'}
+                              </Avatar>
+                              <Typography fontSize={13} noWrap>{typeof driverName === 'string' ? driverName : '—'}</Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Chip label={sc.label} size="small" sx={{
+                              height: 22, fontSize: 10, fontWeight: 700,
+                              bgcolor: sc.bg, color: sc.color,
+                              '& .MuiChip-label': { px: 1 },
+                            }} />
+                          </TableCell>
+                          <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                            {l.pickupDate ? new Date(l.pickupDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
+                          </TableCell>
+                          <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                            {l.expectedDeliveryDate ? new Date(l.expectedDeliveryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </Box>
+            {tableLoads.length > loadLimit && (
+              <Box sx={{ px: 2, py: 1, borderTop: '1px solid #f1f5f9', textAlign: 'center' }}>
+                <Button
+                  fullWidth size="small"
+                  onClick={() => setLoadLimit(p => p + 5)}
+                  sx={{ textTransform: 'none', fontWeight: 600, fontSize: 12, color: ACCENT }}
+                >
+                  Load more ({tableLoads.length - loadLimit} remaining)
+                </Button>
+              </Box>
+            )}
+          </Box>
+
+          {/* Fleet Status Donut */}
+          <Box sx={{ bgcolor: '#fff', borderRadius: 3, border: '1px solid #e2e8f0', p: 2, display: 'flex', flexDirection: 'column' }}>
+            <Typography fontWeight={700} fontSize={14} color="#0f172a" sx={{ mb: 2 }}>Fleet Status</Typography>
+            {fleetData.length > 0 ? (
+              <>
+                <Box sx={{ height: 200 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={fleetData} cx="50%" cy="50%" innerRadius={55} outerRadius={80}
+                        dataKey="value" paddingAngle={3} strokeWidth={0}>
+                        {fleetData.map((_, i) => <Cell key={i} fill={FLEET_COLORS[i % FLEET_COLORS.length]} />)}
+                      </Pie>
+                      <ReTooltip
+                        contentStyle={{ borderRadius: 8, fontSize: 12, border: '1px solid #e2e8f0' }}
+                        formatter={(value: any, name: any) => [`${value}`, name]}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Box>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, justifyContent: 'center', mt: 1 }}>
+                  {fleetData.map((d, i) => (
+                    <Box key={d.name} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Box sx={{ width: 8, height: 8, borderRadius: 1, bgcolor: FLEET_COLORS[i % FLEET_COLORS.length] }} />
+                      <Typography fontSize={11} color="text.secondary" sx={{ textTransform: 'capitalize' }}>
+                        {d.name} ({d.value})
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </>
+            ) : (
+              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography fontSize={13} color="text.secondary">No vehicle data</Typography>
+              </Box>
+            )}
+          </Box>
+        </Box>
+      </Box>
+  );
+}
+
+// ─── Sub-components ────────────────────────────────
+
+function KPIBox({ label, value, icon, color, trend, loading }: {
+  label: string; value: number; icon: React.ReactNode; color: string; trend: number | null; loading: boolean;
+}) {
+  return (
+    <Box sx={{
+      bgcolor: '#fff', borderRadius: 3, p: 2, border: '1px solid #e2e8f0',
+      display: 'flex', flexDirection: 'column', gap: 1,
+      '&:hover': { boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }, transition: 'all 0.2s',
+    }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Typography fontSize={12} fontWeight={600} color="#64748b">{label}</Typography>
+        <Box sx={{
+          width: 32, height: 32, borderRadius: 2,
+          bgcolor: alpha(color, 0.08), color,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          {icon}
+        </Box>
+      </Box>
+      {loading ? (
+        <Skeleton width={60} height={36} />
+      ) : (
+        <Typography fontSize={28} fontWeight={800} color="#0f172a" lineHeight={1}>
+          {value}
+        </Typography>
+      )}
+      {trend !== null && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
+          {trend >= 0 ? <TrendingUp sx={{ fontSize: 14, color: '#22c55e' }} /> : <TrendingDown sx={{ fontSize: 14, color: '#ef4444' }} />}
+          <Typography fontSize={11} color={trend >= 0 ? '#22c55e' : '#ef4444'} fontWeight={600}>
+            {Math.abs(trend)}%
           </Typography>
-          {centerLabel && (
-            <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.55rem' }}>
-              {centerLabel}
-            </Typography>
-          )}
         </Box>
       )}
     </Box>
   );
-};
+}
 
-// ─── Revenue/Expense Bar Comparison ──────────────────────────
-const FinancialComparisonBar = ({
-  revenue,
-  expenses,
-  profit,
-  margin,
-}: {
-  revenue: number;
-  expenses: number;
-  profit: number;
-  margin: number;
-}) => {
-  const theme = useTheme();
-  const maxVal = Math.max(revenue, expenses) || 1;
-
+function StatusCard({ label, count, color, bg }: {
+  label: string; count: number; color: string; bg: string;
+}) {
   return (
-    <Box
-      sx={{
-        borderRadius: 3,
-        p: 3,
-        background: theme.palette.mode === 'dark'
-          ? alpha(theme.palette.background.paper, 0.6)
-          : '#fff',
-        border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-        height: '100%',
-      }}
-    >
-      <Box display="flex" alignItems="center" gap={1} mb={3}>
-        <Box
-          sx={{
-            background: 'linear-gradient(135deg, #22c55e, #16a34a)',
-            borderRadius: 2,
-            p: 0.8,
-            display: 'flex',
-            color: 'white',
-          }}
-        >
-          <TrendingUpIcon sx={{ fontSize: 18 }} />
-        </Box>
-        <Typography variant="subtitle1" fontWeight={700}>
-          Financial Overview
-        </Typography>
-      </Box>
-
-      {/* Revenue */}
-      <Box mb={2.5}>
-        <Box display="flex" justifyContent="space-between" mb={0.5}>
-          <Typography variant="body2" fontWeight={500} color="text.secondary">
-            Revenue
-          </Typography>
-          <Typography variant="body2" fontWeight={700} sx={{ color: '#22c55e' }}>
-            ${revenue.toLocaleString()}
-          </Typography>
-        </Box>
-        <Box sx={{ height: 10, borderRadius: 5, bgcolor: alpha('#22c55e', 0.1), overflow: 'hidden' }}>
-          <Box
-            sx={{
-              height: '100%',
-              width: `${(revenue / maxVal) * 100}%`,
-              borderRadius: 5,
-              background: 'linear-gradient(90deg, #22c55e, #4ade80)',
-              transition: 'width 1s ease',
-            }}
-          />
-        </Box>
-      </Box>
-
-      {/* Expenses */}
-      <Box mb={2.5}>
-        <Box display="flex" justifyContent="space-between" mb={0.5}>
-          <Typography variant="body2" fontWeight={500} color="text.secondary">
-            Expenses
-          </Typography>
-          <Typography variant="body2" fontWeight={700} sx={{ color: '#ef4444' }}>
-            ${expenses.toLocaleString()}
-          </Typography>
-        </Box>
-        <Box sx={{ height: 10, borderRadius: 5, bgcolor: alpha('#ef4444', 0.1), overflow: 'hidden' }}>
-          <Box
-            sx={{
-              height: '100%',
-              width: `${(expenses / maxVal) * 100}%`,
-              borderRadius: 5,
-              background: 'linear-gradient(90deg, #ef4444, #f87171)',
-              transition: 'width 1s ease',
-            }}
-          />
-        </Box>
-      </Box>
-
-      {/* Profit summary */}
-      <Box
-        sx={{
-          borderRadius: 2,
-          p: 2,
-          bgcolor: profit >= 0 ? alpha('#22c55e', 0.06) : alpha('#ef4444', 0.06),
-          border: `1px solid ${profit >= 0 ? alpha('#22c55e', 0.15) : alpha('#ef4444', 0.15)}`,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
-        <Box>
-          <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.65rem' }}>
-            Net Profit
-          </Typography>
-          <Typography variant="h5" fontWeight={800} sx={{ color: profit >= 0 ? '#22c55e' : '#ef4444' }}>
-            ${Math.abs(profit).toLocaleString()}
-          </Typography>
-        </Box>
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 0.5,
-            bgcolor: profit >= 0 ? alpha('#22c55e', 0.12) : alpha('#ef4444', 0.12),
-            borderRadius: 1.5,
-            px: 1.2,
-            py: 0.4,
-          }}
-        >
-          {profit >= 0 ? (
-            <TrendingUpIcon sx={{ fontSize: 16, color: '#22c55e' }} />
-          ) : (
-            <TrendingDownIcon sx={{ fontSize: 16, color: '#ef4444' }} />
-          )}
-          <Typography
-            variant="body2"
-            fontWeight={700}
-            sx={{ color: profit >= 0 ? '#22c55e' : '#ef4444', fontSize: '0.82rem' }}
-          >
-            {margin.toFixed(1)}%
-          </Typography>
-        </Box>
-      </Box>
+    <Box sx={{
+      bgcolor: bg, borderRadius: 2, p: 1.5, border: `1px solid ${alpha(color, 0.15)}`,
+      display: 'flex', flexDirection: 'column', gap: 0.3,
+    }}>
+      <Typography fontSize={11} fontWeight={600} color={alpha(color, 0.8)}>{label}</Typography>
+      <Typography fontSize={24} fontWeight={800} color={color} lineHeight={1}>{count}</Typography>
     </Box>
   );
-};
-
-// ─── Invoice Donut Card ──────────────────────────
-const InvoiceDonutCard = ({
-  invoices,
-}: {
-  invoices: {
-    total: number;
-    paid: number;
-    unpaid: number;
-    overdue: number;
-    totalAmount: number;
-    paidAmount: number;
-    unpaidAmount: number;
-  };
-}) => {
-  const theme = useTheme();
-  const donutData = [
-    { name: 'Paid', value: invoices.paid || 0, color: '#22c55e' },
-    { name: 'Unpaid', value: invoices.unpaid || 0, color: '#f59e0b' },
-    { name: 'Overdue', value: invoices.overdue || 0, color: '#ef4444' },
-  ].filter((d) => d.value > 0);
-
-  // If all zero, show a placeholder
-  if (donutData.length === 0) {
-    donutData.push({ name: 'No Data', value: 1, color: alpha('#94a3b8', 0.2) });
-  }
-
-  const stats = [
-    { label: 'Total', value: invoices.total, amount: invoices.totalAmount, color: '#3b82f6', icon: <ReceiptIcon sx={{ fontSize: 16 }} /> },
-    { label: 'Paid', value: invoices.paid, amount: invoices.paidAmount, color: '#22c55e', icon: <CheckCircleIcon sx={{ fontSize: 16 }} /> },
-    { label: 'Unpaid', value: invoices.unpaid, amount: invoices.unpaidAmount, color: '#f59e0b', icon: <PendingActionsIcon sx={{ fontSize: 16 }} /> },
-    { label: 'Overdue', value: invoices.overdue, amount: 0, color: '#ef4444', icon: <DescriptionIcon sx={{ fontSize: 16 }} /> },
-  ];
-
-  return (
-    <Box
-      sx={{
-        borderRadius: 3,
-        p: 3,
-        height: '100%',
-        background: theme.palette.mode === 'dark'
-          ? alpha(theme.palette.background.paper, 0.6)
-          : '#fff',
-        border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-      }}
-    >
-      <Box display="flex" alignItems="center" gap={1} mb={2.5}>
-        <Box
-          sx={{
-            background: 'linear-gradient(135deg, #8b5cf6, #a855f7)',
-            borderRadius: 2,
-            p: 0.8,
-            display: 'flex',
-            color: 'white',
-          }}
-        >
-          <ReceiptIcon sx={{ fontSize: 18 }} />
-        </Box>
-        <Typography variant="subtitle1" fontWeight={700}>
-          Invoices
-        </Typography>
-      </Box>
-
-      <Box display="flex" alignItems="center" gap={3}>
-        <MiniDonut
-          data={donutData}
-          size={110}
-          innerRadius={35}
-          outerRadius={50}
-          centerValue={invoices.total}
-          centerLabel="Total"
-        />
-
-        <Box flex={1}>
-          {stats.map((s) => (
-            <Box key={s.label} display="flex" alignItems="center" justifyContent="space-between" py={0.6}>
-              <Box display="flex" alignItems="center" gap={0.8}>
-                <Box sx={{ color: s.color, display: 'flex' }}>{s.icon}</Box>
-                <Typography variant="body2" fontWeight={500} sx={{ fontSize: '0.8rem' }}>
-                  {s.label}
-                </Typography>
-              </Box>
-              <Box textAlign="right">
-                <Typography variant="body2" fontWeight={700} sx={{ fontSize: '0.82rem' }}>
-                  {s.value}
-                </Typography>
-                {s.amount > 0 && (
-                  <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.65rem' }}>
-                    ${s.amount.toLocaleString()}
-                  </Typography>
-                )}
-              </Box>
-            </Box>
-          ))}
-        </Box>
-      </Box>
-    </Box>
-  );
-};
-
-// ─── Operational Metrics with Mini Donuts ──────────────────────────
-const OperationalMetricsCard = ({
-  metrics,
-}: {
-  metrics: {
-    totalLoads: number;
-    assignedDrivers: number;
-    completedLoads: number;
-    totalDistanceMiles: number;
-    totalDistanceKm: string;
-  };
-}) => {
-  const theme = useTheme();
-  const completionRate = metrics.totalLoads > 0
-    ? Math.round((metrics.completedLoads / metrics.totalLoads) * 100)
-    : 0;
-
-  const items = [
-    {
-      label: 'Total Loads',
-      value: metrics.totalLoads,
-      icon: <LocalShippingIcon sx={{ fontSize: 22 }} />,
-      color: '#3b82f6',
-      donut: [
-        { name: 'Completed', value: metrics.completedLoads, color: '#22c55e' },
-        { name: 'Active', value: Math.max(metrics.totalLoads - metrics.completedLoads, 0), color: alpha('#3b82f6', 0.2) },
-      ],
-    },
-    {
-      label: 'Active Drivers',
-      value: metrics.assignedDrivers,
-      icon: <PeopleIcon sx={{ fontSize: 22 }} />,
-      color: '#8b5cf6',
-      donut: null,
-    },
-    {
-      label: 'Completed',
-      value: metrics.completedLoads,
-      subtitle: `${completionRate}% rate`,
-      icon: <CheckCircleIcon sx={{ fontSize: 22 }} />,
-      color: '#22c55e',
-      donut: null,
-    },
-    {
-      label: 'Distance',
-      value: `${metrics.totalDistanceMiles.toFixed(0)} mi`,
-      subtitle: `${metrics.totalDistanceKm} km`,
-      icon: <RouteIcon sx={{ fontSize: 22 }} />,
-      color: '#06b6d4',
-      donut: null,
-    },
-  ];
-
-  return (
-    <Box
-      sx={{
-        borderRadius: 3,
-        p: 3,
-        background: theme.palette.mode === 'dark'
-          ? alpha(theme.palette.background.paper, 0.6)
-          : '#fff',
-        border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-      }}
-    >
-      <Box display="flex" alignItems="center" gap={1} mb={2.5}>
-        <Box
-          sx={{
-            background: 'linear-gradient(135deg, #06b6d4, #0891b2)',
-            borderRadius: 2,
-            p: 0.8,
-            display: 'flex',
-            color: 'white',
-          }}
-        >
-          <SpeedIcon sx={{ fontSize: 18 }} />
-        </Box>
-        <Typography variant="subtitle1" fontWeight={700}>
-          Operations
-        </Typography>
-      </Box>
-
-      <Grid container spacing={2}>
-        {items.map((item) => (
-          <Grid item xs={6} sm={3} key={item.label}>
-            <Box
-              sx={{
-                textAlign: 'center',
-                p: 1.5,
-                borderRadius: 2,
-                bgcolor: alpha(item.color, 0.04),
-                border: `1px solid ${alpha(item.color, 0.08)}`,
-                transition: 'all 0.2s',
-                '&:hover': {
-                  bgcolor: alpha(item.color, 0.08),
-                  transform: 'translateY(-2px)',
-                },
-              }}
-            >
-              <Box sx={{ color: item.color, mb: 0.5, display: 'flex', justifyContent: 'center' }}>
-                {item.icon}
-              </Box>
-              <Typography variant="h5" fontWeight={800}>
-                {item.value}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" fontWeight={500}>
-                {item.label}
-              </Typography>
-              {(item as any).subtitle && (
-                <Typography variant="caption" display="block" color="text.disabled" sx={{ fontSize: '0.65rem' }}>
-                  {(item as any).subtitle}
-                </Typography>
-              )}
-            </Box>
-          </Grid>
-        ))}
-      </Grid>
-    </Box>
-  );
-};
-
-// ─── Main Dashboard ──────────────────────────
-const Dashboard = () => {
-  const theme = useTheme();
-  const [dateRange, setDateRange] = useState('month');
-  const { data, loading, error, refetch } = useDashboard(dateRange);
-  const { resetLayout, loading: layoutLoading } = useDashboardLayout();
-  const { user } = useAuth();
-  const { t } = useTranslation();
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
-  const handleRefresh = useCallback(() => {
-    refetch();
-    setSuccessMessage(t('dashboard.dashboardRefreshed'));
-    setTimeout(() => setSuccessMessage(null), 3000);
-  }, [refetch, t]);
-
-  const kpiWidgets = useMemo(() => {
-    if (!data) return [];
-    return [
-      {
-        id: 'kpi-loads',
-        title: t('dashboard.activeLoads'),
-        value: data.kpis.activeLoadsCount,
-        subtitle: `${data.kpis.runningLateCount} ${t('dashboard.runningLate')}`,
-        trend: data.kpis.trends.loads,
-        icon: <LocalShippingIcon />,
-        color: 'primary.main',
-      },
-      {
-        id: 'kpi-drivers',
-        title: t('dashboard.totalDrivers'),
-        value: data.kpis.totalDrivers,
-        subtitle: `${data.kpis.availableDrivers} ${t('dashboard.available')}`,
-        trend: data.kpis.trends.drivers,
-        icon: <PeopleIcon />,
-        color: 'success.main',
-      },
-      {
-        id: 'kpi-completed',
-        title: t('dashboard.completedToday'),
-        value: data.kpis.completedToday,
-        subtitle: t('dashboard.onTrackFor', { count: data.kpis.onTrack }),
-        icon: <CheckCircleIcon />,
-        color: 'warning.main',
-      },
-    ];
-  }, [data, t]);
-
-  if (loading || layoutLoading) {
-    return (
-      <Box sx={{ p: 3 }}>
-        <Skeleton variant="text" width={300} height={40} sx={{ mb: 3 }} />
-        <Grid container spacing={2.5}>
-          {[1, 2, 3, 4].map((i) => (
-            <Grid item xs={12} sm={6} md={3} key={i}>
-              <Skeleton variant="rounded" height={130} sx={{ borderRadius: 3 }} />
-            </Grid>
-          ))}
-        </Grid>
-        <Grid container spacing={2.5} mt={1}>
-          {[1, 2].map((i) => (
-            <Grid item xs={12} md={6} key={i}>
-              <Skeleton variant="rounded" height={280} sx={{ borderRadius: 3 }} />
-            </Grid>
-          ))}
-        </Grid>
-      </Box>
-    );
-  }
-
-  if (error) {
-    return (
-      <Box sx={{ p: 3 }}>
-        <Alert
-          severity="error"
-          action={
-            <Button size="small" onClick={handleRefresh}>
-              {t('common.retry')}
-            </Button>
-          }
-        >
-          {error}
-        </Alert>
-      </Box>
-    );
-  }
-
-  if (!data) return null;
-
-  const fm = data.financialMetrics;
-  const inv = data.invoices;
-  const ops = data.operationalMetrics;
-
-  const dateRangeLabel =
-    dateRange === 'today'
-      ? t('dashboard.today')
-      : dateRange === 'week'
-      ? t('dashboard.thisWeek')
-      : t('dashboard.thisMonth');
-
-  return (
-    <DashboardLayout>
-      <Box
-        sx={{
-          p: { xs: 2, sm: 3 },
-          bgcolor: theme.palette.mode === 'dark' ? 'background.default' : alpha('#f8fafc', 1),
-          minHeight: '100vh',
-        }}
-      >
-        {/* ─── Header ──────────────────────────── */}
-        <Box
-          display="flex"
-          flexDirection={{ xs: 'column', sm: 'row' }}
-          justifyContent="space-between"
-          alignItems={{ xs: 'flex-start', sm: 'center' }}
-          mb={3}
-          gap={2}
-        >
-          <Box>
-            <Typography
-              variant="h5"
-              fontWeight={800}
-              sx={{
-                background: 'linear-gradient(135deg, #1e293b, #475569)',
-                backgroundClip: 'text',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: theme.palette.mode === 'dark' ? 'unset' : 'transparent',
-                fontSize: { xs: '1.4rem', sm: '1.6rem' },
-              }}
-            >
-              {t('dashboard.welcomeBack', { name: user?.name?.split(' ')[0] || 'Owner' })}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3 }}>
-              {t('dashboard.fleetOverview', { period: dateRangeLabel })}
-            </Typography>
-          </Box>
-
-          <Box display="flex" alignItems="center" gap={1}>
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 0.5,
-                bgcolor: alpha('#3b82f6', 0.06),
-                borderRadius: 2,
-                px: 0.5,
-                border: `1px solid ${alpha('#3b82f6', 0.12)}`,
-              }}
-            >
-              <CalendarTodayIcon sx={{ fontSize: 16, color: '#3b82f6', ml: 1 }} />
-              <Select
-                value={dateRange}
-                onChange={(e) => setDateRange(e.target.value)}
-                size="small"
-                variant="standard"
-                disableUnderline
-                sx={{
-                  fontWeight: 600,
-                  fontSize: '0.82rem',
-                  '& .MuiSelect-select': { py: 0.8, pl: 0.5 },
-                }}
-              >
-                <MenuItem value="today">{t('dashboard.today')}</MenuItem>
-                <MenuItem value="week">{t('dashboard.thisWeek')}</MenuItem>
-                <MenuItem value="month">{t('dashboard.thisMonth')}</MenuItem>
-              </Select>
-            </Box>
-            <IconButton
-              onClick={handleRefresh}
-              size="small"
-              sx={{
-                bgcolor: alpha('#3b82f6', 0.06),
-                border: `1px solid ${alpha('#3b82f6', 0.12)}`,
-                '&:hover': { bgcolor: alpha('#3b82f6', 0.12) },
-              }}
-            >
-              <RefreshIcon sx={{ fontSize: 18 }} />
-            </IconButton>
-          </Box>
-        </Box>
-
-        {successMessage && (
-          <Alert severity="success" onClose={() => setSuccessMessage(null)} sx={{ mb: 2, borderRadius: 2 }}>
-            {successMessage}
-          </Alert>
-        )}
-
-        {/* ─── KPI Row ──────────────────────────── */}
-        <Grid container spacing={2.5} mb={3}>
-          {kpiWidgets.map((widget) => (
-            <Grid item xs={12} sm={6} md={3} key={widget.id}>
-              <Suspense fallback={<Skeleton variant="rounded" height={130} sx={{ borderRadius: 3 }} />}>
-                <KPICard {...widget} />
-              </Suspense>
-            </Grid>
-          ))}
-          <Grid item xs={12} sm={6} md={3}>
-            <Suspense fallback={<Skeleton variant="rounded" height={130} sx={{ borderRadius: 3 }} />}>
-              <VehicleStatsCard />
-            </Suspense>
-          </Grid>
-        </Grid>
-
-        {/* ─── Financial + Invoice Row ──────────────────────────── */}
-        <Grid container spacing={2.5} mb={3}>
-          {/* Financial Comparison */}
-          <Grid item xs={12} md={6}>
-            {fm && (
-              <FinancialComparisonBar
-                revenue={fm.totalRevenue}
-                expenses={fm.totalExpenses}
-                profit={fm.totalProfit}
-                margin={fm.profitMargin}
-              />
-            )}
-          </Grid>
-
-          {/* Invoice Donut */}
-          <Grid item xs={12} md={6}>
-            {inv && <InvoiceDonutCard invoices={inv} />}
-          </Grid>
-        </Grid>
-
-        {/* ─── Operational Metrics ──────────────────────────── */}
-        {ops && (
-          <Box mb={3}>
-            <OperationalMetricsCard metrics={ops} />
-          </Box>
-        )}
-
-        {/* ─── Load Status + Recent Activity ──────────────────────────── */}
-        <Grid container spacing={2.5} mb={3}>
-          <Grid item xs={12} md={6}>
-            <Suspense fallback={<Skeleton variant="rounded" height={300} sx={{ borderRadius: 3 }} />}>
-              <LoadStatusChart data={data.loadStatus} />
-            </Suspense>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Suspense fallback={<Skeleton variant="rounded" height={300} sx={{ borderRadius: 3 }} />}>
-              <RecentActivity activities={data.recentActivity} />
-            </Suspense>
-          </Grid>
-        </Grid>
-
-        {/* Critical Trips hidden — only shows when there are actual critical/delayed trips */}
-        {data.criticalTrips && data.criticalTrips.length > 0 && (
-          <Box mb={3}>
-            <Suspense fallback={<Skeleton variant="rounded" height={200} sx={{ borderRadius: 3 }} />}>
-              <CriticalTrips trips={data.criticalTrips} />
-            </Suspense>
-          </Box>
-        )}
-      </Box>
-    </DashboardLayout>
-  );
-};
-
-export default Dashboard;
+}

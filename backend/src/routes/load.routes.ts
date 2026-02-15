@@ -88,6 +88,13 @@ router.post(
   authorize(UserRole.OWNER, UserRole.DISPATCHER),
   LoadController.assignLoad
 );
+// Edit assignment (change driver/truck/trailer/rate) before rate confirmation
+router.patch(
+  '/:id/edit-assignment',
+  authorize(UserRole.OWNER, UserRole.DISPATCHER),
+  LoadController.editAssignment
+);
+
 // Unassign load from driver (Owner, Dispatcher)
 router.post(
   '/:id/unassign',

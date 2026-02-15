@@ -18,7 +18,6 @@ import {
 import { DataGrid, GridColDef, GridActionsCellItem } from '@mui/x-data-grid';
 import { Add, Edit, Delete, LocalShipping, Search, FilterList } from '@mui/icons-material';
 import { InputAdornment } from '@mui/material';
-import { DashboardLayout } from '@layouts/DashboardLayout';
 import { EmptyState } from '@/components/common/EmptyState';
 import { StatsCard } from '@/components/common/StatsCard';
 import { truckApi, Truck, TruckFormData } from '@/api/truck.api';
@@ -341,8 +340,7 @@ const TrucksPage: React.FC = () => {
   ];
 
   return (
-    <DashboardLayout>
-      <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <LocalShipping sx={{ fontSize: 32, color: 'primary.main' }} />
@@ -624,7 +622,6 @@ const TrucksPage: React.FC = () => {
           </form>
         </Dialog>
       </Box>
-    </DashboardLayout>
   );
 };
 

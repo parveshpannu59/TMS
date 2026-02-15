@@ -17,10 +17,11 @@ import {
   Stepper,
   Step,
   StepLabel,
+  InputAdornment,
 } from '@mui/material';
 import { Close, LocationOn, GpsFixed, CheckCircle, PhotoCamera, AutoFixHigh } from '@mui/icons-material';
 import { loadApi } from '@/api/all.api';
-import { useDocumentOCR } from '@/hooks/useDocumentOCR';
+import { useDocumentOCR, extractAmount } from '@/hooks/useDocumentOCR';
 import type { Load } from '@/types/all.types';
 
 interface ShipperCheckInDialogProps {
@@ -39,12 +40,15 @@ export const ShipperCheckInDialog: React.FC<ShipperCheckInDialogProps> = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  // Step tracking: 0 = Confirm Arrival (GPS), 1 = Enter Details, 2 = Checked In
+  // Step tracking: 0 = Confirm Arrival (GPS), 1 = Late Pass Details, 2 = Checked In
   const [activeStep, setActiveStep] = useState(0);
 
-  const [poNumber, setPoNumber] = useState('');
-  const [loadNumber, setLoadNumber] = useState(load.loadNumber || '');
-  const [referenceNumber, setReferenceNumber] = useState('');
+  // Late pass fields
+  const [latePassAmount, setLatePassAmount] = useState('');
+  const [latePassPhoto, setLatePassPhoto] = useState<File | null>(null);
+  const [latePassPreview, setLatePassPreview] = useState<string | null>(null);
+  const [hasLatePass, setHasLatePass] = useState<boolean | null>(null); // null = not yet decided
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ocrAutoFilled, setOcrAutoFilled] = useState(false);
@@ -59,7 +63,7 @@ export const ShipperCheckInDialog: React.FC<ShipperCheckInDialogProps> = ({
   const [checkInTime, setCheckInTime] = useState<Date | null>(null);
   const watchRef = useRef<number | null>(null);
 
-  // Request location on dialog open — uses watchPosition for accuracy improvement
+  // Request location on dialog open
   const requestLocation = useCallback(() => {
     if (!navigator.geolocation) {
       setLocationStatus('denied');
@@ -79,7 +83,6 @@ export const ShipperCheckInDialog: React.FC<ShipperCheckInDialogProps> = ({
         setLocationStatus('granted');
         setLocationError(null);
 
-        // Stop watching once accuracy is good enough
         if (acc <= 100 && watchRef.current !== null) {
           navigator.geolocation.clearWatch(watchRef.current);
           watchRef.current = null;
@@ -111,6 +114,7 @@ export const ShipperCheckInDialog: React.FC<ShipperCheckInDialogProps> = ({
       requestLocation();
       setActiveStep(0);
       setCheckInTime(null);
+      setHasLatePass(null);
     }
     return () => {
       if (watchRef.current !== null) {
@@ -130,9 +134,9 @@ export const ShipperCheckInDialog: React.FC<ShipperCheckInDialogProps> = ({
   };
 
   const handleSubmit = async () => {
-    // At least one identifier required
-    if (!poNumber && !loadNumber && !referenceNumber) {
-      setError('Please fill at least one identifier (PO, Load #, or Reference #)');
+    // If late pass, amount is required
+    if (hasLatePass && (!latePassAmount || parseFloat(latePassAmount) <= 0)) {
+      setError('Please enter the late pass amount');
       return;
     }
 
@@ -140,17 +144,25 @@ export const ShipperCheckInDialog: React.FC<ShipperCheckInDialogProps> = ({
       setLoading(true);
       setError(null);
 
+      // Upload late pass photo if provided
+      let latePassPhotoUrl: string | undefined;
+      if (latePassPhoto) {
+        try {
+          latePassPhotoUrl = await loadApi.uploadLoadDocument(load.id, latePassPhoto);
+        } catch { /* non-critical */ }
+      }
+
       await loadApi.shipperCheckIn(load.id, {
-        poNumber: poNumber || undefined,
-        loadNumber: loadNumber || undefined,
-        referenceNumber: referenceNumber || undefined,
         latitude: coords?.lat,
         longitude: coords?.lng,
-      });
+        latePassAmount: hasLatePass ? parseFloat(latePassAmount) || 0 : 0,
+        latePassPhoto: latePassPhotoUrl,
+        hasLatePass: !!hasLatePass,
+      } as any);
 
       setActiveStep(2);
 
-      // Auto-close after showing success
+      // Auto-close after success
       setTimeout(() => {
         onSuccess();
         handleClose();
@@ -162,37 +174,40 @@ export const ShipperCheckInDialog: React.FC<ShipperCheckInDialogProps> = ({
     }
   };
 
-  const handleScanDocument = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleScanLatePass = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
     setOcrAutoFilled(false);
+    setLatePassPhoto(file);
 
+    // Preview
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = () => setLatePassPreview(reader.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setLatePassPreview(null);
+    }
+
+    // OCR to extract amount
     try {
       const result = await analyze(file);
       if (result) {
-        let filled = false;
-        const fields = result.extractedFields;
-
-        if (fields.poNumber && !poNumber) { setPoNumber(fields.poNumber); filled = true; }
-        if (fields.loadNumber && !loadNumber) { setLoadNumber(fields.loadNumber); filled = true; }
-        if (fields.referenceNumber && !referenceNumber) { setReferenceNumber(fields.referenceNumber); filled = true; }
-
-        // Also try bolNumber and proNumber as reference
-        if (!referenceNumber && (fields.bolNumber || fields.proNumber)) {
-          setReferenceNumber(fields.bolNumber || fields.proNumber || '');
-          filled = true;
+        const amt = extractAmount(result.rawText);
+        if (amt && amt > 0) {
+          setLatePassAmount(String(amt));
+          setOcrAutoFilled(true);
         }
-
-        if (filled) setOcrAutoFilled(true);
       }
     } catch { /* OCR failure is non-critical */ }
   };
 
   const handleClose = () => {
-    setPoNumber('');
-    setLoadNumber(load.loadNumber || '');
-    setReferenceNumber('');
+    setLatePassAmount('');
+    setLatePassPhoto(null);
+    setLatePassPreview(null);
+    setHasLatePass(null);
     setError(null);
     setActiveStep(0);
     setLocationStatus('idle');
@@ -233,21 +248,14 @@ export const ShipperCheckInDialog: React.FC<ShipperCheckInDialogProps> = ({
 
         {/* Progress Stepper */}
         <Stepper activeStep={activeStep} sx={{ mb: 3 }}>
-          <Step>
-            <StepLabel>Confirm Arrival</StepLabel>
-          </Step>
-          <Step>
-            <StepLabel>Enter Details</StepLabel>
-          </Step>
-          <Step>
-            <StepLabel>Checked In</StepLabel>
-          </Step>
+          <Step><StepLabel>Confirm Arrival</StepLabel></Step>
+          <Step><StepLabel>Late Pass</StepLabel></Step>
+          <Step><StepLabel>Checked In</StepLabel></Step>
         </Stepper>
 
         {/* Step 0: Confirm Arrival with GPS */}
         {activeStep === 0 && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {/* Pickup Location */}
             {pickup && (
               <Box sx={{ bgcolor: 'rgba(239,68,68,0.06)', borderRadius: 2, p: 2 }}>
                 <Typography variant="caption" fontWeight={700} color="error">PICKUP LOCATION</Typography>
@@ -261,8 +269,7 @@ export const ShipperCheckInDialog: React.FC<ShipperCheckInDialogProps> = ({
             {/* GPS Location Card */}
             <Box sx={{
               border: `2px solid ${locationStatus === 'granted' ? '#22c55e' : locationStatus === 'denied' ? '#ef4444' : theme.palette.divider}`,
-              borderRadius: 2,
-              p: 2,
+              borderRadius: 2, p: 2,
               bgcolor: locationStatus === 'granted' ? 'rgba(34,197,94,0.06)' : undefined,
             }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -320,7 +327,7 @@ export const ShipperCheckInDialog: React.FC<ShipperCheckInDialogProps> = ({
           </Box>
         )}
 
-        {/* Step 1: Enter Identifiers */}
+        {/* Step 1: Late Pass */}
         {activeStep === 1 && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
             <Alert severity="success" icon={<CheckCircle />}>
@@ -334,76 +341,142 @@ export const ShipperCheckInDialog: React.FC<ShipperCheckInDialogProps> = ({
               )}
             </Alert>
 
-            {/* Scan Document Button */}
-            <Box sx={{
-              border: `2px dashed ${ocrAutoFilled ? '#22c55e' : theme.palette.divider}`,
-              borderRadius: 2, p: 2, textAlign: 'center',
-              bgcolor: ocrAutoFilled ? 'rgba(34,197,94,0.06)' : 'rgba(59,130,246,0.04)',
-            }}>
-              <input
-                ref={scanInputRef}
-                type="file"
-                accept="image/*,application/pdf"
-                capture="environment"
-                onChange={handleScanDocument}
-                style={{ display: 'none' }}
-              />
-              <Button
-                variant={ocrAutoFilled ? 'outlined' : 'contained'}
-                color={ocrAutoFilled ? 'success' : 'primary'}
-                startIcon={ocrAnalyzing ? <CircularProgress size={16} /> : ocrAutoFilled ? <AutoFixHigh /> : <PhotoCamera />}
-                disabled={ocrAnalyzing}
-                onClick={() => scanInputRef.current?.click()}
-                sx={{ mb: 1 }}
-              >
-                {ocrAnalyzing ? 'Scanning Document...' : ocrAutoFilled ? 'Scan Again' : 'Scan PO / Gate Pass'}
-              </Button>
-              <Typography variant="caption" color="text.secondary" display="block">
-                {ocrAutoFilled
-                  ? '✅ Details auto-filled — verify and edit below'
-                  : 'Take a photo of PO slip, gate pass, or any document to auto-fill'}
-              </Typography>
-            </Box>
+            {/* Ask if there's a late pass */}
+            {hasLatePass === null && (
+              <Box sx={{
+                p: 2.5, borderRadius: 3,
+                border: `1px solid ${theme.palette.divider}`,
+                bgcolor: 'rgba(245,158,11,0.04)',
+                textAlign: 'center',
+              }}>
+                <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 0.5 }}>
+                  Did you receive a Late Pass?
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  A late pass is issued when you arrive late at the pickup. It has a penalty amount.
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'center' }}>
+                  <Button
+                    variant="contained"
+                    color="warning"
+                    onClick={() => setHasLatePass(true)}
+                    sx={{ fontWeight: 700, px: 3, borderRadius: 2 }}
+                  >
+                    Yes, I have a Late Pass
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={() => setHasLatePass(false)}
+                    sx={{ fontWeight: 600, px: 3, borderRadius: 2 }}
+                  >
+                    No Late Pass
+                  </Button>
+                </Box>
+              </Box>
+            )}
 
-            <Typography variant="body2" color="text.secondary">
-              Enter at least one identifier to complete check-in. Load Number is pre-filled.
-            </Typography>
+            {/* Late Pass Details */}
+            {hasLatePass === true && (
+              <Box sx={{
+                p: 2, borderRadius: 3,
+                border: `2px solid rgba(245,158,11,0.4)`,
+                bgcolor: 'rgba(245,158,11,0.04)',
+              }}>
+                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5, color: '#d97706' }}>
+                  Late Pass Details
+                </Typography>
 
-            <TextField
-              id="shipper-checkin-load"
-              fullWidth
-              label="Load Number"
-              value={loadNumber}
-              onChange={(e) => setLoadNumber(e.target.value)}
-              placeholder="Enter load number"
-              helperText="Pre-filled from load details"
-            />
-            <TextField
-              id="shipper-checkin-po"
-              fullWidth
-              label="PO Number"
-              value={poNumber}
-              onChange={(e) => { setPoNumber(e.target.value); setOcrAutoFilled(false); }}
-              placeholder="Enter Purchase Order number (optional)"
-              InputProps={{
-                endAdornment: ocrAutoFilled && poNumber ? (
-                  <Chip label="OCR" size="small" icon={<AutoFixHigh />} color="success" variant="outlined" />
-                ) : undefined,
-              }}
-            />
-            <TextField
-              id="shipper-checkin-reference"
-              fullWidth
-              label="Reference Number"
-              value={referenceNumber}
-              onChange={(e) => { setReferenceNumber(e.target.value); setOcrAutoFilled(false); }}
-              placeholder="Enter reference number (optional)"
-              InputProps={{
-                endAdornment: ocrAutoFilled && referenceNumber ? (
-                  <Chip label="OCR" size="small" icon={<AutoFixHigh />} color="success" variant="outlined" />
-                ) : undefined,
-              }}
-            />
+                {/* Scan Late Pass */}
+                <Box sx={{
+                  border: `2px dashed ${latePassPhoto ? '#22c55e' : 'rgba(245,158,11,0.4)'}`,
+                  borderRadius: 2, p: 2, textAlign: 'center', mb: 2,
+                  bgcolor: latePassPhoto ? 'rgba(34,197,94,0.04)' : 'transparent',
+                }}>
+                  <input
+                    ref={scanInputRef}
+                    type="file"
+                    accept="image/*,application/pdf"
+                    capture="environment"
+                    onChange={handleScanLatePass}
+                    style={{ display: 'none' }}
+                  />
+                  <Button
+                    variant={latePassPhoto ? 'outlined' : 'contained'}
+                    color={latePassPhoto ? 'success' : 'warning'}
+                    startIcon={ocrAnalyzing ? <CircularProgress size={16} /> : latePassPhoto ? <AutoFixHigh /> : <PhotoCamera />}
+                    disabled={ocrAnalyzing}
+                    onClick={() => scanInputRef.current?.click()}
+                    sx={{ mb: 1, fontWeight: 700 }}
+                  >
+                    {ocrAnalyzing ? 'Reading Late Pass...' : latePassPhoto ? 'Scan Again' : 'Scan Late Pass'}
+                  </Button>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    {latePassPhoto
+                      ? ocrAutoFilled
+                        ? 'Amount auto-detected from late pass — verify below'
+                        : 'Late pass photo attached — enter amount below'
+                      : 'Take a photo of the late pass to auto-detect the amount'}
+                  </Typography>
+                </Box>
+
+                {/* Late Pass Preview */}
+                {latePassPreview && (
+                  <Box sx={{ borderRadius: 2, overflow: 'hidden', maxHeight: 140, mb: 2 }}>
+                    <img src={latePassPreview} alt="Late Pass" style={{ width: '100%', maxHeight: 140, objectFit: 'cover' }} />
+                  </Box>
+                )}
+
+                {/* Amount Field */}
+                <TextField
+                  fullWidth size="small"
+                  label="Late Pass Amount *"
+                  type="number"
+                  value={latePassAmount}
+                  onChange={(e) => { setLatePassAmount(e.target.value); setOcrAutoFilled(false); }}
+                  placeholder="Enter penalty amount"
+                  required
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                    endAdornment: ocrAutoFilled ? (
+                      <Chip label="OCR" size="small" icon={<AutoFixHigh />} color="success" variant="outlined" sx={{ height: 24 }} />
+                    ) : undefined,
+                  }}
+                  inputProps={{ min: 0, step: 0.01 }}
+                  helperText={ocrAutoFilled ? 'Auto-detected from scanned late pass — please verify' : 'Enter the amount shown on the late pass'}
+                />
+
+                {/* Option to go back */}
+                <Button
+                  size="small"
+                  sx={{ mt: 1, color: 'text.secondary', textTransform: 'none' }}
+                  onClick={() => {
+                    setHasLatePass(null);
+                    setLatePassAmount('');
+                    setLatePassPhoto(null);
+                    setLatePassPreview(null);
+                    setOcrAutoFilled(false);
+                  }}
+                >
+                  No late pass? Go back
+                </Button>
+              </Box>
+            )}
+
+            {/* No Late Pass — just confirm */}
+            {hasLatePass === false && (
+              <Alert severity="info" sx={{ borderRadius: 2 }}>
+                <Typography variant="body2">
+                  No late pass — you can proceed to complete check-in.
+                </Typography>
+                <Button
+                  size="small"
+                  sx={{ mt: 0.5, textTransform: 'none', p: 0 }}
+                  onClick={() => setHasLatePass(null)}
+                >
+                  Actually, I have one
+                </Button>
+              </Alert>
+            )}
           </Box>
         )}
 
@@ -423,6 +496,14 @@ export const ShipperCheckInDialog: React.FC<ShipperCheckInDialogProps> = ({
                 label={`Checked in at ${checkInTime.toLocaleTimeString()}`}
                 variant="outlined"
                 color="success"
+              />
+            )}
+            {hasLatePass && parseFloat(latePassAmount) > 0 && (
+              <Chip
+                label={`Late Pass: $${parseFloat(latePassAmount).toFixed(2)}`}
+                color="warning"
+                variant="outlined"
+                sx={{ fontWeight: 700 }}
               />
             )}
             <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ mt: 1 }}>
@@ -456,8 +537,8 @@ export const ShipperCheckInDialog: React.FC<ShipperCheckInDialogProps> = ({
             <Button
               variant="contained"
               onClick={handleSubmit}
-              disabled={loading || (!poNumber && !loadNumber && !referenceNumber)}
-              sx={{ bgcolor: '#22c55e', '&:hover': { bgcolor: '#16a34a' } }}
+              disabled={loading || hasLatePass === null || (hasLatePass && (!latePassAmount || parseFloat(latePassAmount) <= 0))}
+              sx={{ bgcolor: '#22c55e', '&:hover': { bgcolor: '#16a34a' }, fontWeight: 700 }}
             >
               {loading ? <CircularProgress size={16} /> : 'Complete Check-In'}
             </Button>

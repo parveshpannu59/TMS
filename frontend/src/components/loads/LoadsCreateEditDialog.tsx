@@ -60,12 +60,26 @@ export const LoadsCreateEditDialog = memo<LoadsCreateEditDialogProps>(function L
   onUpdateLoad,
   onSuccess,
 }) {
+  const emptyLocation = { name: '', address: '', city: '', state: '', zipCode: '' };
   const {
     control,
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<LoadFormData>({ resolver: yupResolver(loadSchema) });
+  } = useForm<LoadFormData>({
+    resolver: yupResolver(loadSchema),
+    defaultValues: {
+      origin: { ...emptyLocation },
+      destination: { ...emptyLocation },
+      pickupDate: new Date(),
+      deliveryDate: new Date(Date.now() + 86400000),
+      miles: 0,
+      rate: 0,
+      broker: '',
+      weight: 0,
+      commodity: '',
+    },
+  });
 
   const [customerName, setCustomerName] = useState('');
   const [customerContact, setCustomerContact] = useState('');
@@ -103,31 +117,64 @@ export const LoadsCreateEditDialog = memo<LoadsCreateEditDialogProps>(function L
     }
     if (editingLoad) {
       const load = editingLoad as Record<string, unknown>;
-      const pickup = load.pickupLocation ?? load.origin ?? {};
-      const delivery = load.deliveryLocation ?? load.destination ?? {};
-      const p = pickup as Record<string, unknown>;
-      const d = delivery as Record<string, unknown>;
+      const pickup = (load.pickupLocation ?? load.origin ?? {}) as Record<string, unknown>;
+      const delivery = (load.deliveryLocation ?? load.destination ?? {}) as Record<string, unknown>;
+
+      // Helper: extract location fields robustly
+      const extractLoc = (loc: Record<string, unknown>) => {
+        const address = String(loc.address ?? '').trim();
+        const name = String(loc.name ?? '').trim();
+        const city = String(loc.city ?? '').trim();
+        const state = String(loc.state ?? '').trim();
+        const pincode = String(loc.pincode ?? loc.zipCode ?? loc.zip ?? '').trim();
+
+        // Use address as the primary source; fall back to name only if address is empty
+        let displayAddress = address || name;
+        let displayName = address || name;
+        let parsedCity = city;
+        let parsedState = state;
+        let parsedZip = pincode;
+
+        // If city/state are empty but address contains comma-separated parts, try to parse them out
+        if ((!parsedCity || !parsedState) && displayAddress.includes(',')) {
+          const parts = displayAddress.split(',').map((s: string) => s.trim());
+          if (parts.length >= 3) {
+            displayAddress = parts.slice(0, -2).join(', ');
+            displayName = displayAddress;
+            if (!parsedCity) parsedCity = parts[parts.length - 2] || '';
+            if (!parsedState) parsedState = parts[parts.length - 1] || '';
+          } else if (parts.length === 2 && !parsedCity) {
+            displayAddress = parts[0];
+            displayName = parts[0];
+            parsedCity = parts[1] || '';
+          }
+        }
+
+        return {
+          name: displayName,
+          address: displayAddress,
+          city: parsedCity,
+          state: parsedState,
+          zipCode: parsedZip,
+        };
+      };
+
+      const originData = extractLoc(pickup);
+      const destData = extractLoc(delivery);
+
       setCustomerName((load.customerName as string) || '');
       setCustomerContact((load.customerContact as string) || '');
       setCargoType((load.cargoType as string) || '');
       setCargoDescription((load.cargoDescription as string) || '');
       setLoadType(((load.loadType as string) || 'FTL') as 'FTL' | 'LTL');
       setNotes((load.notes as string) || (load.internalNotes as string) || '');
+
+      console.log('[EditLoad] pickup raw:', pickup, '→ parsed:', originData);
+      console.log('[EditLoad] delivery raw:', delivery, '→ parsed:', destData);
+
       reset({
-        origin: {
-          name: (p.address as string) || '',
-          address: (p.address as string) || '',
-          city: (p.city as string) || '',
-          state: (p.state as string) || '',
-          zipCode: (p.pincode as string) || (p.zipCode as string) || '',
-        },
-        destination: {
-          name: (d.address as string) || '',
-          address: (d.address as string) || '',
-          city: (d.city as string) || '',
-          state: (d.state as string) || '',
-          zipCode: (d.pincode as string) || (d.zipCode as string) || '',
-        },
+        origin: originData,
+        destination: destData,
         pickupDate: new Date((load.pickupDate as string) || Date.now()),
         deliveryDate: new Date((load.expectedDeliveryDate as string) || (load.deliveryDate as string) || Date.now()),
         miles: (load.distance as number) || 0,
@@ -144,8 +191,8 @@ export const LoadsCreateEditDialog = memo<LoadsCreateEditDialogProps>(function L
       setLoadType('FTL');
       setNotes('');
       reset({
-        origin: { name: '', address: '', city: '', state: '', zipCode: '' },
-        destination: { name: '', address: '', city: '', state: '', zipCode: '' },
+        origin: { ...emptyLocation },
+        destination: { ...emptyLocation },
         pickupDate: new Date(),
         deliveryDate: new Date(Date.now() + 86400000),
         miles: 0,

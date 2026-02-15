@@ -187,41 +187,72 @@ export default function TripTrackingMap({
   // ─── Auto-geocode pickup/delivery when lat/lng is missing ───
   const [geocodedPickup, setGeocodedPickup] = useState<{lat: number; lng: number} | null>(null);
   const [geocodedDelivery, setGeocodedDelivery] = useState<{lat: number; lng: number} | null>(null);
-  const geocodeAttemptedRef = useRef(false);
+  const [geocodeError, setGeocodeError] = useState(false);
+  const geocodeAttemptRef = useRef(0);
 
-  useEffect(() => {
-    if (geocodeAttemptedRef.current) return;
+  const runGeocode = useCallback(() => {
     const needsPickup = pickupLocation && !pickupLocation.lat && (pickupLocation.city || pickupLocation.address);
     const needsDelivery = deliveryLocation && !deliveryLocation.lat && (deliveryLocation.city || deliveryLocation.address);
     if (!needsPickup && !needsDelivery) return;
-    geocodeAttemptedRef.current = true;
 
-    const geocode = async (loc: MapLocation): Promise<{lat: number; lng: number} | null> => {
-      const q = [loc.address, loc.city, loc.state].filter(Boolean).join(', ');
-      if (!q) return null;
-      try {
-        const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`, {
-          headers: { 'Accept-Language': 'en' },
-        });
-        const data = await r.json();
-        if (data?.[0]?.lat && data?.[0]?.lon) {
-          return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+    geocodeAttemptRef.current += 1;
+    const attempt = geocodeAttemptRef.current;
+    setGeocodeError(false);
+
+    const geocode = async (loc: MapLocation, label: string): Promise<{lat: number; lng: number} | null> => {
+      // Try different query formats for better geocoding results
+      const queries = [
+        [loc.city, loc.state, 'India'].filter(Boolean).join(', '),
+        [loc.address, loc.city, loc.state].filter(Boolean).join(', '),
+        loc.city || '',
+      ].filter(q => q.length > 0);
+
+      for (const q of queries) {
+        try {
+          console.log(`[Geocode] ${label} attempt ${attempt}: "${q}"`);
+          const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1&countrycodes=in`, {
+            headers: { 'Accept-Language': 'en' },
+          });
+          if (!r.ok) { console.warn(`[Geocode] ${label}: HTTP ${r.status}`); continue; }
+          const data = await r.json();
+          if (data?.[0]?.lat && data?.[0]?.lon) {
+            const result = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+            console.log(`[Geocode] ${label} resolved:`, result);
+            return result;
+          }
+          console.warn(`[Geocode] ${label}: no results for "${q}"`);
+        } catch (err) {
+          console.error(`[Geocode] ${label} failed:`, err);
         }
-      } catch { /* ignore */ }
+        // Nominatim requires 1s between requests
+        await new Promise(r => setTimeout(r, 1100));
+      }
       return null;
     };
 
     (async () => {
+      let gotPickup = false, gotDelivery = false;
       if (needsPickup && pickupLocation) {
-        const coords = await geocode(pickupLocation);
-        if (coords) setGeocodedPickup(coords);
+        const coords = await geocode(pickupLocation, 'Pickup');
+        if (coords) { setGeocodedPickup(coords); gotPickup = true; }
+        // Wait before next geocoding request
+        await new Promise(r => setTimeout(r, 1100));
       }
       if (needsDelivery && deliveryLocation) {
-        const coords = await geocode(deliveryLocation);
-        if (coords) setGeocodedDelivery(coords);
+        const coords = await geocode(deliveryLocation, 'Delivery');
+        if (coords) { setGeocodedDelivery(coords); gotDelivery = true; }
+      }
+      // If either failed, mark error for retry button
+      if ((needsPickup && !gotPickup) || (needsDelivery && !gotDelivery)) {
+        setGeocodeError(true);
       }
     })();
   }, [pickupLocation, deliveryLocation]);
+
+  // Auto-geocode on mount
+  useEffect(() => {
+    if (geocodeAttemptRef.current === 0) runGeocode();
+  }, [runGeocode]);
 
   // Effective pickup/delivery with geocoded fallback
   const effectivePickup = useMemo(() => {
@@ -237,23 +268,49 @@ export default function TripTrackingMap({
   }, [deliveryLocation, geocodedDelivery]);
 
   // Fetch planned route from OSRM
-  useEffect(() => {
-    if (plannedFetchedRef.current || !effectivePickup?.lat || !effectivePickup?.lng || !effectiveDelivery?.lat || !effectiveDelivery?.lng) return;
-    plannedFetchedRef.current = true;
+  const [routeError, setRouteError] = useState(false);
+
+  const fetchRoute = useCallback(() => {
+    if (!effectivePickup?.lat || !effectivePickup?.lng || !effectiveDelivery?.lat || !effectiveDelivery?.lng) return;
     setRouteLoading(true);
+    setRouteError(false);
     (async () => {
       try {
+        console.log('[Route] Fetching OSRM route:', effectivePickup, '→', effectiveDelivery);
         const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${effectivePickup.lng},${effectivePickup.lat};${effectiveDelivery.lng},${effectiveDelivery.lat}?overview=full&geometries=geojson`);
+        if (!r.ok) { console.error(`[Route] OSRM HTTP ${r.status}`); setRouteError(true); return; }
         const d = await r.json();
         if (d.code === 'Ok' && d.routes?.[0]) {
           setPlannedRoute(d.routes[0].geometry.coordinates.map((c: number[]) => [c[1], c[0]] as [number, number]));
           setRouteDistance(`${(d.routes[0].distance / 1000).toFixed(1)} km`);
           const h = Math.floor(d.routes[0].duration / 3600), m = Math.floor((d.routes[0].duration % 3600) / 60);
           setRouteDuration(h > 0 ? `${h}h ${m}m` : `${m} min`);
+          console.log('[Route] Route loaded:', d.routes[0].distance, 'm');
+        } else {
+          console.warn('[Route] OSRM no route:', d.code);
+          // Fallback: draw a straight line between pickup and delivery
+          setPlannedRoute([[effectivePickup.lat, effectivePickup.lng], [effectiveDelivery.lat, effectiveDelivery.lng]]);
+          setRouteDistance(null);
+          setRouteDuration(null);
         }
-      } catch { /* ignore */ } finally { setRouteLoading(false); }
+      } catch (err) {
+        console.error('[Route] OSRM fetch failed:', err);
+        setRouteError(true);
+        // Fallback: straight line
+        if (effectivePickup?.lat && effectiveDelivery?.lat) {
+          setPlannedRoute([[effectivePickup.lat, effectivePickup.lng], [effectiveDelivery.lat, effectiveDelivery.lng]]);
+        }
+      } finally { setRouteLoading(false); }
     })();
   }, [effectivePickup?.lat, effectivePickup?.lng, effectiveDelivery?.lat, effectiveDelivery?.lng]);
+
+  // Auto-fetch route when coordinates become available
+  useEffect(() => {
+    if (!plannedFetchedRef.current && effectivePickup?.lat && effectiveDelivery?.lat) {
+      plannedFetchedRef.current = true;
+      fetchRoute();
+    }
+  }, [fetchRoute, effectivePickup?.lat, effectiveDelivery?.lat]);
 
   const tripStats = useMemo(() => {
     if (locationHistory.length < 2) return null;
@@ -442,6 +499,44 @@ export default function TripTrackingMap({
         </div>
       )}
 
+      {/* ━━━ GEOCODE / ROUTE ERROR — Retry button ━━━━━━━━━━━━━ */}
+      {(geocodeError || routeError) && !plannedRoute && (
+        <div style={{
+          position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+          zIndex: 1000, background: 'rgba(0,0,0,0.8)', borderRadius: 12, padding: '16px 24px',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+        }}>
+          <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>Route loading failed</span>
+          <button
+            onClick={() => {
+              geocodeAttemptRef.current = 0;
+              plannedFetchedRef.current = false;
+              setGeocodeError(false);
+              setRouteError(false);
+              runGeocode();
+            }}
+            style={{
+              background: '#4285F4', color: '#fff', border: 'none', borderRadius: 8,
+              padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* ━━━ GEOCODING loading overlay ━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      {geocodeAttemptRef.current > 0 && !geocodedPickup && !geocodedDelivery && !geocodeError && !effectivePickup?.lat && !effectiveDelivery?.lat && (
+        <div style={{
+          position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+          zIndex: 1000, background: 'rgba(0,0,0,0.7)', borderRadius: 12, padding: '16px 24px',
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <div style={{ width: 18, height: 18, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>Loading route...</span>
+        </div>
+      )}
+
       {/* ━━━ RE-CENTER BUTTON ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {!isCentered && (
         <button className="uber-recenter" onClick={reCenter} title="Re-center">
@@ -603,6 +698,9 @@ export default function TripTrackingMap({
         }
         @keyframes uberDotPulse {
           0%,100% { opacity: 1; } 50% { opacity: 0.3; }
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); }
         }
         .uber-pill-label {
           font-size: 13px; font-weight: 700; color: #111; letter-spacing: -0.2px;

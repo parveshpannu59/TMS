@@ -35,7 +35,6 @@ import { StatsCard } from '@/components/common/StatsCard';
 import { CreateUserDialog } from '@components/users/CreateUserDialog';
 import { EditUserDialog } from '@components/users/EditUserDialog';
 import { ChangePasswordDialog } from '@components/users/ChangePasswordDialog';
-import { DashboardLayout } from '@layouts/DashboardLayout';
 import { format } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 
@@ -248,15 +247,9 @@ export const UsersPage: React.FC = () => {
   );
 
   return (
-    <DashboardLayout>
-      <Box sx={{ 
-        height: 'calc(100vh - 120px)', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        p: 3
-      }}>
+    <Box className="page-fixed-layout">
+      {/* Fixed Header Section */}
+      <Box className="page-fixed-header">
         {/* Page Header */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -324,16 +317,16 @@ export const UsersPage: React.FC = () => {
           </Grid>
         )}
 
-      {error && (
+        {error && (
           <Alert 
             severity="error" 
             sx={{ mb: 2 }} 
             onClose={() => setError(null)}
             variant="outlined"
           >
-          {error}
-        </Alert>
-      )}
+            {error}
+          </Alert>
+        )}
 
         {/* Search and Filters */}
         <Paper sx={{ p: 2, mb: 2, borderRadius: 3, border: '1px solid rgba(226,232,240,0.8)' }}>
@@ -397,43 +390,40 @@ export const UsersPage: React.FC = () => {
             )}
           </Box>
         </Paper>
+      </Box>
 
-        {/* Compact DataGrid - Takes remaining space */}
+      {/* Table Section */}
+      <Box className="page-scrollable-content">
         <Paper 
           sx={{ 
-            minHeight: 600,
-            maxHeight: 900,
-            height: filteredUsers.length > 0 ? Math.min(900, Math.max(600, filteredUsers.length * 52 + 150)) : 600,
-            display: 'flex',
-            flexDirection: 'column',
             border: '1px solid',
             borderColor: 'divider',
             borderRadius: 2,
             overflow: 'hidden',
           }}
         >
-        <DataGrid
-          rows={filteredUsers}
-          columns={columns}
-          loading={loading}
-          // Server-side pagination
-          paginationMode="server"
-          rowCount={totalRows}
-          paginationModel={paginationModel}
-          onPaginationModelChange={(model) => {
-            setPaginationModel(model);
-            fetchUsers(model);
-          }}
-          pageSizeOptions={[10, 25, 50, 100]}
-          disableRowSelectionOnClick
-          autoHeight={false}
-          sx={{
+          <DataGrid
+            rows={filteredUsers}
+            columns={columns}
+            loading={loading}
+            density="compact"
+            autoHeight
+            // Server-side pagination
+            paginationMode="server"
+            rowCount={totalRows}
+            paginationModel={paginationModel}
+            onPaginationModelChange={(model) => {
+              setPaginationModel(model);
+              fetchUsers(model);
+            }}
+            pageSizeOptions={[10, 25, 50, 100]}
+            disableRowSelectionOnClick
+            sx={{
               border: 'none',
-              height: '100%',
               width: '100%',
-            '& .MuiDataGrid-cell': {
-                padding: '8px 16px',
-                fontSize: '0.875rem',
+              '& .MuiDataGrid-cell': {
+                padding: '8px 12px',
+                fontSize: '0.8125rem',
               },
               '& .MuiDataGrid-columnHeaders': {
                 fontSize: '0.8125rem',
@@ -444,13 +434,11 @@ export const UsersPage: React.FC = () => {
                 '&:hover': {
                   backgroundColor: 'action.hover',
                 },
-            },
-            '& .MuiDataGrid-virtualScroller': {
-              overflow: 'auto',
-            },
-          }}
-        />
-      </Paper>
+              },
+            }}
+          />
+        </Paper>
+      </Box>
 
       <CreateUserDialog
         open={createDialogOpen}
@@ -492,7 +480,6 @@ export const UsersPage: React.FC = () => {
         </DialogActions>
       </Dialog>
     </Box>
-    </DashboardLayout>
   );
 };
 

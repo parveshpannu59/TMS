@@ -189,6 +189,7 @@ export class DriverService {
   private static formatDriver(driver: any) {
     return {
       id: driver._id.toString(),
+      _id: driver._id.toString(),
       userId: driver.userId,
       name: driver.name,
       email: driver.email,
@@ -211,6 +212,7 @@ export class DriverService {
       notes: driver.notes,
       bankAccount: driver.bankAccount,
       documents: driver.documents,
+      profilePicture: driver.documents?.photo || null,
       createdAt: driver.createdAt,
       updatedAt: driver.updatedAt,
     };

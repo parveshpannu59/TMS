@@ -41,7 +41,6 @@ import {
   Payments,
   HourglassEmpty,
 } from '@mui/icons-material';
-import { DashboardLayout } from '@layouts/DashboardLayout';
 import { StatsCard } from '@/components/common/StatsCard';
 import { dashboardApi, type AccountantDashboardData } from '@/api/dashboardApi';
 import { loadApi } from '@/api/all.api';
@@ -59,8 +58,8 @@ interface TabPanelProps {
 const TabPanel = (props: TabPanelProps) => {
   const { children, value, index, ...other } = props;
   return (
-    <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
+    <div role="tabpanel" hidden={value !== index} {...other} style={{ display: value === index ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      {value === index && <Box sx={{ py: 3, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>{children}</Box>}
     </div>
   );
 };
@@ -183,7 +182,7 @@ function PendingExpenseApprovals({ onApproved }: { onApproved?: () => void }) {
   ];
 
   return (
-    <Box>
+    <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
         <Typography variant="h6">
           <HourglassEmpty sx={{ verticalAlign: 'middle', mr: 1 }} />
@@ -202,7 +201,7 @@ function PendingExpenseApprovals({ onApproved }: { onApproved?: () => void }) {
       ) : expenses.length === 0 ? (
         <Alert severity="success">No pending expenses to review</Alert>
       ) : (
-        <Box sx={{ height: 400 }}>
+        <Box sx={{ flex: 1, minHeight: 0 }}>
           <DataGrid
             rows={expenses}
             columns={columns}
@@ -211,6 +210,7 @@ function PendingExpenseApprovals({ onApproved }: { onApproved?: () => void }) {
             initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
             disableRowSelectionOnClick
             density="compact"
+            sx={{ height: '100%' }}
           />
         </Box>
       )}
@@ -421,8 +421,8 @@ const AccountingPage: React.FC = () => {
   ];
 
   return (
-    <DashboardLayout>
-      <Box sx={{ p: 3 }}>
+    <Box className="page-fixed-layout">
+      <Box className="page-fixed-header">
         {/* Page Header */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -479,8 +479,9 @@ const AccountingPage: React.FC = () => {
             </Grid>
           ))}
         </Grid>
+      </Box>
 
-
+      <Box className="page-scrollable-content">
         {/* Tabs */}
         <Card>
           <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
@@ -493,7 +494,7 @@ const AccountingPage: React.FC = () => {
           </Box>
 
           <TabPanel value={tabValue} index={0}>
-            <Box sx={{ height: { xs: 400, sm: 500 }, width: '100%' }}>
+            <Box sx={{ flex: 1, width: '100%', minHeight: 0 }}>
               {loading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
                   <CircularProgress />
@@ -505,6 +506,8 @@ const AccountingPage: React.FC = () => {
                     ...assignment,
                   }))}
                   getRowId={(row) => row.id || String(row.loadNumber || idx)}
+                  density="compact"
+                  autoHeight
                   columns={[
                     { field: 'loadNumber', headerName: t('loads.loadNumber'), flex: 1, minWidth: 100 },
                     { field: 'driverName', headerName: t('loads.driver'), flex: 1, minWidth: 120 },
@@ -541,40 +544,42 @@ const AccountingPage: React.FC = () => {
           </TabPanel>
 
           <TabPanel value={tabValue} index={1}>
-            {data?.expenses ? (
-              <Box>
-                <Typography variant="h6" gutterBottom>
-                  {t('accounting.totalExpenses')}: ${data.expenses.total.toLocaleString()}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  {t('accounting.expenseEntries', { count: data.expenses.count })}
-                </Typography>
-                <Grid container spacing={2} sx={{ mb: 3 }}>
-                  {Object.entries(data.expenses.byCategory).map(([category, amount]) => (
-                    <Grid item xs={12} sm={6} md={3} key={category}>
-                      <Card>
-                        <CardContent>
-                          <Typography variant="body2" color="text.secondary">
-                            {category.replace('_', ' ').toUpperCase()}
-                          </Typography>
-                          <Typography variant="h6">${Number(amount).toLocaleString()}</Typography>
-                        </CardContent>
-                      </Card>
-                    </Grid>
-                  ))}
-                </Grid>
-              </Box>
-            ) : (
-              <Alert severity="info" sx={{ mb: 2 }}>{t('accounting.noExpenseData', { defaultValue: 'No expense data available' })}</Alert>
-            )}
+            <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+              {data?.expenses ? (
+                <Box sx={{ flexShrink: 0 }}>
+                  <Typography variant="h6" gutterBottom>
+                    {t('accounting.totalExpenses')}: ${data.expenses.total.toLocaleString()}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {t('accounting.expenseEntries', { count: data.expenses.count })}
+                  </Typography>
+                  <Grid container spacing={2} sx={{ mb: 3 }}>
+                    {Object.entries(data.expenses.byCategory).map(([category, amount]) => (
+                      <Grid item xs={12} sm={6} md={3} key={category}>
+                        <Card>
+                          <CardContent>
+                            <Typography variant="body2" color="text.secondary">
+                              {category.replace('_', ' ').toUpperCase()}
+                            </Typography>
+                            <Typography variant="h6">${Number(amount).toLocaleString()}</Typography>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Box>
+              ) : (
+                <Alert severity="info" sx={{ mb: 2, flexShrink: 0 }}>{t('accounting.noExpenseData', { defaultValue: 'No expense data available' })}</Alert>
+              )}
 
-            {/* Pending Expense Approvals */}
-            <PendingExpenseApprovals onApproved={() => fetchData()} />
+              {/* Pending Expense Approvals */}
+              <PendingExpenseApprovals onApproved={() => fetchData()} />
+            </Box>
           </TabPanel>
 
           <TabPanel value={tabValue} index={2}>
             {data?.payments && data.payments.length > 0 ? (
-              <Box sx={{ height: { xs: 400, sm: 500 } }}>
+              <Box sx={{ flex: 1, minHeight: 0 }}>
                 <DataGrid
                   rows={data.payments.map((payment, idx) => ({ id: idx, ...payment }))}
                   getRowId={(row) => row.id || String(row.loadNumber || idx)}
@@ -608,6 +613,7 @@ const AccountingPage: React.FC = () => {
                     pagination: { paginationModel: { pageSize: 25 } },
                   }}
                   disableRowSelectionOnClick
+                  sx={{ height: '100%' }}
                 />
               </Box>
             ) : (
@@ -716,7 +722,7 @@ const AccountingPage: React.FC = () => {
           </TabPanel>
         </Card>
       </Box>
-    </DashboardLayout>
+    </Box>
   );
 };
 

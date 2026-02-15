@@ -158,6 +158,15 @@ export const loadApi = {
     await apiClient.delete(`/loads/${id}`);
   },
 
+  // Edit assignment (change driver/truck/trailer/rate on assigned loads)
+  editAssignment: async (
+    id: string,
+    data: { driverId?: string; truckId?: string; trailerId?: string; rate?: number }
+  ): Promise<Load> => {
+    const response = await apiClient.patch(`/loads/${id}/edit-assignment`, data);
+    return response.data.data;
+  },
+
   // Broker confirms rate
   confirmRate: async (
     id: string,
@@ -202,6 +211,7 @@ export const loadApi = {
       dropoffTime: string;
       dropoffLocation: string;
       dropoffDate: string;
+      dropoffPlace?: string;
     }
   ): Promise<Load> => {
     const response = await apiClient.post(`/loads/${id}/driver-form`, data);

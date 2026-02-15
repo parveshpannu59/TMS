@@ -23,6 +23,7 @@ type LoadsDataGridProps = {
   onUnassign: (load: Load) => void;
   onOpenNotes: (notes: string, title: string) => void;
   onConfirmRate?: (load: Load) => void;
+  onEditAssignment?: (load: Load) => void;
   onViewTripDetails?: (load: Load) => void;
   onReviewCompletion?: (load: Load) => void;
   onManagePayment?: (load: Load) => void;
@@ -43,6 +44,7 @@ export const LoadsDataGrid = memo<LoadsDataGridProps>(function LoadsDataGrid({
   onUnassign,
   onOpenNotes,
   onConfirmRate,
+  onEditAssignment,
   onViewTripDetails,
   onReviewCompletion,
   onManagePayment,
@@ -58,6 +60,7 @@ export const LoadsDataGrid = memo<LoadsDataGridProps>(function LoadsDataGrid({
     onUnassign,
     onOpenNotes,
     onConfirmRate,
+    onEditAssignment,
     onViewTripDetails,
     onReviewCompletion,
     onManagePayment,
@@ -67,8 +70,6 @@ export const LoadsDataGrid = memo<LoadsDataGridProps>(function LoadsDataGrid({
     <Card
       sx={{
         width: '100%',
-        minHeight: 900,
-        height: 900,
         border: '1px solid',
         borderColor: 'divider',
         borderRadius: 2,
@@ -98,6 +99,8 @@ export const LoadsDataGrid = memo<LoadsDataGridProps>(function LoadsDataGrid({
           rows={filteredLoads}
           columns={columns}
           loading={loading}
+          density="compact"
+          autoHeight
           getRowId={(row) => row._id}
           // ── Server-side pagination ──
           paginationMode="server"
@@ -106,13 +109,11 @@ export const LoadsDataGrid = memo<LoadsDataGridProps>(function LoadsDataGrid({
           onPaginationModelChange={(model: GridPaginationModel) => onPaginationModelChange(model)}
           pageSizeOptions={[10, 25, 50, 100]}
           disableRowSelectionOnClick
-          autoHeight={false}
           sx={{
             width: '100%',
-            height: '100%',
             border: 'none',
             '& .MuiDataGrid-main': { width: '100%' },
-            '& .MuiDataGrid-cell': { padding: '12px 16px', fontSize: '0.875rem', borderColor: 'divider' },
+            '& .MuiDataGrid-cell': { padding: '8px 12px', fontSize: '0.8125rem', borderColor: 'divider' },
             '& .MuiDataGrid-columnHeaders': {
               fontSize: '0.8125rem',
               fontWeight: 600,
@@ -132,7 +133,6 @@ export const LoadsDataGrid = memo<LoadsDataGridProps>(function LoadsDataGrid({
               borderColor: 'divider',
               backgroundColor: 'background.default',
             },
-            '& .MuiDataGrid-virtualScroller': { overflow: 'auto !important' },
           }}
         />
       )}

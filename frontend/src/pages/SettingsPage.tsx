@@ -464,7 +464,6 @@ import {
   Lock,
   Public,
 } from '@mui/icons-material';
-import { DashboardLayout } from '@layouts/DashboardLayout';
 import { useThemeMode } from '@/contexts/ThemeContext';
 import { useAuth } from '@/hooks/useAuth';
 import { getApiOrigin } from '@/api/client';
@@ -804,17 +803,14 @@ const SettingsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <DashboardLayout>
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-          <CircularProgress size={60} />
-        </Box>
-      </DashboardLayout>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+        <CircularProgress size={60} />
+      </Box>
     );
   }
 
   return (
-    <DashboardLayout>
-      <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Settings sx={{ fontSize: 32, color: 'primary.main' }} />
@@ -1664,7 +1660,6 @@ const SettingsPage: React.FC = () => {
           onShowPasswordToggle={() => setShowPassword(!showPassword)}
         />
       </Box>
-    </DashboardLayout>
   );
 };
 

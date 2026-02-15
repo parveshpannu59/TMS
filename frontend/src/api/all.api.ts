@@ -96,6 +96,7 @@ export const loadApi = {
       dropoffTime: string;
       dropoffLocation: string;
       dropoffDate: string;
+      dropoffPlace?: string;
     }
   ): Promise<Load> => {
     const response = await apiClient.post<ApiResponse<Load>>(`/loads/${id}/driver-form`, data);
@@ -136,6 +137,9 @@ export const loadApi = {
       referenceNumber?: string;
       latitude?: number;
       longitude?: number;
+      latePassAmount?: number;
+      latePassPhoto?: string;
+      hasLatePass?: boolean;
     }
   ): Promise<Load> => {
     const response = await apiClient.post<ApiResponse<Load>>(`/loads/${id}/shipper-check-in`, data);

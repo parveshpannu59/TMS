@@ -255,6 +255,8 @@ export default function DriverMobileShell() {
           onClose={() => setSheetOpen(false)}
           onAccepted={() => {
             setSheetOpen(false);
+            // Dispatch event so the dashboard auto-refreshes with the new load
+            window.dispatchEvent(new CustomEvent('assignment-accepted'));
             navigate('/driver/mobile/dashboard');
           }}
         />

@@ -8,7 +8,7 @@ export interface ITruck {
   year: number;
   vin: string;
   licensePlate: string;
-  status: 'available' | 'on_road' | 'in_maintenance' | 'out_of_service';
+  status: 'available' | 'assigned' | 'on_road' | 'in_maintenance' | 'out_of_service';
   currentLoadId?: string;
   currentDriverId?: string;
   notes?: string;
@@ -26,7 +26,7 @@ const TruckSchema = new Schema({
   licensePlate: { type: String, required: true },
   status: {
     type: String,
-    enum: ['available', 'on_road', 'in_maintenance', 'out_of_service'],
+    enum: ['available', 'assigned', 'on_road', 'in_maintenance', 'out_of_service'],
     default: 'available',
   },
   currentLoadId: { type: Schema.Types.ObjectId, ref: 'Load' },

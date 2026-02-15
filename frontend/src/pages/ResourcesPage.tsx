@@ -42,7 +42,6 @@ import {
   Assignment,
   Menu as MenuIcon,
 } from '@mui/icons-material';
-import { DashboardLayout } from '@layouts/DashboardLayout';
 import { StatsCard } from '@/components/common/StatsCard';
 import { useTranslation } from 'react-i18next';
 
@@ -206,8 +205,8 @@ const ResourcesPage: React.FC = () => {
   };
 
   return (
-    <DashboardLayout>
-      <Box sx={{ p: 3 }}>
+    <Box className="page-fixed-layout">
+      <Box className="page-fixed-header">
         {/* Page Header */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -273,8 +272,12 @@ const ResourcesPage: React.FC = () => {
               />
             ))}
           </Tabs>
+        </Card>
+      </Box>
 
-          {/* Resources List */}
+      <Box className="page-scrollable-content">
+        {/* Resources List */}
+        <Card>
           <List sx={{ p: 2 }}>
             {filteredResources.length === 0 ? (
               <Box sx={{ textAlign: 'center', py: 8 }}>
@@ -346,6 +349,7 @@ const ResourcesPage: React.FC = () => {
             )}
           </List>
         </Card>
+      </Box>
 
         {/* Upload Dialog */}
         <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
@@ -388,7 +392,6 @@ const ResourcesPage: React.FC = () => {
           </DialogActions>
         </Dialog>
       </Box>
-    </DashboardLayout>
   );
 };
 

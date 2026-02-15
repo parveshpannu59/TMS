@@ -4,7 +4,12 @@ import { useDriverAssignments } from '../../hooks/useDriverAssignments';
 import { useDriverNotifications } from '../../hooks/useDriverNotifications';
 import '../../layouts/mobile/mobile.css';
 
-export default function MobileAssignmentSheet({ open, onClose, onAccepted }: { open: boolean; onClose: () => void; onAccepted?: (assignmentId: string) => void; }) {
+// Mobile assignment notification sheet for driver
+export default function MobileAssignmentSheet({ open, onClose, onAccepted }: {
+  open: boolean;
+  onClose: () => void;
+  onAccepted?: (assignmentId: string) => void;
+}) {
   const { t } = useTranslation();
   const { pending, loading, error, accept, reject } = useDriverAssignments(15000);
   const { notifications, unreadCount, markAsRead } = useDriverNotifications(20000);
@@ -51,28 +56,105 @@ export default function MobileAssignmentSheet({ open, onClose, onAccepted }: { o
             const pickup = load.pickupLocation || a.pickupLocation || {};
             const delivery = load.deliveryLocation || a.deliveryLocation || {};
             const loadNum = load.loadNumber || a.loadNumber || id.substring(0, 6);
+            const rate = load.rate || 0;
+            const distance = load.distance || load.miles || 0;
+            const truckInfo = (a as any).truckId;
+            const trailerInfo = (a as any).trailerId;
+
+            // Format location: prefer city,state — fallback to address or name
+            const fmtLoc = (loc: any) => {
+              if (!loc) return '—';
+              if (loc.city && loc.city.trim()) return `${loc.city}${loc.state ? ', ' + loc.state : ''}`;
+              if (loc.address && loc.address.trim()) return loc.address;
+              if (loc.name && loc.name.trim()) return loc.name;
+              return '—';
+            };
+
             return (
-              <div key={id} className="dm-card" style={{ display: 'grid', gap: 10 }}>
+              <div key={id} className="dm-card" style={{ display: 'grid', gap: 10, padding: 16 }}>
+                {/* Header: title + load number */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontWeight: 600, fontSize: 16 }}>{t('driverApp.newAssignment')}</span>
+                  <span style={{ fontWeight: 700, fontSize: 16 }}>{t('driverApp.newAssignment')}</span>
                   <span style={{
                     padding: '3px 10px', borderRadius: 20,
-                    background: `${ios.blue}12`, color: ios.blue,
-                    fontSize: 12, fontWeight: 600,
+                    background: `${ios.blue}18`, color: ios.blue,
+                    fontSize: 12, fontWeight: 700,
                   }}>
                     {loadNum}
                   </span>
                 </div>
-                <div style={{ display: 'grid', gap: 4, fontSize: 14, color: 'var(--dm-muted)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: ios.green, display: 'inline-block' }} />
-                    From: {pickup.city ? `${pickup.city}, ${pickup.state || ''}` : '—'}
+
+                {/* From / To locations */}
+                <div style={{ display: 'grid', gap: 6, fontSize: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: ios.green, display: 'inline-block', marginTop: 5, flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontSize: 11, color: 'var(--dm-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3 }}>Pickup</div>
+                      <div style={{ fontWeight: 600, color: 'var(--dm-text)', lineHeight: 1.3 }}>{fmtLoc(pickup)}</div>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: ios.red, display: 'inline-block' }} />
-                    To: {delivery.city ? `${delivery.city}, ${delivery.state || ''}` : '—'}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: ios.red, display: 'inline-block', marginTop: 5, flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontSize: 11, color: 'var(--dm-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3 }}>Delivery</div>
+                      <div style={{ fontWeight: 600, color: 'var(--dm-text)', lineHeight: 1.3 }}>{fmtLoc(delivery)}</div>
+                    </div>
                   </div>
                 </div>
+
+                {/* Rate + Distance + Vehicle */}
+                <div style={{
+                  display: 'flex', flexWrap: 'wrap', gap: 8,
+                  padding: '8px 0', borderTop: '1px solid var(--dm-fill)',
+                }}>
+                  {rate > 0 && (
+                    <span style={{
+                      padding: '4px 10px', borderRadius: 20,
+                      background: `${ios.green}15`, color: ios.green,
+                      fontSize: 13, fontWeight: 700,
+                    }}>
+                      ${rate.toLocaleString()}
+                    </span>
+                  )}
+                  {distance > 0 && (
+                    <span style={{
+                      padding: '4px 10px', borderRadius: 20,
+                      background: 'var(--dm-fill)',
+                      fontSize: 12, fontWeight: 600, color: 'var(--dm-muted)',
+                    }}>
+                      {distance} mi
+                    </span>
+                  )}
+                  {truckInfo && (
+                    <span style={{
+                      padding: '4px 10px', borderRadius: 20,
+                      background: `${ios.blue}12`, color: ios.blue,
+                      fontSize: 12, fontWeight: 600,
+                    }}>
+                      🚛 Truck: {truckInfo.unitNumber || truckInfo.make || 'Assigned'}
+                    </span>
+                  )}
+                  {trailerInfo && (
+                    <span style={{
+                      padding: '4px 10px', borderRadius: 20,
+                      background: `${ios.blue}12`, color: ios.blue,
+                      fontSize: 12, fontWeight: 600,
+                    }}>
+                      🚚 Trailer: {trailerInfo.unitNumber || trailerInfo.type || 'Assigned'}
+                    </span>
+                  )}
+                  {!truckInfo && !trailerInfo && (
+                    <span style={{
+                      padding: '4px 10px', borderRadius: 20,
+                      background: 'var(--dm-fill)',
+                      fontSize: 12, fontWeight: 600, color: 'var(--dm-muted)',
+                    }}>
+                      No vehicle info
+                    </span>
+                  )}
+                </div>
+
+                {/* Accept / Decline buttons */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <button
                     className="dm-btn"

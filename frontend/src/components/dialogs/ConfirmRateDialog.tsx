@@ -6,7 +6,6 @@ import {
   DialogActions,
   Button,
   TextField,
-  Grid,
   Box,
   Typography,
   IconButton,
@@ -14,8 +13,15 @@ import {
   CircularProgress,
   useTheme,
   useMediaQuery,
+  alpha,
 } from '@mui/material';
-import { Close } from '@mui/icons-material';
+import {
+  Close,
+  AttachMoney,
+  MyLocation,
+  LocationOn,
+  Person,
+} from '@mui/icons-material';
 import { loadService } from '@/services/loadService';
 import type { Load } from '@/api/load.api';
 
@@ -25,13 +31,6 @@ interface ConfirmRateDialogProps {
   load: Load | null;
   onSuccess: () => void;
 }
-
-const emptyLocation = {
-  address: '',
-  city: '',
-  state: '',
-  pincode: '',
-};
 
 export const ConfirmRateDialog: React.FC<ConfirmRateDialogProps> = ({
   open,
@@ -43,80 +42,54 @@ export const ConfirmRateDialog: React.FC<ConfirmRateDialogProps> = ({
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [trackingLink, setTrackingLink] = useState('');
-  const [pickupAddress, setPickupAddress] = useState(emptyLocation);
-  const [deliveryAddress, setDeliveryAddress] = useState(emptyLocation);
-  const [miles, setMiles] = useState<number>(0);
+  const [rate, setRate] = useState('');
+  const [fromLocation, setFromLocation] = useState('');
+  const [toLocation, setToLocation] = useState('');
+  const [driverName, setDriverName] = useState('');
 
   useEffect(() => {
     if (open && load) {
-      const l = load as Record<string, unknown>;
+      const l = load as unknown as Record<string, any>;
+      // Rate
+      setRate(String(l.rate || l.driverRate || ''));
+      // From location
       const pickup = l.pickupLocation || l.origin;
+      if (pickup) {
+        const parts = [pickup.address || pickup.name, pickup.city, pickup.state].filter(Boolean);
+        setFromLocation(parts.join(', '));
+      } else { setFromLocation(''); }
+      // To location
       const delivery = l.deliveryLocation || l.destination;
-      setTrackingLink((l.trackingLink as string) || '');
-      setPickupAddress(pickup ? {
-        address: pickup.address || pickup.name || '',
-        city: pickup.city || '',
-        state: pickup.state || '',
-        pincode: pickup.pincode || pickup.zipCode || '',
-      } : emptyLocation);
-      setDeliveryAddress(delivery ? {
-        address: delivery.address || delivery.name || '',
-        city: delivery.city || '',
-        state: delivery.state || '',
-        pincode: delivery.pincode || delivery.zipCode || '',
-      } : emptyLocation);
-      setMiles((load.miles as number) || ((load as Record<string, unknown>).distance as number) || 0);
+      if (delivery) {
+        const parts = [delivery.address || delivery.name, delivery.city, delivery.state].filter(Boolean);
+        setToLocation(parts.join(', '));
+      } else { setToLocation(''); }
+      // Driver
+      if (l.driverId && typeof l.driverId === 'object' && l.driverId.name) {
+        setDriverName(l.driverId.name);
+      } else if (l.driver && typeof l.driver === 'object' && l.driver.name) {
+        setDriverName(l.driver.name);
+      } else { setDriverName(''); }
       setError(null);
     }
   }, [open, load]);
 
-  const handleLocationChange = (
-    type: 'pickup' | 'delivery',
-    field: string,
-    value: string | number
-  ) => {
-    if (type === 'pickup') {
-      setPickupAddress((prev) => ({ ...prev, [field]: value }));
-    } else {
-      setDeliveryAddress((prev) => ({ ...prev, [field]: value }));
-    }
-  };
-
   const handleSubmit = async () => {
     if (!load) return;
-    if (!pickupAddress.address || !pickupAddress.city || !pickupAddress.state || !pickupAddress.pincode) {
-      setError('Pickup address fields are required');
-      return;
-    }
-    if (!deliveryAddress.address || !deliveryAddress.city || !deliveryAddress.state || !deliveryAddress.pincode) {
-      setError('Delivery address fields are required');
-      return;
-    }
-    if (!miles || miles < 0) {
-      setError('Miles must be a positive number');
-      return;
-    }
+    if (!rate || parseFloat(rate) <= 0) { setError('Please enter a valid rate'); return; }
+    if (!fromLocation.trim()) { setError('From location is required'); return; }
+    if (!toLocation.trim()) { setError('To location is required'); return; }
 
     try {
       setLoading(true);
       setError(null);
       await loadService.confirmRate(load._id, {
-        trackingLink: trackingLink.trim() || '',
-        pickupAddress: {
-          address: pickupAddress.address,
-          city: pickupAddress.city,
-          state: pickupAddress.state,
-          pincode: pickupAddress.pincode,
-        },
-        deliveryAddress: {
-          address: deliveryAddress.address,
-          city: deliveryAddress.city,
-          state: deliveryAddress.state,
-          pincode: deliveryAddress.pincode,
-        },
-        miles: Number(miles),
-      });
+        trackingLink: '',
+        pickupAddress: fromLocation.trim(),
+        deliveryAddress: toLocation.trim(),
+        miles: 0,
+        rate: parseFloat(rate),
+      } as any);
       onSuccess();
       handleClose();
     } catch (err: any) {
@@ -127,150 +100,132 @@ export const ConfirmRateDialog: React.FC<ConfirmRateDialogProps> = ({
   };
 
   const handleClose = () => {
-    setTrackingLink('');
-    setPickupAddress(emptyLocation);
-    setDeliveryAddress(emptyLocation);
-    setMiles(0);
+    setRate('');
+    setFromLocation('');
+    setToLocation('');
+    setDriverName('');
     setError(null);
     onClose();
   };
 
   return (
-    <Dialog
-      open={open}
-      onClose={handleClose}
-      fullWidth
-      maxWidth="md"
-      fullScreen={isMobile}
-    >
-      <DialogTitle>
+    <Dialog open={open} onClose={handleClose} fullWidth maxWidth="xs" fullScreen={isMobile}>
+      <DialogTitle sx={{ pb: 1 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6">Confirm Rate (Broker)</Typography>
-          <IconButton onClick={handleClose} size="small">
-            <Close />
-          </IconButton>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{
+              width: 36, height: 36, borderRadius: 2,
+              background: 'linear-gradient(135deg, #10b981, #059669)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <AttachMoney sx={{ color: '#fff', fontSize: 20 }} />
+            </Box>
+            <Typography variant="h6" fontWeight={700}>Confirm Rate</Typography>
+          </Box>
+          <IconButton onClick={handleClose} size="small"><Close /></IconButton>
         </Box>
       </DialogTitle>
-      <DialogContent>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
 
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Enter tracking link, pickup/delivery addresses, and miles as provided by the broker.
-        </Typography>
+      <DialogContent sx={{ pb: 1 }}>
+        {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 1 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+
+          {/* Rate */}
           <TextField
-            fullWidth
-            label="Tracking Link (Optional)"
-            value={trackingLink}
-            onChange={(e) => setTrackingLink(e.target.value)}
-            placeholder="https://..."
-          />
-
-          <Typography variant="subtitle2" color="primary">Pickup Address</Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Address"
-                value={pickupAddress.address}
-                onChange={(e) => handleLocationChange('pickup', 'address', e.target.value)}
-                required
-              />
-            </Grid>
-            <Grid item xs={12} sm={4}>
-              <TextField
-                fullWidth
-                label="City"
-                value={pickupAddress.city}
-                onChange={(e) => handleLocationChange('pickup', 'city', e.target.value)}
-                required
-              />
-            </Grid>
-            <Grid item xs={12} sm={4}>
-              <TextField
-                fullWidth
-                label="State"
-                value={pickupAddress.state}
-                onChange={(e) => handleLocationChange('pickup', 'state', e.target.value)}
-                required
-              />
-            </Grid>
-            <Grid item xs={12} sm={4}>
-              <TextField
-                fullWidth
-                label="Pincode"
-                value={pickupAddress.pincode}
-                onChange={(e) => handleLocationChange('pickup', 'pincode', e.target.value)}
-                required
-              />
-            </Grid>
-          </Grid>
-
-          <Typography variant="subtitle2" color="primary">Delivery Address</Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Address"
-                value={deliveryAddress.address}
-                onChange={(e) => handleLocationChange('delivery', 'address', e.target.value)}
-                required
-              />
-            </Grid>
-            <Grid item xs={12} sm={4}>
-              <TextField
-                fullWidth
-                label="City"
-                value={deliveryAddress.city}
-                onChange={(e) => handleLocationChange('delivery', 'city', e.target.value)}
-                required
-              />
-            </Grid>
-            <Grid item xs={12} sm={4}>
-              <TextField
-                fullWidth
-                label="State"
-                value={deliveryAddress.state}
-                onChange={(e) => handleLocationChange('delivery', 'state', e.target.value)}
-                required
-              />
-            </Grid>
-            <Grid item xs={12} sm={4}>
-              <TextField
-                fullWidth
-                label="Pincode"
-                value={deliveryAddress.pincode}
-                onChange={(e) => handleLocationChange('delivery', 'pincode', e.target.value)}
-                required
-              />
-            </Grid>
-          </Grid>
-
-          <TextField
-            fullWidth
+            fullWidth size="small"
+            label="Rate ($) *"
             type="number"
-            label="Miles *"
-            value={miles || ''}
-            onChange={(e) => setMiles(Number(e.target.value) || 0)}
-            inputProps={{ min: 0 }}
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+            inputProps={{ min: 0, step: 0.01 }}
             required
+            InputProps={{
+              startAdornment: <AttachMoney sx={{ mr: 0.5, color: '#10b981', fontSize: 20 }} />,
+            }}
           />
+
+          {/* From Location */}
+          <TextField
+            fullWidth size="small"
+            label="From Location *"
+            value={fromLocation}
+            onChange={(e) => setFromLocation(e.target.value)}
+            required
+            placeholder="Pickup address"
+            InputProps={{
+              startAdornment: <MyLocation sx={{ mr: 0.5, color: '#3b82f6', fontSize: 20 }} />,
+            }}
+          />
+
+          {/* To Location */}
+          <TextField
+            fullWidth size="small"
+            label="To Location *"
+            value={toLocation}
+            onChange={(e) => setToLocation(e.target.value)}
+            required
+            placeholder="Delivery address"
+            InputProps={{
+              startAdornment: <LocationOn sx={{ mr: 0.5, color: '#ef4444', fontSize: 20 }} />,
+            }}
+          />
+
+          {/* Driver (read-only display) */}
+          {driverName && (
+            <Box sx={{
+              display: 'flex', alignItems: 'center', gap: 1.5,
+              p: 1.5, borderRadius: 2,
+              border: `1px solid ${alpha('#e2e8f0', 0.8)}`,
+              background: alpha('#f8fafc', 0.5),
+            }}>
+              <Box sx={{
+                width: 32, height: 32, borderRadius: '50%',
+                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Person sx={{ color: '#fff', fontSize: 18 }} />
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1 }}>Driver</Typography>
+                <Typography variant="body2" fontWeight={600}>{driverName}</Typography>
+              </Box>
+            </Box>
+          )}
+
+          {!driverName && (
+            <TextField
+              fullWidth size="small"
+              label="Driver"
+              value="Not assigned yet"
+              disabled
+              InputProps={{
+                startAdornment: <Person sx={{ mr: 0.5, color: '#94a3b8', fontSize: 20 }} />,
+              }}
+            />
+          )}
+
+          {/* Info banner when confirming rate for an assigned load */}
+          {driverName && load && (load as any).status === 'assigned' && (
+            <Alert severity="info" sx={{ mt: 1 }}>
+              Confirming the rate will notify <strong>{driverName}</strong> to accept or decline this load.
+            </Alert>
+          )}
         </Box>
       </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={handleClose}>Cancel</Button>
+
+      <DialogActions sx={{ px: { xs: 2, sm: 3 }, pb: 2, pt: 1 }}>
+        <Button onClick={handleClose} disabled={loading}>Cancel</Button>
         <Button
-          variant="contained"
-          onClick={handleSubmit}
-          disabled={loading}
-          startIcon={loading ? <CircularProgress size={18} /> : null}
+          variant="contained" onClick={handleSubmit}
+          disabled={loading || !rate || !fromLocation.trim() || !toLocation.trim()}
+          sx={{
+            fontWeight: 700,
+            background: 'linear-gradient(135deg, #10b981, #059669)',
+            '&:hover': { background: 'linear-gradient(135deg, #059669, #047857)' },
+          }}
         >
-          {loading ? 'Confirming...' : 'Confirm Rate'}
+          {loading ? <CircularProgress size={16} /> : (load && (load as any).status === 'assigned' ? 'Confirm Rate & Notify Driver' : 'Confirm Rate')}
         </Button>
       </DialogActions>
     </Dialog>

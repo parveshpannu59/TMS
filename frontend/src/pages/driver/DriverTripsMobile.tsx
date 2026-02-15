@@ -109,7 +109,8 @@ function getStatusQueryForTab(_tab: TabType): string | undefined {
   return undefined;
 }
 
-const activeStatuses = ['assigned', 'trip_accepted', 'trip_started', 'shipper_check_in', 'shipper_load_in', 'shipper_load_out', 'in_transit', 'receiver_check_in', 'receiver_offload'];
+// 'assigned' loads should NOT appear until driver accepts via notification — only trip_accepted+
+const activeStatuses = ['trip_accepted', 'trip_started', 'shipper_check_in', 'shipper_load_in', 'shipper_load_out', 'in_transit', 'receiver_check_in', 'receiver_offload'];
 const deliveredStatuses = ['completed', 'delivered'];
 const pendingStatuses = ['delivered'];
 
